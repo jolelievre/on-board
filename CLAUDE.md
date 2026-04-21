@@ -18,16 +18,14 @@ cp .env.example .env
 docker compose up -d
 npm install
 npx prisma db push
-npm run dev          # Vite dev server (port 5173, proxies /api to 3000)
-npm run dev:server   # Hono API server (port 3000)
+npm run dev          # Vite dev server + Hono API (port 5173)
 ```
 
 ### Commands
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start Vite dev server (frontend) |
-| `npm run dev:server` | Start Hono server (API) |
+| `npm run dev` | Start dev server (frontend + API on port 5173) |
 | `npm run build` | Build client (Vite) + server (tsc) |
 | `npm run start` | Run production server |
 | `npm run lint` | ESLint (must pass, zero warnings) |
@@ -61,11 +59,9 @@ src/
 
 ### Dev workflow
 
-In development, two processes run:
-1. **Vite** (port 5173): serves the SPA with HMR, proxies `/api/*` to Hono
-2. **Hono** (port 3000): serves the API
+In development, `npm run dev` starts Vite on port 5173. A custom Vite plugin mounts the Hono API as middleware, so `/api/*` requests are handled in the same process — no separate server needed.
 
-In production, a single Hono process serves both the API and the SPA static files.
+In production, a single Hono process serves both the API and the SPA static files on port 3000.
 
 ## Testing
 
