@@ -1,5 +1,6 @@
 ### Stage 1: Install all dependencies
 FROM node:20-alpine AS deps
+RUN npm install -g npm@11
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -14,6 +15,7 @@ RUN npm run build
 
 ### Stage 3: Production dependencies only
 FROM node:20-alpine AS prod-deps
+RUN npm install -g npm@11
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
