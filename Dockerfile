@@ -1,9 +1,9 @@
-### Stage 1: Install all dependencies
+### Stage 1: Install all dependencies (including devDependencies for build)
 FROM node:20-alpine AS deps
 RUN npm install -g npm@11
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 ### Stage 2: Build client + server
 FROM node:20-alpine AS builder
