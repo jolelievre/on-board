@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma
+src/generated/
+
+# Test
+test-results/
+playwright-report/
+blob-report/
+
+# Misc
+*.log
+.next/
+
+# Plan assets (game rules reference, not for commit)
+plan-assets/
+
+# Claude Code (local settings only)
+.claude/settings.local.json
+
+# MCP config (contains API tokens)
+.mcp.json

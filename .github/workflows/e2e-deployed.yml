@@ -1,0 +1,93 @@
+name: E2E Tests (Deployed)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to test"
+        required: true
+        type: choice
+        options:
+          - preview
+          - integration
+          - production
+
+concurrency:
+  group: e2e-deployed-${{ inputs.environment }}
+  cancel-in-progress: true
+
+jobs:
+  resolve-ref:
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+      base_url: ${{ steps.resolve.outputs.base_url }}
+    steps:
+      - name: Resolve ref and URL for environment
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "${{ inputs.environment }}" in
+            preview)
+              PR_JSON=$(gh api repos/${{ github.repository }}/pulls \
+                --jq 'sort_by(.updated_at) | reverse | .[0] | {ref: .head.ref, number: .number}')
+              REF=$(echo "$PR_JSON" | jq -r '.ref')
+              NUMBER=$(echo "$PR_JSON" | jq -r '.number')
+              if [ -z "$REF" ] || [ "$REF" = "null" ]; then
+                echo "::error::No open PR found"
+                exit 1
+              fi
+              echo "Testing PR #$NUMBER (branch: $REF)"
+              echo "ref=$REF" >> "$GITHUB_OUTPUT"
+              echo "base_url=https://on-board-preview.jolelievre.com" >> "$GITHUB_OUTPUT"
+              ;;
+            integration)
+              echo "ref=main" >> "$GITHUB_OUTPUT"
+              echo "base_url=https://on-board-integration.jolelievre.com" >> "$GITHUB_OUTPUT"
+              ;;
+            production)
+              TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name')
+              if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+                echo "::error::No release tag found"
+                exit 1
+              fi
+              echo "Testing release $TAG"
+              echo "ref=$TAG" >> "$GITHUB_OUTPUT"
+              echo "base_url=https://on-board.jolelievre.com" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+  e2e:
+    needs: resolve-ref
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [Mobile Chrome, Mobile Safari]
+    env:
+      BASE_URL: ${{ needs.resolve-ref.outputs.base_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-ref.outputs.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run E2E tests (${{ matrix.project }})
+        run: npx playwright test --project="${{ matrix.project }}"
