@@ -1,0 +1,30 @@
+name: Deploy Production
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      COOLIFY_BASE: https://coolify.jolelievre.dev/api/v1
+      APP_UUID: ${{ secrets.COOLIFY_PROD_APP_UUID }}
+    steps:
+      - name: Pin Coolify app to release tag
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          echo "Deploying tag $TAG"
+          curl -f -X PATCH "$COOLIFY_BASE/applications/$APP_UUID" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"git_commit_sha\": \"$TAG\"}"
+
+      - name: Trigger deploy
+        run: |
+          curl -f -X GET "$COOLIFY_BASE/deploy?uuid=$APP_UUID&force=false" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
