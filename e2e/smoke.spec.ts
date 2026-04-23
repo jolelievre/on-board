@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("homepage loads and shows app name", async ({ page }) => {
+test("homepage loads and shows login page", async ({ page }) => {
   await page.goto("/");
   await page.waitForLoadState("domcontentloaded");
   await expect(page.locator("h1")).toContainText("OnBoard");

@@ -32,6 +32,10 @@ export default defineConfig({
           command: "npm run dev",
           url: baseURL,
           reuseExistingServer: !process.env.CI,
+          env: {
+            NODE_ENV: "test",
+            VITE_TEST_AUTH: "true",
+          },
         },
       }),
 });

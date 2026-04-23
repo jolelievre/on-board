@@ -1,0 +1,32 @@
+{
+  "app": {
+    "name": "OnBoard",
+    "tagline": "Board game score tracker"
+  },
+  "nav": {
+    "games": "Games",
+    "settings": "Settings"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signInWithGoogle": "Sign in with Google",
+    "signOut": "Sign out"
+  },
+  "settings": {
+    "title": "Settings",
+    "profile": "Profile",
+    "language": "Language"
+  },
+  "games": {
+    "title": "Games",
+    "players": "players",
+    "newMatch": "New match",
+    "matchHistory": "Match history",
+    "noMatches": "No matches yet.",
+    "notFound": "Game not found."
+  },
+  "matches": {
+    "title": "Match",
+    "placeholder": "Match scoring will be available in Phase 2."
+  }
+}

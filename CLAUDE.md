@@ -4,6 +4,8 @@
 
 Board game score tracker PWA. SPA architecture (React + Vite) with Hono API server.
 
+See [PLAN.md](PLAN.md) for the full development plan (tech stack rationale, phases, data model).
+
 ## Development
 
 ### Prerequisites
@@ -17,7 +19,8 @@ Board game score tracker PWA. SPA architecture (React + Vite) with Hono API serv
 cp .env.example .env
 docker compose up -d
 npm install
-npx prisma db push
+npm run db:migrate   # Apply Prisma migrations
+npm run db:seed      # Seed game templates
 npm run dev          # Vite dev server + Hono API (port 5173)
 ```
 
@@ -33,10 +36,11 @@ npm run dev          # Vite dev server + Hono API (port 5173)
 | `npm test` | Reset test DB + run all E2E tests |
 | `npm run test:chrome` | E2E on Mobile Chrome only |
 | `npm run test:safari` | E2E on Mobile Safari only |
-| `npm run db:push` | Apply Prisma schema to dev DB |
+| `npm run db:migrate` | Create + apply Prisma migrations (dev) |
 | `npm run db:seed` | Seed game templates |
-| `npm run db:reset` | Force-reset dev DB + seed |
+| `npm run db:reset` | Reset dev DB + re-apply migrations + seed |
 | `npm run db:studio` | Open Prisma Studio |
+| `npm run db:push` | Apply Prisma schema directly (no migration file) |
 
 ### Architecture
 
@@ -44,15 +48,17 @@ npm run dev          # Vite dev server + Hono API (port 5173)
 src/
   client/          # React SPA (served by Vite in dev, by Hono in prod)
     main.tsx       # Entry point
-    App.tsx        # Root component
-    routes/        # TanStack Router pages
+    routes/        # TanStack Router pages (file-based routing)
     components/    # React components (by feature)
     hooks/         # Custom hooks
-    lib/           # Client utilities (Dexie DB, sync engine)
+    lib/           # Client utilities (auth-client, query-client, i18n)
+    locales/       # i18n translation files (en/, fr/)
   server/          # Hono API server
     index.ts       # Entry point (serves API + static files)
-    routes/        # API route handlers
-    lib/           # Server utilities (Prisma client, helpers)
+    app.ts         # Hono app with routes + auth handler
+    routes/        # API route handlers (games, matches, scores, players)
+    lib/           # Server utilities (Prisma client, auth config)
+    middleware/     # Hono middleware (auth)
   shared/          # Types and logic shared between client & server
     scoring/       # Game scoring calculations
 ```
@@ -94,7 +100,7 @@ BASE_URL="https://your-deployed-url.example.com" npm run test:chrome
 - Docker multi-stage build (see `Dockerfile`)
 - Coolify: auto-deploy on push to main (integration), manual deploy on release (production)
 - Preview environment on PRs (fixed URL)
-- `entrypoint.sh`: runs `prisma db push` then starts server (preserves data across deploys)
+- `entrypoint.sh`: runs `prisma migrate deploy` then seeds + starts server (preserves data across deploys)
 
 ## Git Workflow
 

@@ -1,4 +1,5 @@
 import { defineConfig, type Plugin } from "vite";
+import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
@@ -14,11 +15,15 @@ function honoDevServer(): Plugin {
           "./src/server/app.ts",
         );
 
+        const hasBody = req.method !== "GET" && req.method !== "HEAD";
         const request = new Request(
           new URL(req.url, `http://${req.headers.host}`),
           {
             method: req.method,
             headers: req.headers as Record<string, string>,
+            ...(hasBody
+              ? { body: req as unknown as ReadableStream, duplex: "half" }
+              : {}),
           },
         );
 
@@ -36,11 +41,26 @@ function honoDevServer(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), honoDevServer()],
+  plugins: [
+    TanStackRouterVite({
+      target: "react",
+      routesDirectory: "./src/client/routes",
+      generatedRouteTree: "./src/client/routeTree.gen.ts",
+      quoteStyle: "double",
+      semicolons: true,
+    }),
+    react(),
+    honoDevServer(),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  ssr: {
+    // Externalize server-only packages so Vite's SSR loader
+    // doesn't try to evaluate CJS modules as ESM
+    external: ["@prisma/client", "better-auth", "pg"],
   },
   build: {
     outDir: "dist/client",

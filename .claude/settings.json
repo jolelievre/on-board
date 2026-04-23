@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npm test *)",
+      "Bash(npm install *)",
+      "Bash(npm ci *)",
+      "Bash(npm ls *)",
+      "Bash(npx prisma *)",
+      "Bash(npx playwright *)",
+      "Bash(npx tsx *)",
+      "Bash(docker compose *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(rm *)",
+      "Bash(rm -f *)",
+      "Bash(mkdir *)",
+      "Bash(ls *)",
+      "WebSearch"
+    ]
+  }
+}

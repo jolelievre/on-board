@@ -1,0 +1,32 @@
+{
+  "app": {
+    "name": "OnBoard",
+    "tagline": "Suivi de scores de jeux de société"
+  },
+  "nav": {
+    "games": "Jeux",
+    "settings": "Paramètres"
+  },
+  "auth": {
+    "signIn": "Se connecter",
+    "signInWithGoogle": "Se connecter avec Google",
+    "signOut": "Se déconnecter"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "profile": "Profil",
+    "language": "Langue"
+  },
+  "games": {
+    "title": "Jeux",
+    "players": "joueurs",
+    "newMatch": "Nouvelle partie",
+    "matchHistory": "Historique des parties",
+    "noMatches": "Aucune partie pour le moment.",
+    "notFound": "Jeu introuvable."
+  },
+  "matches": {
+    "title": "Partie",
+    "placeholder": "Le suivi de score sera disponible en Phase 2."
+  }
+}

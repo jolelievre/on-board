@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -8,5 +7,116 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Minimal schema for Phase 0 bootstrap.
-// Full schema (User, Game, Match, Player, Score) will be added in Phase 1.
+// ─── Auth tables (managed by better-auth, field-mapped in auth config) ───
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  emailVerified Boolean   @default(false)
+  avatarUrl     String?
+  locale        String    @default("en")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  createdMatches Match[]  @relation("MatchCreator")
+  players       Player[]
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Verification {
+  id         String    @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+}
+
+// ─── Application tables ───
+
+model Game {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  description String
+  minPlayers  Int
+  maxPlayers  Int
+  iconUrl     String?
+  config      Json    @default("{}")
+
+  matches Match[]
+}
+
+model Match {
+  id          String    @id @default(cuid())
+  gameId      String
+  game        Game      @relation(fields: [gameId], references: [id])
+  createdById String
+  createdBy   User      @relation("MatchCreator", fields: [createdById], references: [id])
+  status      String    @default("IN_PROGRESS")
+  victoryType String?
+  winnerId    String?
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  players Player[]
+  scores  Score[]
+}
+
+model Player {
+  id       String  @id @default(cuid())
+  matchId  String
+  match    Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  userId   String?
+  user     User?   @relation(fields: [userId], references: [id])
+  name     String
+  position Int
+
+  scores Score[]
+
+  @@unique([matchId, position])
+}
+
+model Score {
+  id       String @id @default(cuid())
+  matchId  String
+  match    Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  playerId String
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  category String
+  value    Int
+  metadata Json   @default("{}")
+
+  @@unique([matchId, playerId, category])
+}
