@@ -20,13 +20,14 @@ Games to support: **7 Wonders Duel** (POC), **Skull King** (UX via Claude Design
 | **Routing** | TanStack Router | React Router | Type-safe by default, designed for SPAs, natively integrates with TanStack Query. React Router v7 merges with Remix and leans toward SSR, which is not our use case. |
 | **Data fetching** | TanStack Query | SWR, custom hooks | Built-in client cache, optimistic mutations, automatic retry, stale-while-revalidate. Essential for offline experience: read from local cache then sync in background. |
 | **Styling** | TailwindCSS | CSS Modules, styled-components | Fast iteration, utility-first, no CSS-in-JS runtime. Already mastered via birthday-party. |
+| **i18n** | react-i18next | react-intl, LinguiJS | Most popular React i18n library, JSON catalogs, namespace support, lazy loading. Simple integration with TanStack Router. |
 
 ### Backend: Hono + PostgreSQL + Prisma
 
 | Component | Choice | Rejected Alternative | Rationale |
 |-----------|--------|---------------------|-----------|
 | **API Server** | Hono | Express, Fastify, Next.js API routes | Native TypeScript framework, built on Web Standards (Request/Response), ultra-lightweight (~14KB). Serves the API AND the SPA static files → single process, single port (3000), single Docker container. Express is aging; Fastify is heavier; Next.js is overkill to serve a pure API. |
-| **Auth** | better-auth | NextAuth (Auth.js) | Framework-agnostic (works with Hono natively), built-in Google OAuth, Prisma adapter, session management. NextAuth is tightly coupled to Next.js — possible with other frameworks but not natural. better-auth is the emerging choice for non-Next.js stacks. |
+| **Auth** | better-auth | NextAuth (Auth.js) | Framework-agnostic (works with Hono natively), built-in Google OAuth, Prisma adapter, session management. NextAuth is tightly coupled to Next.js — possible with other frameworks but not natural. better-auth is the emerging choice for non-Next.js stacks. **Risk**: relatively new library — may need fallback to manual Google OAuth if we hit friction. |
 | **ORM** | Prisma | Drizzle, Kysely, TypeORM | Declarative schema, reliable migrations, excellent TypeScript support. Already mastered via birthday-party. Drizzle would be a valid alternative (lighter, SQL-first) but Prisma offers better DX for a project with complex relations (Match → Players → Scores). |
 | **Database** | PostgreSQL 16 | SQLite, MySQL | Robust, reliable, native JSON support. Same choice as birthday-party, same Coolify infra. SQLite would be simpler but doesn't support the concurrent connections needed for multi-device sync. |
 
@@ -82,125 +83,281 @@ Single process, single port, single Docker container.
 
 ---
 
-## Phase 0: Project Bootstrap + Deployment ✍️ IN PROGRESS
+## Phase 0: Project Bootstrap + Deployment ✅ DONE
 
 **Goal**: Minimal working project, deployed on Coolify, pipeline validated end-to-end.
 
-### Steps
-
-- [x] Rename `assets/` → `plan-assets/` (game rules reference, not committed)
-- [x] `PLAN.md` with tech stack rationale (this file)
-- [ ] Init Git repo + `.gitignore`
-- [ ] Init Vite + React 19 + TypeScript + TailwindCSS
-- [ ] Setup Hono server (serves SPA + `/api/health`)
-- [ ] `docker-compose.yml`: PostgreSQL 16 (DBs `onboard_dev` + `onboard_test`)
-- [ ] Prisma init (minimal schema, DB connection)
-- [ ] ESLint flat config
-- [ ] Playwright config (Mobile Chrome + Mobile Safari) + first smoke test
-- [ ] `Dockerfile` multi-stage (deps → build client + server → runner)
-- [ ] `scripts/entrypoint.sh`, `scripts/init-test-db.sql`
-- [ ] `.env.example`, `.env.test`
-- [ ] `CLAUDE.md` with project conventions
-- [ ] Create GitHub repo `on-board`
-- [ ] Configure Coolify: integration app (main branch, auto-deploy) + preview (fixed URL)
-- [ ] First push → deploy → verify the page loads on Coolify
-
-**Validation**: `npm run dev` starts, `/api/health` responds, `npm run lint` passes, site is accessible on Coolify.
+- [x] Vite + React 19 + TypeScript + TailwindCSS
+- [x] Hono server with Vite middleware plugin (single process, single port)
+- [x] Docker (compose + multi-stage Dockerfile)
+- [x] PostgreSQL 16 (dev + test databases)
+- [x] Prisma init (minimal schema)
+- [x] ESLint flat config + Playwright config (Mobile Chrome + Mobile Safari)
+- [x] CI/CD: `ci.yml` (lint + type-check + build + E2E on PR), `deploy-prod.yml` (release → Coolify API), `e2e-deployed.yml` (manual against deployed envs)
+- [x] Coolify: integration (auto-deploy on main), preview (fixed URL on PR), production (deploy via API on release)
+- [x] CLAUDE.md, PLAN.md, skills (frontend-design, create-pr)
 
 ---
 
-## Phase 1: Auth + Data Model
+## Phase 1: Auth + Data Model + i18n
 
-> **TO BE VALIDATED** — Phases 1-8 have not been approved yet.
+**Goal**: Google OAuth login, database schema, route structure, internationalization.
 
-**Goal**: Google OAuth login via better-auth, DB schema, route structure.
+### Auth (better-auth)
 
-- Prisma schema (User, Game, Match, Player, Score)
-- better-auth: Google OAuth, Prisma adapter, Hono middleware
-- Test mode: mock auth for E2E (no real Google OAuth in CI)
-- API routes CRUD (games, matches, scores, players/suggestions)
-- Client routes via TanStack Router (/, /games, /games/$slug, /matches/$id)
-- E2E: auth, navigation
+- Google OAuth provider, Prisma adapter, Hono middleware
+- Test mode: mock auth for E2E (test-only credentials provider, no real Google OAuth in CI)
+- User profile: name, email, avatar (from Google), preferred language
+
+### Data model (Prisma)
+
+```
+User
+  - id, email, name, avatarUrl, locale
+  - createdAt, updatedAt
+
+Game (templates, seeded)
+  - id, slug ("7-wonders-duel", "skull-king"), name, description
+  - minPlayers, maxPlayers, iconUrl, config (Json)
+
+Match
+  - id, gameId, createdById (User), status (IN_PROGRESS / COMPLETED)
+  - victoryType (nullable: "score", "military_supremacy", "scientific_supremacy")
+  - winnerId (nullable, Player.id)
+  - startedAt, completedAt
+
+Player (per-match participant)
+  - id, matchId, userId (nullable), name, position
+  - @@unique([matchId, position])
+
+Score
+  - id, matchId, playerId, category (string), value (Int), metadata (Json)
+  - @@unique([matchId, playerId, category])
+
+LocalProfile (client-side only, stored in Dexie — not in Prisma)
+  - id, name, avatarUrl, linkedUserId (nullable)
+  - Reused across matches for player name autocomplete
+```
+
+### Player identity approach
+
+- **Local profiles**: stored on the device (Dexie/IndexedDB), reusable across games. When creating a match, you type a name or pick from previous local profiles.
+- **No account required for friends**: friends are just local profiles with a name.
+- **Link later**: when a friend creates their own Google account, the match creator can search online profiles and link them to the local profile. Linked profiles get the friend's avatar and name updates. Shared matches become visible in both users' histories.
+
+### i18n (react-i18next)
+
+- JSON catalogs: `src/client/locales/en/common.json`, `src/client/locales/fr/common.json`
+- Default language: English, available: English + French
+- Language selector in user settings (stored in User.locale for logged-in users, localStorage for guests)
+- All user-facing strings go through `t()` from day one — no hardcoded text
+- Namespace-based organization: `common`, `games`, `scoring` (added as needed)
+
+### Routes
+
+**API**:
+```
+POST   /api/auth/*                  # better-auth handlers
+GET    /api/games                   # List game templates
+GET    /api/games/:slug             # Game details
+POST   /api/matches                 # Create match
+GET    /api/matches                 # Match history (filter by game)
+GET    /api/matches/:id             # Match details + scores
+PUT    /api/matches/:id             # Update (status, victoryType, winnerId)
+POST   /api/matches/:id/scores      # Save scores
+GET    /api/players/suggestions     # Autocomplete from past matches
+```
+
+**Client** (TanStack Router):
+```
+/                → Login (redirect to /games if authenticated)
+/games           → Game list (home page)
+/games/$slug     → Game detail + match history + new match button
+/matches/$id     → Active match scoring
+/settings        → User profile + language selector
+```
+
+### E2E
+
+- `e2e/auth.spec.ts`: login, redirect, route protection
+- `e2e/navigation.spec.ts`: navigate between pages
+- `e2e/i18n.spec.ts`: language switch works
+
+**Validation**: Google OAuth login works in dev, routes are protected, schema is applied, language switch works.
 
 ---
 
 ## Phase 2: 7 Wonders Duel — POC
 
-**Goal**: Functional scoring, simple form inspired by the physical score grid.
+**Goal**: Functional scoring with a clean look inspired by the physical score grid.
 
-- 7 score categories (military, treasury, wonders, civil, scientific, commercial, guilds)
-- Special victories (military supremacy, scientific supremacy)
-- New match: enter 2 player names (autocomplete)
-- Score grid: 2 columns × 7 rows + auto-calculated total
-- Match history
-- E2E: full flow creation → scoring → end game → history
+### Score categories (2 players)
 
----
+1. `military` — Military conflicts (0-9 pts, or instant victory)
+2. `treasury` — Coins (1 VP per 3 coins)
+3. `wonders` — Wonder points
+4. `civil` — Blue card points
+5. `scientific` — Green card points (+ set bonuses)
+6. `commercial` — Yellow card points
+7. `guilds` — Purple card points
 
-## Phase 3: CI/CD Pipeline
+### Features
 
-**Goal**: Full GitHub Actions pipeline (CI on PR, prod deploy on release, E2E on deployed envs).
+- Game template seeded in DB with slug `7-wonders-duel`
+- New match: enter 2 player names (autocomplete from local profiles)
+- Score form: grid inspired by the physical score sheet (2 columns × 7 category rows, color-coded)
+- Auto-calculated totals per player
+- Special victories: military supremacy, scientific supremacy (closes the match immediately with victoryType + winnerId)
+- Save scores → persist in DB
+- Match history: list of completed matches with totals, winner, victory type
+- Reasonable default styling using TailwindCSS (will be refined in Phase 3)
 
-- `ci.yml`: lint + type-check + build + E2E matrix (Chrome × Safari × campaigns)
-- `deploy-prod.yml`: on release published → Coolify API
-- `e2e-deployed.yml`: workflow_dispatch against preview/integration/production
-- Coolify prod config (deploy via API on release tag)
+### E2E
 
----
+- `e2e/seven-wonders.spec.ts`: create match, enter scores, verify totals, special victory, complete match, verify history
 
-## Phase 4: Claude Design — Branding + UX
-
-**Goal**: Visual identity and UX patterns before going further with UI.
-
-- Logo, color palette, typography
-- Mobile-first design system
-- 7 Wonders Duel scoring UX (refinement from POC)
-- Skull King scoring UX (round-by-round, bids, tricks, bonuses)
-- PWA indicators (offline, sync, install)
+**Validation**: full flow from creating a match to seeing it in history.
 
 ---
 
-## Phase 5: Apply Design System
+## Phase 3: Claude Design — Branding + UX + Implementation
 
-**Goal**: Implement the design across all existing pages.
+**Goal**: Visual identity, UX patterns, and implementation across all existing and planned screens.
 
-- Custom Tailwind theme
-- Reusable UI components
-- PWA manifest + icons
-- Mobile layout (header + bottom bar)
+### Step 1: Prepare design brief
+
+Write a detailed brief for Claude Design including:
+- Project purpose and target audience (friends around a table, mobile-first)
+- Screenshots of the Phase 2 POC
+- The 7 Wonders Duel physical score grid image (from plan-assets)
+- Skull King rules and round-by-round flow description
+- Requirements: PWA indicators (offline, sync, install), language switcher
+- Screens to design: login, game list (home), game detail/history, 7WD scoring, Skull King scoring (round flow, bid/trick/bonus, scoreboard), settings, match summary
+
+### Step 2: Claude Design session
+
+- Logo "OnBoard", color palette, typography
+- Mobile-first design system (buttons, cards, inputs, navigation)
+- All screens listed above
+
+### Step 3: Implementation
+
+- Custom Tailwind theme (colors, fonts, spacing from design)
+- Reusable UI components in `src/client/components/ui/`
+- PWA manifest (`public/manifest.json`) + app icons
+- Mobile layout: header + bottom navigation bar
+- Restyle all existing pages (login, game list, 7WD scoring, settings) per design
+- `index.html`: meta tags, theme-color, icons
+
+**Validation**: app matches the design, installable on mobile (manifest present).
 
 ---
 
-## Phase 6: Skull King
+## Phase 4: Skull King
 
-**Goal**: Full scoring with both variants (Classic + Rascal).
+**Goal**: Full scoring with both variants (Classic + Rascal), using the design from Phase 3.
 
-- 2-8 players, 10 rounds, bid/trick/bonus per round
-- Classic scoring + Rascal variant
-- Special capture bonuses
-- E2E: full game, score calculations, variants
+### Scoring rules — Classic
+
+- 2-8 players, 10 rounds (round N = N cards dealt)
+- Per round: bid (before) + tricks won (after) + bonus captures
+- Bid = 0, correct: **+10 × N**
+- Bid = 0, incorrect: **-10 × N**
+- Bid > 0, correct: **+20 × bid**
+- Bid > 0, incorrect: **-10 × |bid - tricks|**
+- Bonuses: pirates captured by Skull King (+30), mermaids by pirates (+20), Skull King by mermaid (+40), black 14 (+20), colored 14 (+10)
+
+### Scoring rules — Rascal variant
+
+- Potential per round = 10 × N
+- Direct hit (exact bid): 100% of potential
+- Ricochet (off by 1): 50% of potential
+- Miss (off by 2+): 0 points
+- Optional Cannonball: potential = 15 × N if correct, 0 if wrong
+
+### Data model
+
+- Score `category = "round_1"` through `"round_10"`
+- `metadata` Json: `{ bid, tricks, bonus, bonusDetails[] }`
+- `value` = calculated score for the round
+
+### UX flow (from Claude Design)
+
+- Round-by-round progression with round indicator
+- Per-player bid entry at start of round
+- Per-player trick count + bonus selection at end of round
+- Running score table visible throughout
+- Variant switcher (Classic / Rascal)
+
+### Shared scoring logic
+
+- `src/shared/scoring/skull-king.ts`: calculation for both variants (shared between client and server)
+
+### E2E
+
+- `e2e/skull-king.spec.ts`: full 10-round game, both variants, bonus captures, score verification
+
+**Validation**: complete Skull King game, correct scores in both variants.
 
 ---
 
-## Phase 7: Offline-first + PWA
+## Phase 5: Offline-first + PWA
 
-**Goal**: Works offline, syncs when back online, installable.
+**Goal**: Works offline, syncs when back online, installable as an app.
 
-- Dexie.js: local IndexedDB mirror of server entities
-- vite-plugin-pwa (Workbox): SPA shell cache
-- Sync engine (push/pull, Last-Write-Wins)
-- E2E: offline test (context.setOffline), local persistence, online sync
+### What this phase adds
+
+- **App shell caching**: Service Worker caches the SPA (HTML/JS/CSS) so the app loads without internet
+- **Offline data**: Dexie.js stores matches, players, scores locally in IndexedDB so you can use the app without internet
+- **Background sync**: queued writes are pushed to the server when connectivity returns
+- **Install prompt**: PWA is installable from the browser (Add to Home Screen)
+
+Both are implemented together — caching the shell without offline data would show an empty app, which isn't useful.
+
+### Stack
+
+- **Dexie.js**: local IndexedDB mirror of server entities (Match, Player, Score, LocalProfile)
+- **vite-plugin-pwa (Workbox)**: precache SPA shell, network-first strategy for API
+- **Background Sync API**: queue writes made offline
+
+### Sync strategy (Last-Write-Wins)
+
+- Every record has `updatedAt` timestamp
+- Client tracks `lastSyncedAt` per entity type
+- On sync: push local changes → pull server changes since `lastSyncedAt`
+- Conflict: server timestamp wins (one scorer at a time in practice)
+
+### Key files
+
+- `src/client/lib/db.ts` — Dexie schema (mirrors Prisma models client-side)
+- `src/client/lib/sync.ts` — sync engine (push/pull/conflict resolution)
+- `src/client/hooks/useOnlineStatus.ts` — online/offline detection
+- `src/client/hooks/useSyncStatus.ts` — pending changes indicator
+- `src/server/routes/sync.ts` — server-side sync endpoint
+- `vite.config.ts` — vite-plugin-pwa configuration
+
+### E2E
+
+- Test offline mode: `context.setOffline(true)` in Playwright
+- Verify data persists in IndexedDB when offline
+- Verify sync on reconnect
+- Verify PWA install prompt
+
+**Validation**: score a game offline, reconnect, data syncs. App installable on Android/iOS.
 
 ---
 
-## Phase 8: Polish + Distribution
+## Phase 6: Polish + Distribution
 
 **Goal**: Smooth experience, ready to share with friends.
 
-- Real-time sync indicator
-- Player autocomplete
-- History filters
-- Basic statistics
-- Lighthouse PWA audit (score 100)
-- Installation help page
-- v1.0.0 → production deploy
+- Real-time sync indicator in UI (synced / pending / error)
+- Player autocomplete from local profiles + linked online profiles
+- Match history filters (by game, player, date)
+- Basic statistics (win rates, average scores per game)
+- Lighthouse PWA audit (must pass all PWA criteria)
+- Installation help page (accessible without auth, explains how to install on Android/iOS)
+- Link-to-account feature: link local profiles to friends' Google accounts
+- v1.0.0 release → production deploy
+
+**Validation**: Lighthouse PWA score 100, friends can install and use the app.
