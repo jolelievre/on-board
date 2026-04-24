@@ -1,18 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { loginViaUI } from "./helpers/auth";
+import { isTestAuthMode } from "./helpers/auth";
 
-test.describe("Authentication", () => {
-  test("login page shows sign-in form in test mode", async ({ page }) => {
+test.describe("Authentication — universal", () => {
+  // These tests run WITHOUT stored auth state
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("login page shows app name", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator("h1")).toContainText("OnBoard");
-    await expect(page.locator("input[name='email']")).toBeVisible();
-    await expect(page.locator("input[name='password']")).toBeVisible();
-  });
-
-  test("can sign up and is redirected to /games", async ({ page }) => {
-    await loginViaUI(page);
-    await expect(page.locator("h1")).toContainText("Games");
   });
 
   test("protected route /games redirects to / when not authenticated", async ({
@@ -20,8 +16,6 @@ test.describe("Authentication", () => {
   }) => {
     await page.goto("/games");
     await page.waitForLoadState("domcontentloaded");
-
-    // Should redirect back to login
     await page.waitForURL("/", { timeout: 5000 });
     await expect(page.locator("h1")).toContainText("OnBoard");
   });
@@ -31,7 +25,6 @@ test.describe("Authentication", () => {
   }) => {
     await page.goto("/settings");
     await page.waitForLoadState("domcontentloaded");
-
     await page.waitForURL("/", { timeout: 5000 });
     await expect(page.locator("h1")).toContainText("OnBoard");
   });
@@ -44,5 +37,28 @@ test.describe("Authentication", () => {
 
     const playersRes = await request.get("/api/players/suggestions");
     expect(playersRes.status()).toBe(401);
+  });
+});
+
+test.describe("Authentication — test mode only", () => {
+  test.skip(!isTestAuthMode(), "Skipped: not in test auth mode");
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("login page shows email/password form", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.locator("input[name='email']")).toBeVisible();
+    await expect(page.locator("input[name='password']")).toBeVisible();
+  });
+});
+
+test.describe("Authentication — Google OAuth only", () => {
+  test.skip(isTestAuthMode(), "Skipped: in test auth mode");
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("login page shows Google sign-in button", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.locator("text=Sign in with Google")).toBeVisible();
   });
 });

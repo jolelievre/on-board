@@ -34,9 +34,9 @@ npm run dev          # Vite dev server + Hono API (port 5173)
 | `npm run start` | Run production server |
 | `npm run lint` | ESLint (must pass, zero warnings) |
 | `npm run type-check` | TypeScript strict check |
-| `npm test` | Reset test DB + run all E2E tests |
-| `npm run test:chrome` | E2E on Mobile Chrome only |
-| `npm run test:safari` | E2E on Mobile Safari only |
+| `npm test` | Reset test DB + run all E2E tests (both browsers) |
+| `npm run test:chrome` | Reset test DB + E2E on Mobile Chrome only |
+| `npm run test:safari` | Reset test DB + E2E on Mobile Safari only |
 | `npm run db:migrate` | Create + apply Prisma migrations (dev) |
 | `npm run db:seed` | Seed game templates |
 | `npm run db:reset` | Reset dev DB + re-apply migrations + seed |

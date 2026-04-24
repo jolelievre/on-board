@@ -1,11 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { createAndSignIn } from "../helpers/auth";
 
-test.describe("API: Matches", () => {
+test.describe("API: Matches (authenticated)", () => {
+  // These tests use the stored auth state from the setup project
+
   test("POST /api/matches creates a match", async ({ request }) => {
-    await createAndSignIn(request);
-
-    // Get game ID
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
@@ -29,12 +27,9 @@ test.describe("API: Matches", () => {
   test("POST /api/matches rejects invalid player count", async ({
     request,
   }) => {
-    await createAndSignIn(request);
-
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
-    // 7 Wonders Duel requires exactly 2 players
     const res = await request.post("/api/matches", {
       data: {
         gameId: game.id,
@@ -46,8 +41,6 @@ test.describe("API: Matches", () => {
   });
 
   test("POST /api/matches rejects missing gameId", async ({ request }) => {
-    await createAndSignIn(request);
-
     const res = await request.post("/api/matches", {
       data: { players: [{ name: "Alice", position: 0 }] },
     });
@@ -55,18 +48,7 @@ test.describe("API: Matches", () => {
     expect(res.status()).toBe(400);
   });
 
-  test("POST /api/matches returns 401 without auth", async ({ request }) => {
-    const res = await request.post("/api/matches", {
-      data: { gameId: "test", players: [] },
-    });
-
-    expect(res.status()).toBe(401);
-  });
-
   test("GET /api/matches lists user matches", async ({ request }) => {
-    await createAndSignIn(request);
-
-    // Create a match first
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
@@ -88,8 +70,6 @@ test.describe("API: Matches", () => {
   });
 
   test("GET /api/matches/:id returns match details", async ({ request }) => {
-    await createAndSignIn(request);
-
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
@@ -114,8 +94,6 @@ test.describe("API: Matches", () => {
   });
 
   test("PUT /api/matches/:id updates match status", async ({ request }) => {
-    await createAndSignIn(request);
-
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
@@ -149,8 +127,6 @@ test.describe("API: Matches", () => {
   test("PUT /api/matches/:id rejects invalid winnerId", async ({
     request,
   }) => {
-    await createAndSignIn(request);
-
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
@@ -170,5 +146,17 @@ test.describe("API: Matches", () => {
     });
 
     expect(res.status()).toBe(400);
+  });
+});
+
+test.describe("API: Matches (unauthenticated)", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("POST /api/matches returns 401 without auth", async ({ request }) => {
+    const res = await request.post("/api/matches", {
+      data: { gameId: "test", players: [] },
+    });
+
+    expect(res.status()).toBe(401);
   });
 });

@@ -1,13 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { createAndSignIn } from "../helpers/auth";
 
-test.describe("API: Players", () => {
+test.describe("API: Players (authenticated)", () => {
   test("GET /api/players/suggestions returns player names", async ({
     request,
   }) => {
-    await createAndSignIn(request);
-
-    // Create a match to have some player names
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
@@ -32,8 +28,6 @@ test.describe("API: Players", () => {
   test("GET /api/players/suggestions filters by query", async ({
     request,
   }) => {
-    await createAndSignIn(request);
-
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
@@ -54,6 +48,10 @@ test.describe("API: Players", () => {
     expect(names).toContain("Alice");
     expect(names).not.toContain("Bob");
   });
+});
+
+test.describe("API: Players (unauthenticated)", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
 
   test("GET /api/players/suggestions returns 401 without auth", async ({
     request,

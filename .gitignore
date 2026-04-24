@@ -30,6 +30,7 @@ src/client/routeTree.gen.ts
 test-results/
 playwright-report/
 blob-report/
+e2e/.auth/
 
 # Misc
 *.log

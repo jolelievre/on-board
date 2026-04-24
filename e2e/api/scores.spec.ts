@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { createAndSignIn } from "../helpers/auth";
 
-async function createTestMatch(request: import("@playwright/test").APIRequestContext) {
+async function createTestMatch(
+  request: import("@playwright/test").APIRequestContext,
+) {
   const gamesRes = await request.get("/api/games/7-wonders-duel");
   const game = await gamesRes.json();
 
@@ -18,9 +19,8 @@ async function createTestMatch(request: import("@playwright/test").APIRequestCon
   return createRes.json();
 }
 
-test.describe("API: Scores", () => {
+test.describe("API: Scores (authenticated)", () => {
   test("POST /api/matches/:id/scores saves scores", async ({ request }) => {
-    await createAndSignIn(request);
     const match = await createTestMatch(request);
 
     const res = await request.post(`/api/matches/${match.id}/scores`, {
@@ -48,7 +48,6 @@ test.describe("API: Scores", () => {
   test("POST /api/matches/:id/scores upserts existing scores", async ({
     request,
   }) => {
-    await createAndSignIn(request);
     const match = await createTestMatch(request);
 
     // Save initial score
@@ -86,7 +85,6 @@ test.describe("API: Scores", () => {
   test("POST /api/matches/:id/scores rejects invalid playerId", async ({
     request,
   }) => {
-    await createAndSignIn(request);
     const match = await createTestMatch(request);
 
     const res = await request.post(`/api/matches/${match.id}/scores`, {
@@ -107,7 +105,6 @@ test.describe("API: Scores", () => {
   test("POST /api/matches/:id/scores rejects non-integer value", async ({
     request,
   }) => {
-    await createAndSignIn(request);
     const match = await createTestMatch(request);
 
     const res = await request.post(`/api/matches/${match.id}/scores`, {
@@ -124,6 +121,10 @@ test.describe("API: Scores", () => {
 
     expect(res.status()).toBe(400);
   });
+});
+
+test.describe("API: Scores (unauthenticated)", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
 
   test("POST /api/matches/:id/scores returns 401 without auth", async ({
     request,
