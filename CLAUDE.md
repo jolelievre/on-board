@@ -29,6 +29,7 @@ npm run dev          # Vite dev server + Hono API (port 5173)
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Start dev server (frontend + API on port 5173) |
+| `npm run dev:kill` | Kill any process on port 5173 (stale dev servers) |
 | `npm run build` | Build client (Vite) + server (tsc) |
 | `npm run start` | Run production server |
 | `npm run lint` | ESLint (must pass, zero warnings) |
@@ -68,6 +69,12 @@ src/
 In development, `npm run dev` starts Vite on port 5173. A custom Vite plugin mounts the Hono API as middleware, so `/api/*` requests are handled in the same process — no separate server needed.
 
 In production, a single Hono process serves both the API and the SPA static files on port 3000.
+
+### Port conflicts
+
+The dev server and Playwright both use port 5173. Stale processes on that port cause "socket hang up" or "ECONNREFUSED" errors.
+
+`npm run dev` auto-kills any existing process on port 5173 before starting. For E2E tests, run `npm run dev:kill` beforehand since Playwright starts its own dev server.
 
 ## Testing
 
