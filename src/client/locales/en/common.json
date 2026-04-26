@@ -10,7 +10,11 @@
   "auth": {
     "signIn": "Sign in",
     "signInWithGoogle": "Sign in with Google",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "name": "Name",
+    "email": "Email",
+    "password": "Password",
+    "defaultName": "Test User"
   },
   "settings": {
     "title": "Settings",
@@ -28,5 +32,8 @@
   "matches": {
     "title": "Match",
     "placeholder": "Match scoring will be available in Phase 2."
+  },
+  "common": {
+    "loading": "Loading..."
   }
 }

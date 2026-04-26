@@ -31,7 +31,7 @@ function GameDetailPage() {
   if (isPending) {
     return (
       <div className="mx-auto max-w-lg p-4">
-        <p className="text-gray-500">Loading...</p>
+        <p className="text-gray-500">{t("common.loading")}</p>
       </div>
     );
   }

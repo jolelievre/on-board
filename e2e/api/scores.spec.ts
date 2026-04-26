@@ -23,7 +23,7 @@ test.describe("API: Scores (authenticated)", () => {
   test("POST /api/matches/:id/scores saves scores", async ({ request }) => {
     const match = await createTestMatch(request);
 
-    const res = await request.post(`/api/matches/${match.id}/scores`, {
+    const res = await request.patch(`/api/matches/${match.id}/scores`, {
       data: {
         scores: [
           {
@@ -51,7 +51,7 @@ test.describe("API: Scores (authenticated)", () => {
     const match = await createTestMatch(request);
 
     // Save initial score
-    await request.post(`/api/matches/${match.id}/scores`, {
+    await request.patch(`/api/matches/${match.id}/scores`, {
       data: {
         scores: [
           {
@@ -64,7 +64,7 @@ test.describe("API: Scores (authenticated)", () => {
     });
 
     // Update score
-    const res = await request.post(`/api/matches/${match.id}/scores`, {
+    const res = await request.patch(`/api/matches/${match.id}/scores`, {
       data: {
         scores: [
           {
@@ -87,7 +87,7 @@ test.describe("API: Scores (authenticated)", () => {
   }) => {
     const match = await createTestMatch(request);
 
-    const res = await request.post(`/api/matches/${match.id}/scores`, {
+    const res = await request.patch(`/api/matches/${match.id}/scores`, {
       data: {
         scores: [
           {
@@ -107,7 +107,7 @@ test.describe("API: Scores (authenticated)", () => {
   }) => {
     const match = await createTestMatch(request);
 
-    const res = await request.post(`/api/matches/${match.id}/scores`, {
+    const res = await request.patch(`/api/matches/${match.id}/scores`, {
       data: {
         scores: [
           {
@@ -129,7 +129,7 @@ test.describe("API: Scores (unauthenticated)", () => {
   test("POST /api/matches/:id/scores returns 401 without auth", async ({
     request,
   }) => {
-    const res = await request.post("/api/matches/fake-id/scores", {
+    const res = await request.patch("/api/matches/fake-id/scores", {
       data: { scores: [] },
     });
 

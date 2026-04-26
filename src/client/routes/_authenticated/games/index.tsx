@@ -30,7 +30,7 @@ function GamesPage() {
     <div className="mx-auto max-w-lg p-4">
       <h1 className="text-2xl font-bold">{t("games.title")}</h1>
 
-      {isPending && <p className="mt-4 text-gray-500">Loading...</p>}
+      {isPending && <p className="mt-4 text-gray-500">{t("common.loading")}</p>}
 
       {games && (
         <div className="mt-4 flex flex-col gap-3">

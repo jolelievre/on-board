@@ -10,7 +10,11 @@
   "auth": {
     "signIn": "Se connecter",
     "signInWithGoogle": "Se connecter avec Google",
-    "signOut": "Se déconnecter"
+    "signOut": "Se déconnecter",
+    "name": "Nom",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "defaultName": "Utilisateur test"
   },
   "settings": {
     "title": "Paramètres",
@@ -28,5 +32,8 @@
   "matches": {
     "title": "Partie",
     "placeholder": "Le suivi de score sera disponible en Phase 2."
+  },
+  "common": {
+    "loading": "Chargement..."
   }
 }

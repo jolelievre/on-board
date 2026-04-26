@@ -7,45 +7,53 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Auth tables (managed by better-auth, field-mapped in auth config) ───
+// ─── Auth tables ───
+// Managed by better-auth. Field mapping is configured in src/server/lib/auth.ts
+// (e.g. better-auth's "image" field maps to our "avatarUrl" column).
 
+/// The app user. One per person, regardless of how they log in.
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
   name          String
   emailVerified Boolean   @default(false)
-  avatarUrl     String?
-  locale        String    @default("en")
+  avatarUrl     String?   /// Profile picture URL (from Google OAuth)
+  locale        String    @default("en") /// Preferred language ("en" or "fr")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
-  createdMatches Match[]  @relation("MatchCreator")
-  players       Player[]
+  accounts       Account[]
+  sessions       Session[]
+  createdMatches Match[]   @relation("MatchCreator")
+  players        Player[]
 }
 
+/// An OAuth provider link. One User can have multiple Accounts
+/// (e.g. Google today, other providers in the future).
+/// Stores provider-specific tokens and credentials.
 model Account {
   id                    String    @id @default(cuid())
-  accountId             String
-  providerId            String
+  accountId             String    /// Provider-side user ID (e.g. Google user ID)
+  providerId            String    /// Auth provider name (e.g. "google", "credential")
   userId                String
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
+  accessToken           String?   /// OAuth access token
+  refreshToken          String?   /// OAuth refresh token
+  idToken               String?   /// OAuth ID token (JWT with user claims)
   accessTokenExpiresAt  DateTime?
   refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
+  scope                 String?   /// OAuth scopes granted
+  password              String?   /// Hashed password (email/password auth in test mode)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 }
 
+/// An active login session. Created on sign-in, deleted on sign-out.
+/// The token is sent as an httpOnly cookie.
 model Session {
   id        String   @id @default(cuid())
   expiresAt DateTime
-  token     String   @unique
+  token     String   @unique /// Session token stored in the browser cookie
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   ipAddress String?
@@ -54,10 +62,11 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+/// Used by better-auth for email verification and password reset flows.
 model Verification {
   id         String    @id @default(cuid())
-  identifier String
-  value      String
+  identifier String    /// What is being verified (e.g. email address)
+  value      String    /// Verification token or code
   expiresAt  DateTime
   createdAt  DateTime? @default(now())
   updatedAt  DateTime? @updatedAt
@@ -65,28 +74,31 @@ model Verification {
 
 // ─── Application tables ───
 
+/// A board game template (seeded, not user-created).
+/// Each game defines its scoring rules in the config JSON field.
 model Game {
   id          String  @id @default(cuid())
-  slug        String  @unique
+  slug        String  @unique /// URL-friendly identifier (e.g. "7-wonders-duel")
   name        String
   description String
   minPlayers  Int
   maxPlayers  Int
   iconUrl     String?
-  config      Json    @default("{}")
+  config      Json    @default("{}") /// Game-specific scoring config (categories, rules, variants)
 
   matches Match[]
 }
 
+/// A game session between players. Created when someone starts a new game.
 model Match {
   id          String    @id @default(cuid())
   gameId      String
   game        Game      @relation(fields: [gameId], references: [id])
   createdById String
   createdBy   User      @relation("MatchCreator", fields: [createdById], references: [id])
-  status      String    @default("IN_PROGRESS")
-  victoryType String?
-  winnerId    String?
+  status      String    @default("IN_PROGRESS") /// "IN_PROGRESS" or "COMPLETED"
+  victoryType String?   /// How the game ended (e.g. "score", "military_supremacy")
+  winnerId    String?   /// References Player.id (not a FK to avoid circular deps)
   startedAt   DateTime  @default(now())
   completedAt DateTime?
 
@@ -94,29 +106,33 @@ model Match {
   scores  Score[]
 }
 
+/// A participant in a match. Can optionally be linked to a User account.
+/// Friends without accounts are just a name (userId is null).
 model Player {
   id       String  @id @default(cuid())
   matchId  String
   match    Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  userId   String?
+  userId   String? /// Linked User account (null for unregistered friends)
   user     User?   @relation(fields: [userId], references: [id])
-  name     String
-  position Int
+  name     String  /// Display name for this match
+  position Int     /// Seat/turn order (0-indexed)
 
   scores Score[]
 
   @@unique([matchId, position])
 }
 
+/// A single score entry for a player in a match.
+/// One entry per player per scoring category (e.g. "military", "round_3").
 model Score {
   id       String @id @default(cuid())
   matchId  String
   match    Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
   playerId String
   player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  category String
-  value    Int
-  metadata Json   @default("{}")
+  category String /// Scoring category (e.g. "military", "civil", "round_1")
+  value    Int    /// Calculated score for this category
+  metadata Json   @default("{}") /// Extra data (e.g. { bid, tricks, bonusDetails[] } for Skull King)
 
   @@unique([matchId, playerId, category])
 }

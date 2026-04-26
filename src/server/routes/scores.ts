@@ -9,7 +9,7 @@ type AuthEnv = {
   };
 };
 
-export const scoresRoutes = new Hono<AuthEnv>().post(
+export const scoresRoutes = new Hono<AuthEnv>().patch(
   "/:id/scores",
   async (c) => {
     const user = c.get("user");
