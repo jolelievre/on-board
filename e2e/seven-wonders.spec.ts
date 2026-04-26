@@ -251,6 +251,26 @@ test.describe("7 Wonders Duel — full flow", () => {
     );
   });
 
+  test("skull-king match shows the unsupported scoring fallback", async ({
+    page,
+  }) => {
+    await page.goto("/games/skull-king");
+    await page.waitForLoadState("domcontentloaded");
+    await page.click("[data-testid='new-match-button']");
+    await page.waitForURL("**/games/skull-king/new");
+
+    const stamp = Date.now().toString(36);
+    await page.fill("[data-testid='new-match-player-0']", `Captain-${stamp}`);
+    await page.fill("[data-testid='new-match-player-1']", `Mate-${stamp}`);
+    await page.click("[data-testid='new-match-submit']");
+
+    await page.waitForURL(/\/matches\/[a-z0-9-]+/i);
+    await expect(
+      page.locator("[data-testid='scoring-not-supported']"),
+    ).toBeVisible();
+    await expect(page.locator("[data-testid='score-grid']")).toHaveCount(0);
+  });
+
   test("scientific_progress category contributes to total", async ({
     page,
   }) => {

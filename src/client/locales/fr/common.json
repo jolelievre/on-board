@@ -59,6 +59,7 @@
     },
     "back": "Retour au jeu",
     "notFound": "Partie introuvable.",
+    "scoringNotSupported": "Le suivi de score pour {{game}} n'est pas encore disponible.",
     "newMatch": {
       "title": "Nouvelle partie",
       "playerLabel": "Joueur {{n}}",

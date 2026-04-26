@@ -59,6 +59,7 @@
     },
     "back": "Back to game",
     "notFound": "Match not found.",
+    "scoringNotSupported": "Scoring for {{game}} is not yet supported.",
     "newMatch": {
       "title": "New match",
       "playerLabel": "Player {{n}}",
