@@ -41,9 +41,64 @@
   },
   "matches": {
     "title": "Partie",
-    "placeholder": "Le suivi de score sera disponible en Phase 2."
+    "saving": "Sauvegarde…",
+    "saved": "Sauvegardé",
+    "saveError": "Échec de la sauvegarde",
+    "completeByScore": "Terminer : {{name}} gagne aux points",
+    "completeByTiebreaker": "Terminer : {{name}} gagne au départage par les Civils",
+    "completeMilitarySupremacy": "Terminer : suprématie militaire pour {{name}}",
+    "completeScientificSupremacy": "Terminer : suprématie scientifique pour {{name}}",
+    "declareDraw": "Déclarer une égalité",
+    "draw": "Égalité",
+    "winner": "Vainqueur : {{name}}",
+    "victoryType": {
+      "score": "Aux points",
+      "military_supremacy": "Suprématie militaire",
+      "scientific_supremacy": "Suprématie scientifique",
+      "draw": "Égalité"
+    },
+    "back": "Retour au jeu",
+    "notFound": "Partie introuvable.",
+    "scoringNotSupported": "Le suivi de score pour {{game}} n'est pas encore disponible.",
+    "newMatch": {
+      "title": "Nouvelle partie",
+      "playerLabel": "Joueur {{n}}",
+      "playerPlaceholder": "Nom du joueur",
+      "playerRange": "{{min}}–{{max}} joueurs",
+      "addPlayer": "Ajouter un joueur",
+      "removePlayer": "Retirer le joueur {{n}}",
+      "start": "Commencer la partie",
+      "duplicateNames": "Les joueurs doivent avoir des noms différents.",
+      "missingName": "Chaque joueur doit avoir un nom."
+    },
+    "history": {
+      "empty": "Aucune partie pour le moment.",
+      "inProgress": "En cours",
+      "resume": "Reprendre",
+      "vs": "vs"
+    }
+  },
+  "scoring": {
+    "sevenWondersDuel": {
+      "categories": {
+        "civil": "Civil",
+        "scientific": "Scientifique",
+        "commercial": "Commercial",
+        "guilds": "Guildes",
+        "wonders": "Merveilles",
+        "scientific_progress": "Progrès",
+        "treasury": "Trésor",
+        "military": "Militaire"
+      },
+      "total": "Total",
+      "treasuryHint": "{{coins}} pièces ({{vp}} PV)",
+      "specialVictory": {
+        "military": "Suprématie militaire",
+        "scientific": "Suprématie scientifique"
+      }
+    }
   },
   "common": {
-    "loading": "Chargement..."
+    "loading": "Chargement…"
   }
 }

@@ -3,9 +3,23 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
+  const sevenWondersDuelConfig = {
+    categories: [
+      { key: "civil", label: "Civil", color: "#2563eb", min: 0 },
+      { key: "scientific", label: "Scientific", color: "#16a34a", min: 0 },
+      { key: "commercial", label: "Commercial", color: "#eab308", min: 0 },
+      { key: "guilds", label: "Guilds", color: "#9333ea", min: 0 },
+      { key: "wonders", label: "Wonders", color: "#9ca3af", min: 0 },
+      { key: "scientific_progress", label: "Progress", color: "#84cc16", min: 0 },
+      { key: "treasury", label: "Treasury", color: "#ca8a04", min: 0 },
+      { key: "military", label: "Military", color: "#dc2626", min: 0, max: 10 },
+    ],
+    victoryTypes: ["score", "military_supremacy", "scientific_supremacy", "draw"],
+  };
+
   const sevenWondersDuel = await prisma.game.upsert({
     where: { slug: "7-wonders-duel" },
-    update: {},
+    update: { config: sevenWondersDuelConfig },
     create: {
       slug: "7-wonders-duel",
       name: "7 Wonders Duel",
@@ -13,18 +27,7 @@ async function main() {
         "A two-player strategy game where you lead a civilization and build architectural wonders.",
       minPlayers: 2,
       maxPlayers: 2,
-      config: {
-        categories: [
-          { key: "military", label: "Military", color: "#dc2626", min: 0, max: 9 },
-          { key: "treasury", label: "Treasury", color: "#ca8a04", min: 0 },
-          { key: "wonders", label: "Wonders", color: "#7c3aed" },
-          { key: "civil", label: "Civil", color: "#2563eb" },
-          { key: "scientific", label: "Scientific", color: "#16a34a" },
-          { key: "commercial", label: "Commercial", color: "#ea580c" },
-          { key: "guilds", label: "Guilds", color: "#9333ea" },
-        ],
-        victoryTypes: ["score", "military_supremacy", "scientific_supremacy"],
-      },
+      config: sevenWondersDuelConfig,
     },
   });
 

@@ -41,9 +41,64 @@
   },
   "matches": {
     "title": "Match",
-    "placeholder": "Match scoring will be available in Phase 2."
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveError": "Save failed",
+    "completeByScore": "Complete: {{name}} wins by score",
+    "completeByTiebreaker": "Complete: {{name}} wins by Civil tiebreaker",
+    "completeMilitarySupremacy": "Complete: military supremacy for {{name}}",
+    "completeScientificSupremacy": "Complete: scientific supremacy for {{name}}",
+    "declareDraw": "Declare draw",
+    "draw": "Draw",
+    "winner": "Winner: {{name}}",
+    "victoryType": {
+      "score": "By score",
+      "military_supremacy": "Military supremacy",
+      "scientific_supremacy": "Scientific supremacy",
+      "draw": "Draw"
+    },
+    "back": "Back to game",
+    "notFound": "Match not found.",
+    "scoringNotSupported": "Scoring for {{game}} is not yet supported.",
+    "newMatch": {
+      "title": "New match",
+      "playerLabel": "Player {{n}}",
+      "playerPlaceholder": "Player name",
+      "playerRange": "{{min}}–{{max}} players",
+      "addPlayer": "Add player",
+      "removePlayer": "Remove player {{n}}",
+      "start": "Start match",
+      "duplicateNames": "Players must have different names.",
+      "missingName": "Each player must have a name."
+    },
+    "history": {
+      "empty": "No matches yet.",
+      "inProgress": "In progress",
+      "resume": "Resume",
+      "vs": "vs"
+    }
+  },
+  "scoring": {
+    "sevenWondersDuel": {
+      "categories": {
+        "civil": "Civil",
+        "scientific": "Scientific",
+        "commercial": "Commercial",
+        "guilds": "Guilds",
+        "wonders": "Wonders",
+        "scientific_progress": "Progress",
+        "treasury": "Treasury",
+        "military": "Military"
+      },
+      "total": "Total",
+      "treasuryHint": "{{coins}} coins ({{vp}} VP)",
+      "specialVictory": {
+        "military": "Military supremacy",
+        "scientific": "Scientific supremacy"
+      }
+    }
   },
   "common": {
-    "loading": "Loading..."
+    "loading": "Loading…"
   }
 }

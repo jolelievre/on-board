@@ -37,8 +37,10 @@ Use this template:
 ### Manual (on preview environment)
 <Checkboxes for each manual validation step. Be specific about what to check and where.>
 
-- [ ] Open preview URL → page loads correctly
-- [ ] Check `/api/health` responds with `{"status":"ok",...}`
+**Every URL or path must be a clickable Markdown link** so the reviewer can jump straight to the page from GitHub. Use the full preview URL, not bare paths or backticks.
+
+- [ ] Open [`/games`](https://on-board-preview.jolelievre.com/games) → page loads correctly
+- [ ] Check [`/api/health`](https://on-board-preview.jolelievre.com/api/health) responds with `{"status":"ok",...}`
 - [ ] <Feature-specific validation steps...>
 
 ### E2E on deployed preview
@@ -68,4 +70,5 @@ BASE_URL="https://on-board-preview.jolelievre.com" npm run test:chrome
 - Keep the PR title short (under 70 characters), use conventional commit prefix (`feat:`, `fix:`, `chore:`, etc.)
 - The validation plan is the primary QA step — make it thorough and actionable
 - When the PR adds user-facing features, include specific steps to test them on the preview environment
+- **Make every URL/path in the validation plan a clickable Markdown link** pointing to the preview environment (`https://on-board-preview.jolelievre.com/...`). Bare paths or backtick-wrapped paths force the reviewer to copy-paste — clickable links don't.
 - Adapt the checklist to the scope of the PR (remove items that don't apply, add relevant ones)
