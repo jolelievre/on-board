@@ -20,7 +20,7 @@ async function createTestMatch(
 }
 
 test.describe("API: Scores (authenticated)", () => {
-  test("POST /api/matches/:id/scores saves scores", async ({ request }) => {
+  test("PATCH /api/matches/:id/scores saves scores", async ({ request }) => {
     const match = await createTestMatch(request);
 
     const res = await request.patch(`/api/matches/${match.id}/scores`, {
@@ -45,7 +45,7 @@ test.describe("API: Scores (authenticated)", () => {
     expect(scores).toHaveLength(2);
   });
 
-  test("POST /api/matches/:id/scores upserts existing scores", async ({
+  test("PATCH /api/matches/:id/scores upserts existing scores", async ({
     request,
   }) => {
     const match = await createTestMatch(request);
@@ -82,7 +82,7 @@ test.describe("API: Scores (authenticated)", () => {
     expect(scores[0].value).toBe(8);
   });
 
-  test("POST /api/matches/:id/scores rejects invalid playerId", async ({
+  test("PATCH /api/matches/:id/scores rejects invalid playerId", async ({
     request,
   }) => {
     const match = await createTestMatch(request);
@@ -102,7 +102,7 @@ test.describe("API: Scores (authenticated)", () => {
     expect(res.status()).toBe(400);
   });
 
-  test("POST /api/matches/:id/scores rejects non-integer value", async ({
+  test("PATCH /api/matches/:id/scores rejects non-integer value", async ({
     request,
   }) => {
     const match = await createTestMatch(request);
@@ -126,7 +126,7 @@ test.describe("API: Scores (authenticated)", () => {
 test.describe("API: Scores (unauthenticated)", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test("POST /api/matches/:id/scores returns 401 without auth", async ({
+  test("PATCH /api/matches/:id/scores returns 401 without auth", async ({
     request,
   }) => {
     const res = await request.patch("/api/matches/fake-id/scores", {
