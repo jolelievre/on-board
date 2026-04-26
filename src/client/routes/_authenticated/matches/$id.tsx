@@ -9,8 +9,8 @@ import {
 } from "../../../components/scoring/SevenWondersScoreGrid";
 import {
   SEVEN_WONDERS_CATEGORY_KEYS,
-  computeScoreWinner,
   computeTotalsByPlayer,
+  resolveScoreOutcome,
   type SevenWondersCategoryKey,
   type SevenWondersVictoryType,
 } from "../../../../shared/scoring/7-wonders-duel";
@@ -29,10 +29,12 @@ type ScoreRow = {
   value: number;
 };
 
+type CompletedVictoryType = SevenWondersVictoryType | "draw";
+
 type Match = {
   id: string;
   status: "IN_PROGRESS" | "COMPLETED";
-  victoryType: SevenWondersVictoryType | null;
+  victoryType: CompletedVictoryType | null;
   winnerId: string | null;
   game: { id: string; slug: string; name: string };
   players: Player[];
@@ -163,8 +165,8 @@ function MatchPage() {
 
   const completeMatch = useMutation({
     mutationFn: (input: {
-      victoryType: SevenWondersVictoryType;
-      winnerId: string;
+      victoryType: CompletedVictoryType;
+      winnerId: string | null;
     }) =>
       api<Match>(`/api/matches/${id}`, {
         method: "PUT",
@@ -194,13 +196,27 @@ function MatchPage() {
     return computeTotalsByPlayer(flat);
   }, [match, values]);
 
-  const scoreWinnerId = useMemo(() => computeScoreWinner(totals), [totals]);
+  const coins = useMemo(() => {
+    const out: Record<string, number> = {};
+    if (!match) return out;
+    for (const p of match.players) out[p.id] = values[p.id]?.treasury ?? 0;
+    return out;
+  }, [match, values]);
+
+  const outcome = useMemo(
+    () => resolveScoreOutcome(totals, coins),
+    [totals, coins],
+  );
   const isCompleted = match?.status === "COMPLETED";
 
   const handleCompleteByScore = async () => {
-    if (!scoreWinnerId) return;
+    if (outcome.kind === "empty") return;
     await flushPendingSave();
-    completeMatch.mutate({ victoryType: "score", winnerId: scoreWinnerId });
+    if (outcome.kind === "draw") {
+      completeMatch.mutate({ victoryType: "draw", winnerId: null });
+    } else {
+      completeMatch.mutate({ victoryType: "score", winnerId: outcome.winnerId });
+    }
   };
 
   const handleSpecialVictory = async (
@@ -248,13 +264,13 @@ function MatchPage() {
         )}
       </div>
 
-      {isCompleted && winner && (
+      {isCompleted && (
         <div
           className="mt-4 rounded-md border border-green-200 bg-green-50 p-3"
           data-testid="winner-banner"
         >
           <p className="text-sm font-semibold text-green-900">
-            {t("matches.winner", { name: winner.name })}
+            {winner ? t("matches.winner", { name: winner.name }) : t("matches.draw")}
           </p>
           {match.victoryType && (
             <p className="text-xs text-green-700">
@@ -278,15 +294,21 @@ function MatchPage() {
           <button
             type="button"
             onClick={handleCompleteByScore}
-            disabled={!scoreWinnerId || completeMatch.isPending}
+            disabled={completeMatch.isPending}
             data-testid="complete-match"
+            data-outcome={outcome.kind}
             className="rounded-md bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700 disabled:bg-gray-400"
           >
-            {t("matches.complete")}
+            {outcome.kind === "draw"
+              ? t("matches.declareDraw")
+              : t("matches.complete")}
           </button>
-          {!scoreWinnerId && (
-            <p className="text-xs text-gray-500" data-testid="complete-tie-hint">
-              {t("matches.completeTie")}
+          {outcome.kind === "winner" && outcome.viaTiebreaker && (
+            <p className="text-xs text-gray-500" data-testid="tiebreaker-hint">
+              {t("matches.tiebreakerHint", {
+                name:
+                  match.players.find((p) => p.id === outcome.winnerId)?.name ?? "",
+              })}
             </p>
           )}
 

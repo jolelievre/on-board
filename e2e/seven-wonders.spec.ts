@@ -142,4 +142,95 @@ test.describe("7 Wonders Duel — full flow", () => {
       page.locator(`[data-testid='score-grid-total-${p1Id}']`),
     ).toHaveText("2");
   });
+
+  test("coin tiebreaker: equal VP, more coins wins", async ({ page }) => {
+    const names = uniqueNames();
+    await startMatch(page, names);
+
+    const p1Id = await page
+      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p1}`)
+      .first()
+      .evaluate((el) =>
+        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
+      );
+    const p2Id = await page
+      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p2}`)
+      .first()
+      .evaluate((el) =>
+        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
+      );
+
+    // Both reach 5 VP, but Alice has more coins (8 → +2 VP from coins, total 7)
+    // Wait — coin VP also counts in the total, so we need them tied AFTER coin VP.
+    // Alice: civil=5, treasury=8 → 5 + floor(8/3)=2 = 7
+    // Bob:   civil=7              → 7
+    // Tied at 7. Alice has 8 coins, Bob has 0 → Alice wins by coin tiebreaker.
+    await setScore(page, p1Id, "civil", 5);
+    await setScore(page, p1Id, "treasury", 8);
+    await setScore(page, p2Id, "civil", 7);
+
+    await expect(
+      page.locator(`[data-testid='score-grid-total-${p1Id}']`),
+    ).toHaveText("7");
+    await expect(
+      page.locator(`[data-testid='score-grid-total-${p2Id}']`),
+    ).toHaveText("7");
+
+    await expect(page.locator("[data-testid='complete-match']")).toHaveAttribute(
+      "data-outcome",
+      "winner",
+    );
+    await expect(page.locator("[data-testid='tiebreaker-hint']")).toContainText(
+      names.p1,
+    );
+
+    await expect(page.locator("[data-testid='save-status']")).toHaveAttribute(
+      "data-status",
+      "saved",
+      { timeout: 5000 },
+    );
+    await page.click("[data-testid='complete-match']");
+    await expect(page.locator("[data-testid='winner-banner']")).toContainText(
+      names.p1,
+    );
+  });
+
+  test("draw: equal VP and equal coins yields a draw", async ({ page }) => {
+    const names = uniqueNames();
+    await startMatch(page, names);
+
+    const p1Id = await page
+      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p1}`)
+      .first()
+      .evaluate((el) =>
+        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
+      );
+    const p2Id = await page
+      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p2}`)
+      .first()
+      .evaluate((el) =>
+        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
+      );
+
+    await setScore(page, p1Id, "civil", 5);
+    await setScore(page, p2Id, "civil", 5);
+
+    await expect(page.locator("[data-testid='complete-match']")).toHaveAttribute(
+      "data-outcome",
+      "draw",
+    );
+    await expect(page.locator("[data-testid='complete-match']")).toContainText(
+      /Declare draw|Déclarer une égalité/,
+    );
+
+    await expect(page.locator("[data-testid='save-status']")).toHaveAttribute(
+      "data-status",
+      "saved",
+      { timeout: 5000 },
+    );
+    await page.click("[data-testid='complete-match']");
+    await expect(page.locator("[data-testid='winner-banner']")).toContainText(
+      /Draw|Égalité/,
+    );
+  });
 });

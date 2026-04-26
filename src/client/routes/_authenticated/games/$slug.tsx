@@ -25,7 +25,7 @@ type ScoreRow = { playerId: string; category: string; value: number };
 type MatchListItem = {
   id: string;
   status: "IN_PROGRESS" | "COMPLETED";
-  victoryType: SevenWondersVictoryType | null;
+  victoryType: SevenWondersVictoryType | "draw" | null;
   winnerId: string | null;
   startedAt: string;
   completedAt: string | null;

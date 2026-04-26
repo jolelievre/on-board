@@ -45,12 +45,15 @@
     "saved": "Sauvegardé",
     "saveError": "Échec de la sauvegarde",
     "complete": "Terminer la partie",
-    "completeTie": "Égalité — déclarez une victoire spéciale ou ajustez les scores.",
+    "declareDraw": "Déclarer une égalité",
+    "draw": "Égalité",
+    "tiebreakerHint": "Égalité aux PV — {{name}} l'emporte au départage par les pièces.",
     "winner": "Vainqueur : {{name}}",
     "victoryType": {
       "score": "Aux points",
       "military_supremacy": "Suprématie militaire",
-      "scientific_supremacy": "Suprématie scientifique"
+      "scientific_supremacy": "Suprématie scientifique",
+      "draw": "Égalité"
     },
     "back": "Retour au jeu",
     "notFound": "Partie introuvable.",

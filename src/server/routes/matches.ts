@@ -108,8 +108,8 @@ export const matchesRoutes = new Hono<AuthEnv>()
 
     const { status, victoryType, winnerId } = body as {
       status?: string;
-      victoryType?: string;
-      winnerId?: string;
+      victoryType?: string | null;
+      winnerId?: string | null;
     };
 
     // Validate match exists and belongs to user

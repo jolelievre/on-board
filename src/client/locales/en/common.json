@@ -45,12 +45,15 @@
     "saved": "Saved",
     "saveError": "Save failed",
     "complete": "Complete match",
-    "completeTie": "Tie — declare a special victory or adjust scores.",
+    "declareDraw": "Declare draw",
+    "draw": "Draw",
+    "tiebreakerHint": "Tied on VP — {{name}} wins by coin tiebreaker.",
     "winner": "Winner: {{name}}",
     "victoryType": {
       "score": "By score",
       "military_supremacy": "Military supremacy",
-      "scientific_supremacy": "Scientific supremacy"
+      "scientific_supremacy": "Scientific supremacy",
+      "draw": "Draw"
     },
     "back": "Back to game",
     "notFound": "Match not found.",
