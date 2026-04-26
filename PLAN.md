@@ -99,7 +99,7 @@ Single process, single port, single Docker container.
 
 ---
 
-## Phase 1: Auth + Data Model + i18n
+## Phase 1: Auth + Data Model + i18n ✅ DONE
 
 **Goal**: Google OAuth login, database schema, route structure, internationalization.
 
