@@ -15,18 +15,15 @@ function uniqueTestUser() {
 /**
  * Login adapter — auto-detects the available auth method:
  * - If the email/password form is visible (test mode) → use it
- * - Otherwise → use Google OAuth (needs GOOGLE_TEST_EMAIL/PASSWORD env vars)
+ * - Otherwise → use Google OAuth (needs GOOGLE_TEST_EMAIL/PASSWORD in .env.test.local)
  *
  * After login, the page is on /games.
  */
 export async function login(page: Page) {
   await page.goto("/");
   await page.waitForLoadState("domcontentloaded");
-
-  // Wait for the login page to fully render
   await page.waitForSelector("h1", { timeout: 10000 });
 
-  // Detect which auth method is available
   const hasTestAuth = await page
     .locator("input[name='email']")
     .isVisible({ timeout: 2000 })
@@ -67,7 +64,11 @@ async function loginWithTestAuth(page: Page) {
 
 /**
  * Login via Google OAuth.
- * Requires GOOGLE_TEST_EMAIL and GOOGLE_TEST_PASSWORD env vars.
+ * Requires GOOGLE_TEST_EMAIL and GOOGLE_TEST_PASSWORD env vars
+ * (set in .env.test.local).
+ *
+ * The auth-setup project uses real Chrome with automation flags disabled
+ * so Google doesn't block the login.
  */
 async function loginWithGoogle(page: Page) {
   const email = process.env.GOOGLE_TEST_EMAIL;
@@ -76,7 +77,7 @@ async function loginWithGoogle(page: Page) {
   if (!email || !password) {
     throw new Error(
       "Google OAuth login requires GOOGLE_TEST_EMAIL and GOOGLE_TEST_PASSWORD env vars. " +
-      "Set them in .env.test.local",
+        "Set them in .env.test.local",
     );
   }
 
@@ -99,6 +100,14 @@ async function loginWithGoogle(page: Page) {
   // Enter password
   await page.fill('input[type="password"]', password);
   await page.click("#passwordNext");
+
+  // Google may show a consent screen on first login to the app
+  try {
+    const continueButton = page.locator('button:has-text("Continue"), button:has-text("Continuer"), #submit_approve_access');
+    await continueButton.click({ timeout: 5000 });
+  } catch {
+    // No consent screen — direct redirect
+  }
 
   // Wait for redirect back to the app
   await page.waitForURL("**/games", { timeout: 30000 });

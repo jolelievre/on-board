@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { isTestAuthMode } from "./helpers/auth";
+import { isTestAuthMode, login } from "./helpers/auth";
 
 test.describe("Authentication — universal", () => {
   // These tests run WITHOUT stored auth state
@@ -37,6 +37,42 @@ test.describe("Authentication — universal", () => {
 
     const playersRes = await request.get("/api/players/suggestions");
     expect(playersRes.status()).toBe(401);
+  });
+});
+
+test.describe("Authentication — logout", () => {
+  // Logout invalidates the session server-side, so these tests
+  // use their own fresh login to avoid breaking other tests.
+  test.use({ storageState: { cookies: [], origins: [] } });
+  test.skip(!isTestAuthMode(), "Skipped: logout tests need test auth mode for fresh login");
+
+  test("can sign out and is redirected to login page", async ({ page }) => {
+    await login(page);
+
+    await page.goto("/settings");
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.locator("h1")).toContainText("Settings");
+
+    await page.click("text=Sign out");
+
+    await page.waitForURL("/", { timeout: 10000 });
+    await expect(page.locator("h1")).toContainText("OnBoard");
+  });
+
+  test("cannot access protected routes after sign out", async ({ page }) => {
+    await login(page);
+
+    await page.goto("/settings");
+    await page.waitForLoadState("domcontentloaded");
+
+    await page.click("text=Sign out");
+    await page.waitForURL("/", { timeout: 10000 });
+
+    // Try to access a protected route
+    await page.goto("/games");
+    await page.waitForLoadState("domcontentloaded");
+    await page.waitForURL("/", { timeout: 5000 });
+    await expect(page.locator("h1")).toContainText("OnBoard");
   });
 });
 

@@ -91,8 +91,10 @@ The dev server and Playwright both use port 5173. Stale processes on that port c
 ### Running against deployed environments
 
 ```bash
-BASE_URL="https://your-deployed-url.example.com" npm run test:chrome
+BASE_URL="https://on-board-preview.jolelievre.com" npm run test:chrome
 ```
+
+Google OAuth login is automated — requires `GOOGLE_TEST_EMAIL` and `GOOGLE_TEST_PASSWORD` in `.env.test.local`.
 
 ## Code Style
 

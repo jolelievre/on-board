@@ -26,11 +26,22 @@ export default defineConfig({
     // Auth state will be set per-project via storageState
   },
   projects: [
-    // Setup project: logs in once and saves auth state
+    // Setup project: logs in once and saves auth state.
+    // Uses real Chrome with automation flags disabled so Google OAuth works.
     {
       name: "auth-setup",
       testMatch: /auth\.setup\.ts/,
-      use: { ...devices["Pixel 5"] },
+      use: {
+        ...devices["Pixel 5"],
+        ...(isRemote
+          ? {
+              channel: "chrome",
+              launchOptions: {
+                args: ["--disable-blink-features=AutomationControlled"],
+              },
+            }
+          : {}),
+      },
     },
     {
       name: "Mobile Chrome",
