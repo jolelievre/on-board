@@ -2,7 +2,7 @@
 set -e
 
 echo "Running database migrations..."
-npx prisma db push --skip-generate
+npx prisma migrate deploy
 
 echo "Seeding database (conditional)..."
 npx tsx prisma/seed.ts

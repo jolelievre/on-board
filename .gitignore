@@ -20,13 +20,17 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Prisma
-src/generated/
+# Prisma (generated client in node_modules)
+# No custom output directory needed
+
+# TanStack Router (auto-generated)
+src/client/routeTree.gen.ts
 
 # Test
 test-results/
 playwright-report/
 blob-report/
+e2e/.auth/
 
 # Misc
 *.log

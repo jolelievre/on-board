@@ -1,0 +1,49 @@
+{
+  "app": {
+    "name": "OnBoard",
+    "tagline": "Board game score tracker"
+  },
+  "nav": {
+    "games": "Games",
+    "settings": "Settings"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signInWithGoogle": "Sign in with Google",
+    "signOut": "Sign out",
+    "name": "Name",
+    "email": "Email",
+    "password": "Password",
+    "defaultName": "Test User"
+  },
+  "settings": {
+    "title": "Settings",
+    "profile": "Profile",
+    "language": "Language"
+  },
+  "games": {
+    "title": "Games",
+    "players": "players",
+    "newMatch": "New match",
+    "matchHistory": "Match history",
+    "noMatches": "No matches yet.",
+    "notFound": "Game not found.",
+    "catalog": {
+      "7-wonders-duel": {
+        "name": "7 Wonders Duel",
+        "description": "A two-player strategy game where you lead a civilization and build architectural wonders."
+      },
+      "skull-king": {
+        "name": "Skull King",
+        "description": "A trick-taking pirate card game where you bid on how many tricks you will win each round."
+      }
+    }
+  },
+  "matches": {
+    "title": "Match",
+    "placeholder": "Match scoring will be available in Phase 2."
+  },
+  "common": {
+    "loading": "Loading..."
+  }
+}
