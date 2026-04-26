@@ -68,7 +68,11 @@ test.describe("7 Wonders Duel — full flow", () => {
       { timeout: 5000 },
     );
 
-    // Complete the match — Alice wins
+    // Complete button announces the winner before commit
+    await expect(page.locator("[data-testid='complete-match']")).toContainText(
+      names.p1,
+    );
+
     await page.click("[data-testid='complete-match']");
 
     await expect(page.locator("[data-testid='winner-banner']")).toContainText(
@@ -198,7 +202,10 @@ test.describe("7 Wonders Duel — full flow", () => {
       "data-outcome",
       "winner",
     );
-    await expect(page.locator("[data-testid='tiebreaker-hint']")).toContainText(
+    await expect(page.locator("[data-testid='complete-match']")).toContainText(
+      /Civil tiebreaker|départage par les Civils/,
+    );
+    await expect(page.locator("[data-testid='complete-match']")).toContainText(
       names.p1,
     );
 

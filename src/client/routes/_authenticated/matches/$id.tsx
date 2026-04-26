@@ -244,6 +244,11 @@ function MatchPage() {
     ? match.players.find((p) => p.id === match.winnerId)
     : null;
 
+  const scoreWinnerName =
+    outcome.kind === "winner"
+      ? (match.players.find((p) => p.id === outcome.winnerId)?.name ?? "")
+      : "";
+
   const completeButtonLabel = (() => {
     if (supremacy && supremacyPlayer) {
       const key =
@@ -253,7 +258,12 @@ function MatchPage() {
       return t(key, { name: supremacyPlayer.name });
     }
     if (outcome.kind === "draw") return t("matches.declareDraw");
-    return t("matches.complete");
+    if (outcome.kind === "winner") {
+      return outcome.viaTiebreaker
+        ? t("matches.completeByTiebreaker", { name: scoreWinnerName })
+        : t("matches.completeByScore", { name: scoreWinnerName });
+    }
+    return t("matches.completeByScore", { name: "" });
   })();
 
   const completeOutcomeAttr = supremacy ? supremacy.type : outcome.kind;
@@ -322,14 +332,6 @@ function MatchPage() {
           >
             {completeButtonLabel}
           </button>
-          {!supremacy && outcome.kind === "winner" && outcome.viaTiebreaker && (
-            <p className="text-xs text-gray-500" data-testid="tiebreaker-hint">
-              {t("matches.tiebreakerHint", {
-                name:
-                  match.players.find((p) => p.id === outcome.winnerId)?.name ?? "",
-              })}
-            </p>
-          )}
         </div>
       )}
 
