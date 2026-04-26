@@ -187,7 +187,7 @@ GET    /api/players/suggestions     # Autocomplete from past matches
 
 ---
 
-## Phase 2: 7 Wonders Duel — POC
+## Phase 2: 7 Wonders Duel — POC ✅ DONE
 
 **Goal**: Functional scoring with a clean look inspired by the physical score grid.
 
