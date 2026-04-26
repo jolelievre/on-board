@@ -41,8 +41,12 @@ function GamesPage() {
               params={{ slug: game.slug }}
               className="rounded-lg border p-4 hover:bg-gray-50"
             >
-              <h2 className="font-semibold">{game.name}</h2>
-              <p className="mt-1 text-sm text-gray-600">{game.description}</p>
+              <h2 className="font-semibold">
+                {t(`games.catalog.${game.slug}.name`, { defaultValue: game.name })}
+              </h2>
+              <p className="mt-1 text-sm text-gray-600">
+                {t(`games.catalog.${game.slug}.description`, { defaultValue: game.description })}
+              </p>
               <p className="mt-1 text-xs text-gray-400">
                 {game.minPlayers}–{game.maxPlayers} {t("games.players")}
               </p>

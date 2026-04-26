@@ -27,7 +27,17 @@
     "newMatch": "New match",
     "matchHistory": "Match history",
     "noMatches": "No matches yet.",
-    "notFound": "Game not found."
+    "notFound": "Game not found.",
+    "catalog": {
+      "7-wonders-duel": {
+        "name": "7 Wonders Duel",
+        "description": "A two-player strategy game where you lead a civilization and build architectural wonders."
+      },
+      "skull-king": {
+        "name": "Skull King",
+        "description": "A trick-taking pirate card game where you bid on how many tricks you will win each round."
+      }
+    }
   },
   "matches": {
     "title": "Match",

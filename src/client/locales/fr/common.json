@@ -27,7 +27,17 @@
     "newMatch": "Nouvelle partie",
     "matchHistory": "Historique des parties",
     "noMatches": "Aucune partie pour le moment.",
-    "notFound": "Jeu introuvable."
+    "notFound": "Jeu introuvable.",
+    "catalog": {
+      "7-wonders-duel": {
+        "name": "7 Wonders Duel",
+        "description": "Un jeu de stratégie à deux joueurs où vous dirigez une civilisation et construisez des merveilles architecturales."
+      },
+      "skull-king": {
+        "name": "Skull King",
+        "description": "Un jeu de plis sur le thème des pirates où vous pariez sur le nombre de plis que vous remporterez à chaque manche."
+      }
+    }
   },
   "matches": {
     "title": "Partie",
