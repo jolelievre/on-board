@@ -75,6 +75,7 @@ export const matchesRoutes = new Hono<AuthEnv>()
       include: {
         game: { select: { name: true, slug: true } },
         players: { orderBy: { position: "asc" } },
+        scores: true,
       },
       orderBy: { startedAt: "desc" },
     });

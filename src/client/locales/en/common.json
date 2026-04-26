@@ -41,9 +41,55 @@
   },
   "matches": {
     "title": "Match",
-    "placeholder": "Match scoring will be available in Phase 2."
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveError": "Save failed",
+    "complete": "Complete match",
+    "completeTie": "Tie — declare a special victory or adjust scores.",
+    "winner": "Winner: {{name}}",
+    "victoryType": {
+      "score": "By score",
+      "military_supremacy": "Military supremacy",
+      "scientific_supremacy": "Scientific supremacy"
+    },
+    "back": "Back to game",
+    "notFound": "Match not found.",
+    "newMatch": {
+      "title": "New match",
+      "playerLabel": "Player {{n}}",
+      "playerPlaceholder": "Player name",
+      "start": "Start match",
+      "duplicateNames": "Players must have different names.",
+      "missingName": "Each player must have a name."
+    },
+    "history": {
+      "empty": "No matches yet.",
+      "inProgress": "In progress",
+      "resume": "Resume",
+      "vs": "vs"
+    }
+  },
+  "scoring": {
+    "sevenWondersDuel": {
+      "categories": {
+        "military": "Military",
+        "treasury": "Treasury",
+        "wonders": "Wonders",
+        "civil": "Civil",
+        "scientific": "Scientific",
+        "commercial": "Commercial",
+        "guilds": "Guilds"
+      },
+      "total": "Total",
+      "treasuryHint": "{{coins}} coins ({{vp}} VP)",
+      "specialVictory": {
+        "military": "Military supremacy",
+        "scientific": "Scientific supremacy",
+        "declareFor": "Declare for {{name}}"
+      }
+    }
   },
   "common": {
-    "loading": "Loading..."
+    "loading": "Loading…"
   }
 }

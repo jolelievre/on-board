@@ -41,9 +41,55 @@
   },
   "matches": {
     "title": "Partie",
-    "placeholder": "Le suivi de score sera disponible en Phase 2."
+    "saving": "Sauvegarde…",
+    "saved": "Sauvegardé",
+    "saveError": "Échec de la sauvegarde",
+    "complete": "Terminer la partie",
+    "completeTie": "Égalité — déclarez une victoire spéciale ou ajustez les scores.",
+    "winner": "Vainqueur : {{name}}",
+    "victoryType": {
+      "score": "Aux points",
+      "military_supremacy": "Suprématie militaire",
+      "scientific_supremacy": "Suprématie scientifique"
+    },
+    "back": "Retour au jeu",
+    "notFound": "Partie introuvable.",
+    "newMatch": {
+      "title": "Nouvelle partie",
+      "playerLabel": "Joueur {{n}}",
+      "playerPlaceholder": "Nom du joueur",
+      "start": "Commencer la partie",
+      "duplicateNames": "Les joueurs doivent avoir des noms différents.",
+      "missingName": "Chaque joueur doit avoir un nom."
+    },
+    "history": {
+      "empty": "Aucune partie pour le moment.",
+      "inProgress": "En cours",
+      "resume": "Reprendre",
+      "vs": "vs"
+    }
+  },
+  "scoring": {
+    "sevenWondersDuel": {
+      "categories": {
+        "military": "Militaire",
+        "treasury": "Trésor",
+        "wonders": "Merveilles",
+        "civil": "Civil",
+        "scientific": "Scientifique",
+        "commercial": "Commercial",
+        "guilds": "Guildes"
+      },
+      "total": "Total",
+      "treasuryHint": "{{coins}} pièces ({{vp}} PV)",
+      "specialVictory": {
+        "military": "Suprématie militaire",
+        "scientific": "Suprématie scientifique",
+        "declareFor": "Déclarer pour {{name}}"
+      }
+    }
   },
   "common": {
-    "loading": "Chargement..."
+    "loading": "Chargement…"
   }
 }
