@@ -12,6 +12,15 @@ export type ScoreGridValues = Record<
   Partial<Record<SevenWondersCategoryKey, number>>
 >;
 
+export type SupremacyType = "military_supremacy" | "scientific_supremacy";
+export type SupremacySelection = {
+  type: SupremacyType;
+  playerId: string;
+} | null;
+
+const MILITARY_COLOR = "#dc2626";
+const SCIENTIFIC_COLOR = "#16a34a";
+
 type Props = {
   players: ScoreGridPlayer[];
   values: ScoreGridValues;
@@ -20,6 +29,8 @@ type Props = {
     category: SevenWondersCategoryKey,
     value: number,
   ) => void;
+  supremacy: SupremacySelection;
+  onSupremacyChange: (next: SupremacySelection) => void;
   disabled?: boolean;
 };
 
@@ -29,10 +40,20 @@ function parseInput(raw: string): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export function SevenWondersScoreGrid({
   players,
   values,
   onChange,
+  supremacy,
+  onSupremacyChange,
   disabled,
 }: Props) {
   const { t } = useTranslation();
@@ -44,6 +65,14 @@ export function SevenWondersScoreGrid({
     }));
     return { player: p, total: computePlayerTotal(playerScores) };
   });
+
+  const toggleSupremacy = (type: SupremacyType, playerId: string) => {
+    if (supremacy?.type === type && supremacy.playerId === playerId) {
+      onSupremacyChange(null);
+    } else {
+      onSupremacyChange({ type, playerId });
+    }
+  };
 
   return (
     <div
@@ -94,6 +123,26 @@ export function SevenWondersScoreGrid({
           {total}
         </div>
       ))}
+
+      {/* Supremacy rows */}
+      <SupremacyRow
+        type="military_supremacy"
+        color={MILITARY_COLOR}
+        label={t("scoring.sevenWondersDuel.specialVictory.military")}
+        players={players}
+        supremacy={supremacy}
+        onToggle={toggleSupremacy}
+        disabled={disabled}
+      />
+      <SupremacyRow
+        type="scientific_supremacy"
+        color={SCIENTIFIC_COLOR}
+        label={t("scoring.sevenWondersDuel.specialVictory.scientific")}
+        players={players}
+        supremacy={supremacy}
+        onToggle={toggleSupremacy}
+        disabled={disabled}
+      />
     </div>
   );
 }
@@ -122,14 +171,15 @@ function CategoryRow({
   disabled,
 }: CategoryRowProps) {
   const { t } = useTranslation();
+  const rowBg = hexToRgba(color, 0.12);
 
   return (
     <>
       <div
-        className="flex items-center bg-white px-3 py-2"
-        style={{ borderLeft: `4px solid ${color}` }}
+        className="flex items-center px-3 py-2"
+        style={{ backgroundColor: rowBg, borderLeft: `4px solid ${color}` }}
       >
-        <span className="text-sm font-medium text-gray-800">{label}</span>
+        <span className="text-sm font-medium text-gray-900">{label}</span>
       </div>
       {players.map((p) => {
         const raw = values[p.id]?.[category] ?? 0;
@@ -137,7 +187,8 @@ function CategoryRow({
         return (
           <div
             key={p.id}
-            className="flex flex-col items-center justify-center bg-white px-2 py-2"
+            className="flex flex-col items-center justify-center px-2 py-2"
+            style={{ backgroundColor: rowBg }}
           >
             <input
               type="text"
@@ -150,11 +201,11 @@ function CategoryRow({
               max={max}
               onChange={(e) => onChange(p.id, category, parseInput(e.target.value))}
               data-testid={`score-input-${p.id}-${category}`}
-              className="w-full max-w-[4rem] rounded border border-gray-200 bg-white px-2 py-1 text-center text-base text-gray-900 focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
+              className="w-full max-w-[4rem] rounded border border-gray-300 bg-white px-2 py-1 text-center text-base text-gray-900 focus:border-blue-500 focus:outline-none disabled:bg-gray-50 disabled:text-gray-500"
             />
             {category === "treasury" && raw > 0 && (
               <span
-                className="mt-1 text-[10px] text-gray-500"
+                className="mt-1 text-[10px] text-gray-700"
                 data-testid={`score-treasury-hint-${p.id}`}
               >
                 {t("scoring.sevenWondersDuel.treasuryHint", {
@@ -163,6 +214,59 @@ function CategoryRow({
                 })}
               </span>
             )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+type SupremacyRowProps = {
+  type: SupremacyType;
+  color: string;
+  label: string;
+  players: ScoreGridPlayer[];
+  supremacy: SupremacySelection;
+  onToggle: (type: SupremacyType, playerId: string) => void;
+  disabled?: boolean;
+};
+
+function SupremacyRow({
+  type,
+  color,
+  label,
+  players,
+  supremacy,
+  onToggle,
+  disabled,
+}: SupremacyRowProps) {
+  const rowBg = hexToRgba(color, 0.18);
+
+  return (
+    <>
+      <div
+        className="flex items-center px-3 py-2"
+        style={{ backgroundColor: rowBg, borderLeft: `4px solid ${color}` }}
+      >
+        <span className="text-sm font-semibold text-gray-900">{label}</span>
+      </div>
+      {players.map((p) => {
+        const checked = supremacy?.type === type && supremacy.playerId === p.id;
+        return (
+          <div
+            key={p.id}
+            className="flex items-center justify-center px-2 py-2"
+            style={{ backgroundColor: rowBg }}
+          >
+            <input
+              type="checkbox"
+              checked={checked}
+              disabled={disabled}
+              onChange={() => onToggle(type, p.id)}
+              data-testid={`supremacy-${type}-${p.id}`}
+              className="h-5 w-5 cursor-pointer accent-current"
+              style={{ color }}
+            />
           </div>
         );
       })}

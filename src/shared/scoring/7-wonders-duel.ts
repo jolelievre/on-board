@@ -1,11 +1,12 @@
 export type SevenWondersCategoryKey =
-  | "military"
-  | "treasury"
-  | "wonders"
   | "civil"
   | "scientific"
   | "commercial"
-  | "guilds";
+  | "guilds"
+  | "wonders"
+  | "scientific_progress"
+  | "treasury"
+  | "military";
 
 export type SevenWondersVictoryType =
   | "score"
@@ -20,13 +21,14 @@ export type SevenWondersCategory = {
 };
 
 export const SEVEN_WONDERS_CATEGORIES: ReadonlyArray<SevenWondersCategory> = [
-  { key: "military", color: "#dc2626", min: 0, max: 9 },
-  { key: "treasury", color: "#ca8a04", min: 0 },
-  { key: "wonders", color: "#7c3aed", min: 0 },
   { key: "civil", color: "#2563eb", min: 0 },
   { key: "scientific", color: "#16a34a", min: 0 },
-  { key: "commercial", color: "#ea580c", min: 0 },
+  { key: "commercial", color: "#eab308", min: 0 },
   { key: "guilds", color: "#9333ea", min: 0 },
+  { key: "wonders", color: "#9ca3af", min: 0 },
+  { key: "scientific_progress", color: "#84cc16", min: 0 },
+  { key: "treasury", color: "#ca8a04", min: 0 },
+  { key: "military", color: "#dc2626", min: 0, max: 10 },
 ];
 
 export const SEVEN_WONDERS_CATEGORY_KEYS: ReadonlyArray<SevenWondersCategoryKey> =
@@ -98,14 +100,14 @@ export type ScoreOutcome =
   | { kind: "empty" };
 
 /**
- * Applies the official 7 Wonders Duel rule on a tie:
- * highest VP → most coins among the tied players → draw.
+ * Applies the official 7 Wonders Duel civil-victory rule:
+ * highest total VP → most Civil (blue) VP among the tied players → draw.
  *
- * `coins` maps playerId to the raw Treasury value (coins, not VP).
+ * `civilVp` maps playerId to its civil-category value (which is direct VP).
  */
 export function resolveScoreOutcome(
   totals: Record<string, number>,
-  coins: Record<string, number>,
+  civilVp: Record<string, number>,
 ): ScoreOutcome {
   const entries = Object.entries(totals);
   if (entries.length === 0) return { kind: "empty" };
@@ -118,15 +120,15 @@ export function resolveScoreOutcome(
     return { kind: "winner", winnerId: topByVp[0], viaTiebreaker: false };
   }
 
-  let bestCoins = -Infinity;
+  let bestCivil = -Infinity;
   for (const id of topByVp) {
-    const c = coins[id] ?? 0;
-    if (c > bestCoins) bestCoins = c;
+    const c = civilVp[id] ?? 0;
+    if (c > bestCivil) bestCivil = c;
   }
-  const topByCoins = topByVp.filter((id) => (coins[id] ?? 0) === bestCoins);
+  const topByCivil = topByVp.filter((id) => (civilVp[id] ?? 0) === bestCivil);
 
-  if (topByCoins.length === 1) {
-    return { kind: "winner", winnerId: topByCoins[0], viaTiebreaker: true };
+  if (topByCivil.length === 1) {
+    return { kind: "winner", winnerId: topByCivil[0], viaTiebreaker: true };
   }
   return { kind: "draw" };
 }

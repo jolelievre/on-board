@@ -45,9 +45,11 @@
     "saved": "Saved",
     "saveError": "Save failed",
     "complete": "Complete match",
+    "completeMilitarySupremacy": "Complete: military supremacy for {{name}}",
+    "completeScientificSupremacy": "Complete: scientific supremacy for {{name}}",
     "declareDraw": "Declare draw",
     "draw": "Draw",
-    "tiebreakerHint": "Tied on VP — {{name}} wins by coin tiebreaker.",
+    "tiebreakerHint": "Tied on VP — {{name}} wins by Civil tiebreaker.",
     "winner": "Winner: {{name}}",
     "victoryType": {
       "score": "By score",
@@ -75,20 +77,20 @@
   "scoring": {
     "sevenWondersDuel": {
       "categories": {
-        "military": "Military",
-        "treasury": "Treasury",
-        "wonders": "Wonders",
         "civil": "Civil",
         "scientific": "Scientific",
         "commercial": "Commercial",
-        "guilds": "Guilds"
+        "guilds": "Guilds",
+        "wonders": "Wonders",
+        "scientific_progress": "Progress",
+        "treasury": "Treasury",
+        "military": "Military"
       },
       "total": "Total",
       "treasuryHint": "{{coins}} coins ({{vp}} VP)",
       "specialVictory": {
         "military": "Military supremacy",
-        "scientific": "Scientific supremacy",
-        "declareFor": "Declare for {{name}}"
+        "scientific": "Scientific supremacy"
       }
     }
   },

@@ -6,6 +6,7 @@ import { api } from "../../../lib/api";
 import {
   SevenWondersScoreGrid,
   type ScoreGridValues,
+  type SupremacySelection,
 } from "../../../components/scoring/SevenWondersScoreGrid";
 import {
   SEVEN_WONDERS_CATEGORY_KEYS,
@@ -90,6 +91,7 @@ function MatchPage() {
   });
 
   const [values, setValues] = useState<ScoreGridValues>({});
+  const [supremacy, setSupremacy] = useState<SupremacySelection>(null);
   const [hydrated, setHydrated] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -196,35 +198,38 @@ function MatchPage() {
     return computeTotalsByPlayer(flat);
   }, [match, values]);
 
-  const coins = useMemo(() => {
+  const civilVp = useMemo(() => {
     const out: Record<string, number> = {};
     if (!match) return out;
-    for (const p of match.players) out[p.id] = values[p.id]?.treasury ?? 0;
+    for (const p of match.players) out[p.id] = values[p.id]?.civil ?? 0;
     return out;
   }, [match, values]);
 
   const outcome = useMemo(
-    () => resolveScoreOutcome(totals, coins),
-    [totals, coins],
+    () => resolveScoreOutcome(totals, civilVp),
+    [totals, civilVp],
   );
   const isCompleted = match?.status === "COMPLETED";
 
-  const handleCompleteByScore = async () => {
-    if (outcome.kind === "empty") return;
+  const supremacyPlayer = supremacy
+    ? (match?.players.find((p) => p.id === supremacy.playerId) ?? null)
+    : null;
+
+  const handleComplete = async () => {
     await flushPendingSave();
+    if (supremacy) {
+      completeMatch.mutate({
+        victoryType: supremacy.type,
+        winnerId: supremacy.playerId,
+      });
+      return;
+    }
+    if (outcome.kind === "empty") return;
     if (outcome.kind === "draw") {
       completeMatch.mutate({ victoryType: "draw", winnerId: null });
-    } else {
-      completeMatch.mutate({ victoryType: "score", winnerId: outcome.winnerId });
+      return;
     }
-  };
-
-  const handleSpecialVictory = async (
-    victoryType: "military_supremacy" | "scientific_supremacy",
-    winnerId: string,
-  ) => {
-    await flushPendingSave();
-    completeMatch.mutate({ victoryType, winnerId });
+    completeMatch.mutate({ victoryType: "score", winnerId: outcome.winnerId });
   };
 
   if (isPending || !match) {
@@ -238,6 +243,20 @@ function MatchPage() {
   const winner = match.winnerId
     ? match.players.find((p) => p.id === match.winnerId)
     : null;
+
+  const completeButtonLabel = (() => {
+    if (supremacy && supremacyPlayer) {
+      const key =
+        supremacy.type === "military_supremacy"
+          ? "matches.completeMilitarySupremacy"
+          : "matches.completeScientificSupremacy";
+      return t(key, { name: supremacyPlayer.name });
+    }
+    if (outcome.kind === "draw") return t("matches.declareDraw");
+    return t("matches.complete");
+  })();
+
+  const completeOutcomeAttr = supremacy ? supremacy.type : outcome.kind;
 
   return (
     <div className="mx-auto max-w-lg p-4">
@@ -285,6 +304,8 @@ function MatchPage() {
           players={match.players}
           values={values}
           onChange={handleScoreChange}
+          supremacy={supremacy}
+          onSupremacyChange={setSupremacy}
           disabled={isCompleted}
         />
       </div>
@@ -293,17 +314,15 @@ function MatchPage() {
         <div className="mt-6 flex flex-col gap-3">
           <button
             type="button"
-            onClick={handleCompleteByScore}
+            onClick={handleComplete}
             disabled={completeMatch.isPending}
             data-testid="complete-match"
-            data-outcome={outcome.kind}
+            data-outcome={completeOutcomeAttr}
             className="rounded-md bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700 disabled:bg-gray-400"
           >
-            {outcome.kind === "draw"
-              ? t("matches.declareDraw")
-              : t("matches.complete")}
+            {completeButtonLabel}
           </button>
-          {outcome.kind === "winner" && outcome.viaTiebreaker && (
+          {!supremacy && outcome.kind === "winner" && outcome.viaTiebreaker && (
             <p className="text-xs text-gray-500" data-testid="tiebreaker-hint">
               {t("matches.tiebreakerHint", {
                 name:
@@ -311,25 +330,6 @@ function MatchPage() {
               })}
             </p>
           )}
-
-          <SpecialVictorySection
-            label={t("scoring.sevenWondersDuel.specialVictory.military")}
-            players={match.players}
-            onDeclare={(winnerId) =>
-              handleSpecialVictory("military_supremacy", winnerId)
-            }
-            disabled={completeMatch.isPending}
-            testIdPrefix="declare-military"
-          />
-          <SpecialVictorySection
-            label={t("scoring.sevenWondersDuel.specialVictory.scientific")}
-            players={match.players}
-            onDeclare={(winnerId) =>
-              handleSpecialVictory("scientific_supremacy", winnerId)
-            }
-            disabled={completeMatch.isPending}
-            testIdPrefix="declare-scientific"
-          />
         </div>
       )}
 
@@ -343,44 +343,6 @@ function MatchPage() {
           {t("matches.back")}
         </Link>
       )}
-    </div>
-  );
-}
-
-type SpecialVictorySectionProps = {
-  label: string;
-  players: Player[];
-  onDeclare: (winnerId: string) => void;
-  disabled?: boolean;
-  testIdPrefix: string;
-};
-
-function SpecialVictorySection({
-  label,
-  players,
-  onDeclare,
-  disabled,
-  testIdPrefix,
-}: SpecialVictorySectionProps) {
-  const { t } = useTranslation();
-
-  return (
-    <div className="rounded-md border border-gray-200 p-3">
-      <p className="text-sm font-semibold text-gray-700">{label}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {players.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            disabled={disabled}
-            onClick={() => onDeclare(p.id)}
-            data-testid={`${testIdPrefix}-${p.id}`}
-            className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-50"
-          >
-            {t("scoring.sevenWondersDuel.specialVictory.declareFor", { name: p.name })}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

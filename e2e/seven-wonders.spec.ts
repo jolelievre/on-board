@@ -29,6 +29,15 @@ async function setScore(
   await input.blur();
 }
 
+async function resolvePlayerId(page: Page, name: string): Promise<string> {
+  return page
+    .locator(`[data-testid^='score-grid-player-'] >> text=${name}`)
+    .first()
+    .evaluate((el) =>
+      el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
+    );
+}
+
 test.describe("7 Wonders Duel — full flow", () => {
   test("create match, score, complete by score, see in history", async ({
     page,
@@ -36,19 +45,8 @@ test.describe("7 Wonders Duel — full flow", () => {
     const names = uniqueNames();
     await startMatch(page, names);
 
-    // Resolve player IDs from the testid attributes on the grid header
-    const p1Id = await page
-      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p1}`)
-      .first()
-      .evaluate((el) =>
-        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
-      );
-    const p2Id = await page
-      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p2}`)
-      .first()
-      .evaluate((el) =>
-        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
-      );
+    const p1Id = await resolvePlayerId(page, names.p1);
+    const p2Id = await resolvePlayerId(page, names.p2);
 
     // Alice: civil 8, scientific 6 → total 14
     // Bob: wonders 4 → total 4
@@ -92,21 +90,30 @@ test.describe("7 Wonders Duel — full flow", () => {
     await expect(history).toContainText("(4)");
   });
 
-  test("special victory: military supremacy ends the match immediately", async ({
+  test("special victory: military supremacy via checkbox + Complete", async ({
     page,
   }) => {
     const names = uniqueNames();
     await startMatch(page, names);
 
-    const p2Id = await page
-      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p2}`)
-      .first()
-      .evaluate((el) =>
-        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
-      );
+    const p2Id = await resolvePlayerId(page, names.p2);
 
-    // Declare military supremacy for player 2 — no scores entered
-    await page.click(`[data-testid='declare-military-${p2Id}']`);
+    // Tick the military supremacy checkbox for Bob
+    await page.check(`[data-testid='supremacy-military_supremacy-${p2Id}']`);
+
+    // Complete button label changes
+    await expect(page.locator("[data-testid='complete-match']")).toHaveAttribute(
+      "data-outcome",
+      "military_supremacy",
+    );
+    await expect(page.locator("[data-testid='complete-match']")).toContainText(
+      names.p2,
+    );
+
+    // Match is NOT complete until we click the button
+    await expect(page.locator("[data-testid='winner-banner']")).toHaveCount(0);
+
+    await page.click("[data-testid='complete-match']");
 
     await expect(page.locator("[data-testid='winner-banner']")).toContainText(
       names.p2,
@@ -116,22 +123,41 @@ test.describe("7 Wonders Duel — full flow", () => {
     );
   });
 
+  test("supremacy checkboxes are mutually exclusive across both rows", async ({
+    page,
+  }) => {
+    const names = uniqueNames();
+    await startMatch(page, names);
+
+    const p1Id = await resolvePlayerId(page, names.p1);
+    const p2Id = await resolvePlayerId(page, names.p2);
+
+    // Tick military for Alice
+    await page.check(`[data-testid='supremacy-military_supremacy-${p1Id}']`);
+    await expect(
+      page.locator(`[data-testid='supremacy-military_supremacy-${p1Id}']`),
+    ).toBeChecked();
+
+    // Tick scientific for Bob → military for Alice unchecks
+    await page.check(`[data-testid='supremacy-scientific_supremacy-${p2Id}']`);
+    await expect(
+      page.locator(`[data-testid='supremacy-military_supremacy-${p1Id}']`),
+    ).not.toBeChecked();
+    await expect(
+      page.locator(`[data-testid='supremacy-scientific_supremacy-${p2Id}']`),
+    ).toBeChecked();
+  });
+
   test("treasury input: 7 coins yields 2 VP toward the total", async ({
     page,
   }) => {
     const names = uniqueNames();
     await startMatch(page, names);
 
-    const p1Id = await page
-      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p1}`)
-      .first()
-      .evaluate((el) =>
-        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
-      );
+    const p1Id = await resolvePlayerId(page, names.p1);
 
     await setScore(page, p1Id, "treasury", 7);
 
-    // 7 coins → 2 VP
     await expect(
       page.locator(`[data-testid='score-treasury-hint-${p1Id}']`),
     ).toContainText(/7/);
@@ -143,31 +169,23 @@ test.describe("7 Wonders Duel — full flow", () => {
     ).toHaveText("2");
   });
 
-  test("coin tiebreaker: equal VP, more coins wins", async ({ page }) => {
+  test("civil tiebreaker: equal totals, more civil VP wins", async ({
+    page,
+  }) => {
     const names = uniqueNames();
     await startMatch(page, names);
 
-    const p1Id = await page
-      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p1}`)
-      .first()
-      .evaluate((el) =>
-        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
-      );
-    const p2Id = await page
-      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p2}`)
-      .first()
-      .evaluate((el) =>
-        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
-      );
+    const p1Id = await resolvePlayerId(page, names.p1);
+    const p2Id = await resolvePlayerId(page, names.p2);
 
-    // Both reach 5 VP, but Alice has more coins (8 → +2 VP from coins, total 7)
-    // Wait — coin VP also counts in the total, so we need them tied AFTER coin VP.
-    // Alice: civil=5, treasury=8 → 5 + floor(8/3)=2 = 7
-    // Bob:   civil=7              → 7
-    // Tied at 7. Alice has 8 coins, Bob has 0 → Alice wins by coin tiebreaker.
+    // Both reach 7 VP, but Alice has more Civil VP.
+    // Alice: civil=5, wonders=2 → 7
+    // Bob:   civil=3, wonders=4 → 7
+    // Tied at 7. Civil tiebreaker: Alice (5) > Bob (3) → Alice wins.
     await setScore(page, p1Id, "civil", 5);
-    await setScore(page, p1Id, "treasury", 8);
-    await setScore(page, p2Id, "civil", 7);
+    await setScore(page, p1Id, "wonders", 2);
+    await setScore(page, p2Id, "civil", 3);
+    await setScore(page, p2Id, "wonders", 4);
 
     await expect(
       page.locator(`[data-testid='score-grid-total-${p1Id}']`),
@@ -195,22 +213,14 @@ test.describe("7 Wonders Duel — full flow", () => {
     );
   });
 
-  test("draw: equal VP and equal coins yields a draw", async ({ page }) => {
+  test("draw: equal totals and equal civil VP yields a draw", async ({
+    page,
+  }) => {
     const names = uniqueNames();
     await startMatch(page, names);
 
-    const p1Id = await page
-      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p1}`)
-      .first()
-      .evaluate((el) =>
-        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
-      );
-    const p2Id = await page
-      .locator(`[data-testid^='score-grid-player-'] >> text=${names.p2}`)
-      .first()
-      .evaluate((el) =>
-        el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
-      );
+    const p1Id = await resolvePlayerId(page, names.p1);
+    const p2Id = await resolvePlayerId(page, names.p2);
 
     await setScore(page, p1Id, "civil", 5);
     await setScore(page, p2Id, "civil", 5);
@@ -232,5 +242,21 @@ test.describe("7 Wonders Duel — full flow", () => {
     await expect(page.locator("[data-testid='winner-banner']")).toContainText(
       /Draw|Égalité/,
     );
+  });
+
+  test("scientific_progress category contributes to total", async ({
+    page,
+  }) => {
+    const names = uniqueNames();
+    await startMatch(page, names);
+
+    const p1Id = await resolvePlayerId(page, names.p1);
+
+    // Progress tokens give VP directly (no conversion).
+    await setScore(page, p1Id, "scientific_progress", 6);
+
+    await expect(
+      page.locator(`[data-testid='score-grid-total-${p1Id}']`),
+    ).toHaveText("6");
   });
 });
