@@ -64,6 +64,9 @@
       "title": "New match",
       "playerLabel": "Player {{n}}",
       "playerPlaceholder": "Player name",
+      "playerRange": "{{min}}–{{max}} players",
+      "addPlayer": "Add player",
+      "removePlayer": "Remove player {{n}}",
       "start": "Start match",
       "duplicateNames": "Players must have different names.",
       "missingName": "Each player must have a name."

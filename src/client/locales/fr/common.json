@@ -64,6 +64,9 @@
       "title": "Nouvelle partie",
       "playerLabel": "Joueur {{n}}",
       "playerPlaceholder": "Nom du joueur",
+      "playerRange": "{{min}}–{{max}} joueurs",
+      "addPlayer": "Ajouter un joueur",
+      "removePlayer": "Retirer le joueur {{n}}",
       "start": "Commencer la partie",
       "duplicateNames": "Les joueurs doivent avoir des noms différents.",
       "missingName": "Chaque joueur doit avoir un nom."
