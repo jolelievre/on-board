@@ -18,6 +18,7 @@
     "test:safari": "npx playwright test --project='auth-setup' --project='Mobile Safari'",
     "test:headed": "npx playwright test --headed",
     "test:ui": "npx playwright test --ui",
+    "screenshots": "./scripts/test-setup.sh && tsx scripts/capture-screenshots.ts",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force",
