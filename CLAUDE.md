@@ -42,6 +42,7 @@ npm run dev          # Vite dev server + Hono API (port 5173)
 | `npm run db:reset` | Reset dev DB + re-apply migrations + seed |
 | `npm run db:studio` | Open Prisma Studio |
 | `npm run db:push` | Apply Prisma schema directly (no migration file) |
+| `npm run screenshots` | Capture mobile-viewport PNGs of every screen into `plan-assets/screenshots/` (standalone — boots its own dev server in test mode, not part of the E2E test campaign) |
 
 ### Architecture
 
