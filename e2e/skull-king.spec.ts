@@ -170,27 +170,49 @@ test.describe("Skull King — Classic flow", () => {
     );
   });
 
-  test("bonus stacking: a single round with multiple bonus types", async ({
+  test("bonus budget: total bonuses cannot exceed tricks won", async ({
     page,
   }) => {
     const names = uniqueNames(2);
     await startMatchAndDeal(page, names);
 
-    // Round 1: P1 bids 1 takes 1, P2 bids 0 takes 0.
+    // Round 1 has exactly 1 trick to distribute. P1 bids 1 takes 1, P2
+    // bids 0 takes 0.
     await pickBid(page, 1);
     await pickBid(page, 0);
     await page.click("[data-testid='sk-bid-reveal']");
     await page.click("[data-testid='sk-bid-recap-continue']");
-
-    // P1: bid 1 made → +20 base. Then add a black-14 toggle (+20),
-    // a colored-14 (+10), and one mermaidByPirate (+20). Total = +70.
     await pickTricks(page, 1);
+
+    // P1 has 1 trick → budget 1. Setting black-14 fills it.
     await page.click("[data-testid='sk-bonus-black14']");
-    await page.click("[data-testid='sk-bonus-color14']");
-    await page.click("[data-testid='sk-bonus-mermaidByPirate']");
     await expect(page.locator("[data-testid='sk-round-total']")).toHaveText(
-      "+70",
+      "+40",
     );
+
+    // Other bonuses are now disabled — their dynamic max is 0.
+    for (const id of [
+      "sk-bonus-color14",
+      "sk-bonus-mermaidByPirate",
+      "sk-bonus-pirateBySK",
+      "sk-bonus-skByMermaid",
+    ]) {
+      await expect(page.locator(`[data-testid='${id}']`)).toBeDisabled();
+    }
+
+    // Tap the active bonus again — toggles off, freeing budget.
+    await page.click("[data-testid='sk-bonus-black14']");
+    await expect(
+      page.locator("[data-testid='sk-bonus-black14']"),
+    ).toHaveAttribute("data-on", "false");
+
+    // Other bonuses are tappable again.
+    await expect(
+      page.locator("[data-testid='sk-bonus-color14']"),
+    ).toBeEnabled();
+    await expect(
+      page.locator("[data-testid='sk-bonus-mermaidByPirate']"),
+    ).toBeEnabled();
   });
 
   test("scoreboard toggle: opens grill, shows totals, closes back", async ({
@@ -531,6 +553,28 @@ test.describe("Skull King — Classic flow", () => {
     }
   });
 
+  test("tricks cap: digit grid disables values beyond the round's remaining budget", async ({
+    page,
+  }) => {
+    const names = uniqueNames(3);
+    await startMatchAndDeal(page, names);
+
+    // Round 1 has exactly 1 trick to distribute. After P1 takes it, P2's
+    // and P3's grid should disable digit "1".
+    await enterBids(page, [1, 0, 0]);
+    await pickTricks(page, 1);
+    await page.click("[data-testid='sk-result-next']");
+
+    // P2 sees only "0" enabled; "1" is disabled because P1 already took
+    // the only trick.
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='0']"),
+    ).toBeEnabled();
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='1']"),
+    ).toBeDisabled();
+  });
+
   test("match history: 3-player match renders one row per player with rank, sorted by score", async ({
     page,
   }) => {
@@ -543,10 +587,10 @@ test.describe("Skull King — Classic flow", () => {
     const matchId = page.url().match(/\/matches\/([^/?#]+)/)?.[1];
     expect(matchId).toBeTruthy();
 
-    // Round 1: P1 bids 1 takes 1 (+20), P2 bids 0 takes 0 (+10), P3 bids 0
-    // takes 1 (-10). Expected ranking: P1 first, P2 second, P3 third.
-    await enterBids(page, [1, 0, 0]);
-    await enterResults(page, [1, 0, 1]);
+    // Round 1 has exactly 1 trick. P1 bids 1 takes 1 (+20), P2 bids 0
+    // takes 0 (+10), P3 bids 1 takes 0 (-10). Distinct ranks 1/2/3.
+    await enterBids(page, [1, 0, 1]);
+    await enterResults(page, [1, 0, 0]);
     await expect(page.locator("[data-testid='sk-transition']")).toBeVisible();
 
     await page.goto("/games/skull-king");
@@ -582,10 +626,10 @@ test.describe("Skull King — Classic flow", () => {
     const names = uniqueNames(3);
     await startMatchAndDeal(page, names);
 
-    // Round 1: P1 bids 1 takes 1 (+20), P2 bids 0 takes 0 (+10), P3 bids 0
-    // takes 1 (-10). Ranks should be P1=#1, P2=#2, P3=#3.
-    await enterBids(page, [1, 0, 0]);
-    await enterResults(page, [1, 0, 1]);
+    // Round 1: P1 bids 1 takes 1 (+20), P2 bids 0 takes 0 (+10), P3 bids 1
+    // takes 0 (-10). Ranks should be P1=#1, P2=#2, P3=#3.
+    await enterBids(page, [1, 0, 1]);
+    await enterResults(page, [1, 0, 0]);
     await expect(page.locator("[data-testid='sk-transition']")).toBeVisible();
     await page.click("[data-testid='sk-scoreboard-toggle']");
     await expect(page.locator("[data-testid='sk-scoreboard']")).toBeVisible();

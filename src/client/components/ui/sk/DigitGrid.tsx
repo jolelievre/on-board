@@ -7,8 +7,12 @@ type Props = {
   selected: number | undefined;
   /** Callback when a digit is tapped. */
   onPick: (n: number) => void;
-  /** Disable interaction. */
+  /** Disable interaction for the whole grid. */
   disabled?: boolean;
+  /** When set, digits strictly greater than this value render disabled.
+   * Used by the tricks-won input to cap the active player at the round's
+   * remaining trick budget. */
+  maxAllowed?: number;
   /** When true, cells render at the larger size used in the bid bottom sheet. */
   big?: boolean;
   /** Optional test id used by E2E tests to scope queries. */
@@ -24,6 +28,7 @@ export function DigitGrid({
   selected,
   onPick,
   disabled,
+  maxAllowed,
   big,
   "data-testid": testId,
 }: Props) {
@@ -41,15 +46,19 @@ export function DigitGrid({
     >
       {digits.map((n) => {
         const isSelected = n === selected;
+        const overBudget =
+          maxAllowed !== undefined && n > maxAllowed && n !== selected;
+        const isDisabled = disabled || overBudget;
         return (
           <button
             key={n}
             type="button"
             className={`${styles.cell} ${isSelected ? styles.selected : ""}`}
             onClick={() => onPick(n)}
-            disabled={disabled}
+            disabled={isDisabled}
             data-value={n}
             data-selected={isSelected ? "true" : undefined}
+            data-disabled={isDisabled ? "true" : undefined}
             aria-pressed={isSelected}
           >
             {n}

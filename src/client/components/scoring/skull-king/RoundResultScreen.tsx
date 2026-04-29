@@ -59,14 +59,35 @@ export function RoundResultScreen({
     0,
   );
 
+  // Soft validation: bonuses each represent a trick the player won, so the
+  // total bonus count must stay ≤ tricks won. Each bonus's effective max is
+  // therefore min(itemMax, tricks - othersTotal). Once a counter reaches its
+  // dynamic max, the next click loops back to 0, which frees budget for the
+  // siblings to become tappable again.
+  const BONUS_KEYS: SkullKingBonusKey[] = [
+    "color14",
+    "black14",
+    "mermaidByPirate",
+    "pirateBySK",
+    "skByMermaid",
+  ];
+  const totalBonuses = BONUS_KEYS.reduce((sum, k) => sum + entry[k], 0);
+
+  const dynamicMaxFor = (key: SkullKingBonusKey): number => {
+    const itemMax = SK_BONUS_MAX[key];
+    const others = totalBonuses - entry[key];
+    const allowed = Math.max(0, entry.tricks - others);
+    return Math.min(itemMax, allowed);
+  };
+
   const update = (patch: Partial<SkullKingRoundEntry>) => {
     let next: SkullKingRoundEntry = { ...entry, ...patch };
     // Bonuses require winning the trick that contained the bonus card. If
-    // the player has zero tricks they cannot have any bonus — clear them
-    // automatically so the score breakdown stays consistent. The parent
-    // re-render is also blocked from re-introducing them by the disabled
-    // chips below.
-    if (next.tricks === 0) {
+    // tricks drops below the current bonus sum (including the tricks=0 case),
+    // clear all bonuses so the user re-enters them under the new budget —
+    // simpler and more predictable than picking which to keep.
+    const nextBonusSum = BONUS_KEYS.reduce((s, k) => s + next[k], 0);
+    if (nextBonusSum > next.tricks) {
       next = {
         ...next,
         color14: 0,
@@ -82,11 +103,29 @@ export function RoundResultScreen({
   const tricksZero = entry.tricks === 0;
 
   const cycleCounter = (key: SkullKingBonusKey) => {
-    if (tricksZero) return;
-    const max = SK_BONUS_MAX[key];
-    const current = entry[key];
-    update({ [key]: (current + 1) % (max + 1) } as Partial<SkullKingRoundEntry>);
+    const v = entry[key];
+    const allowed = dynamicMaxFor(key);
+    // Loop to 0 once we've hit the dynamic ceiling. With v=0 and allowed=0
+    // the chip is disabled at the call site, so we never get here in that
+    // state.
+    const nextValue = v >= allowed ? 0 : v + 1;
+    update({ [key]: nextValue } as Partial<SkullKingRoundEntry>);
   };
+
+  const isBonusDisabled = (key: SkullKingBonusKey): boolean => {
+    if (tricksZero) return true;
+    return entry[key] === 0 && dynamicMaxFor(key) === 0;
+  };
+
+  // Tricks digit-grid cap: the active player can claim at most "round
+  // minus the tricks already entered for the other players". The current
+  // player's own tricks count toward the budget but the max-allowed is
+  // expressed relative to the OTHERS so the active row stays tappable.
+  const otherPlayersTricks = players.reduce(
+    (sum, p) => (p.id === active.id ? sum : sum + (entries[p.id]?.tricks ?? 0)),
+    0,
+  );
+  const tricksMaxAllowed = Math.max(0, round - otherPlayersTricks);
 
   const score = scoreSkullKingRound(round, entry);
   const cum = (cumulativeBefore[active.id] ?? 0) + score.total;
@@ -128,6 +167,7 @@ export function RoundResultScreen({
           </p>
           <DigitGrid
             max={round}
+            maxAllowed={tricksMaxAllowed}
             selected={entry.tricks}
             onPick={(n) => update({ tricks: n })}
             data-testid="sk-result-tricks"
@@ -155,7 +195,7 @@ export function RoundResultScreen({
             count={entry.color14}
             accent="var(--sk-gold)"
             onTap={() => cycleCounter("color14")}
-            disabled={tricksZero}
+            disabled={isBonusDisabled("color14")}
             testId="sk-bonus-color14"
           />
           <CounterChip
@@ -165,7 +205,7 @@ export function RoundResultScreen({
             count={entry.mermaidByPirate}
             accent="var(--sk-sea)"
             onTap={() => cycleCounter("mermaidByPirate")}
-            disabled={tricksZero}
+            disabled={isBonusDisabled("mermaidByPirate")}
             testId="sk-bonus-mermaidByPirate"
           />
           <CounterChip
@@ -175,7 +215,7 @@ export function RoundResultScreen({
             count={entry.pirateBySK}
             accent="var(--sk-blood)"
             onTap={() => cycleCounter("pirateBySK")}
-            disabled={tricksZero}
+            disabled={isBonusDisabled("pirateBySK")}
             testId="sk-bonus-pirateBySK"
           />
         </div>
@@ -189,7 +229,7 @@ export function RoundResultScreen({
             on={entry.black14 === 1}
             accent="var(--sk-black)"
             onToggle={(v) => update({ black14: v ? 1 : 0 })}
-            disabled={tricksZero}
+            disabled={isBonusDisabled("black14")}
             testId="sk-bonus-black14"
           />
           <ToggleChip
@@ -199,7 +239,7 @@ export function RoundResultScreen({
             on={entry.skByMermaid === 1}
             accent="var(--sk-sea-deep)"
             onToggle={(v) => update({ skByMermaid: v ? 1 : 0 })}
-            disabled={tricksZero}
+            disabled={isBonusDisabled("skByMermaid")}
             testId="sk-bonus-skByMermaid"
           />
         </div>
