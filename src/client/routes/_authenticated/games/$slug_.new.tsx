@@ -53,6 +53,7 @@ function NewMatchPage() {
 
   const [names, setNames] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (game && names.length === 0) {
@@ -141,16 +142,24 @@ function NewMatchPage() {
           </Pill>
         </div>
 
-        <datalist id="player-suggestions">
-          {suggestions.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-
         <form onSubmit={handleSubmit} className={styles.form}>
           {names.map((value, i) => {
             const initial = value.trim().slice(0, 1).toUpperCase() || String(i + 1);
             const avatarClass = AVATAR_CLASSES[i % AVATAR_CLASSES.length];
+            const isActive = activeIndex === i;
+            // Filter suggestions: exclude names already taken by other slots,
+            // narrow to substring match against the current input value.
+            const usedElsewhere = new Set(
+              names
+                .map((n, idx) => (idx === i ? "" : n.trim().toLowerCase()))
+                .filter(Boolean),
+            );
+            const query = value.trim().toLowerCase();
+            const filteredSuggestions = isActive
+              ? suggestions
+                  .filter((s) => !usedElsewhere.has(s.toLowerCase()))
+                  .filter((s) => query === "" || s.toLowerCase().includes(query))
+              : [];
             return (
               <div key={i}>
                 <label className={styles.label} htmlFor={`new-match-player-${i}`}>
@@ -167,21 +176,64 @@ function NewMatchPage() {
                         type="text"
                         name={`player-${i}`}
                         data-testid={`new-match-player-${i}`}
-                        list="player-suggestions"
                         autoComplete="off"
                         placeholder={t("matches.newMatch.playerPlaceholder")}
                         value={value}
+                        onFocus={() => setActiveIndex(i)}
+                        onBlur={(e) => {
+                          // Keep chips open when focus moves to a chip button
+                          // inside the same suggestions row; close otherwise.
+                          const next = e.relatedTarget;
+                          if (
+                            next instanceof HTMLElement &&
+                            next.dataset.suggestionFor === String(i)
+                          ) {
+                            return;
+                          }
+                          setActiveIndex((curr) => (curr === i ? null : curr));
+                        }}
                         onChange={(e) => {
                           setNames((prev) => {
-                            const next = [...prev];
-                            next[i] = e.target.value;
-                            return next;
+                            const nextNames = [...prev];
+                            nextNames[i] = e.target.value;
+                            return nextNames;
                           });
                         }}
                         className={styles.input}
                       />
                       <Icon name="pencil" size={16} />
                     </div>
+                    {isActive && filteredSuggestions.length > 0 && (
+                      <div
+                        className={styles.suggestions}
+                        data-testid={`new-match-suggestions-${i}`}
+                      >
+                        {filteredSuggestions.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            data-suggestion-for={i}
+                            data-testid={`new-match-suggestion-${i}-${s}`}
+                            className={styles.suggestionChip}
+                            onMouseDown={(e) => {
+                              // Prevent the input from blurring before
+                              // onClick fires.
+                              e.preventDefault();
+                            }}
+                            onClick={() => {
+                              setNames((prev) => {
+                                const nextNames = [...prev];
+                                nextNames[i] = s;
+                                return nextNames;
+                              });
+                              setActiveIndex(null);
+                            }}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {canRemove && (
                     <button

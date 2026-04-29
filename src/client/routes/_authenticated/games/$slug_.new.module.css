@@ -166,6 +166,38 @@
   color: var(--color-primary);
 }
 
+.suggestions {
+  margin-top: 0.375rem;
+  padding: 0.375rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.suggestionChip {
+  padding: 0.375rem 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: var(--color-surface-alt);
+  color: var(--color-ink-soft);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 80ms ease-out, color 80ms ease-out;
+}
+
+.suggestionChip:hover {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface-alt));
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
 .error {
   font-family: var(--font-body);
   font-size: 0.85rem;
