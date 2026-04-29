@@ -4,6 +4,35 @@ function stamp() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
+test.describe("New match form — self suggestion chip", () => {
+  test("clicking the self chip fills the input with the user's name", async ({
+    page,
+  }) => {
+    // Read the authenticated user's name from the session — the chip's
+    // testid is keyed by it.
+    const sessionRes = await page.request.get("/api/auth/get-session");
+    expect(sessionRes.ok()).toBeTruthy();
+    const session = await sessionRes.json();
+    const userName = session.user.name as string;
+
+    await page.goto("/games/7-wonders-duel/new");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Focus the first slot to surface the suggestions card
+    await page.click("[data-testid='new-match-player-0']");
+
+    const selfChip = page.locator(
+      `[data-testid='new-match-suggestion-0-${userName}']`,
+    );
+    await expect(selfChip).toBeVisible();
+    await selfChip.click();
+
+    await expect(
+      page.locator("[data-testid='new-match-player-0']"),
+    ).toHaveValue(userName);
+  });
+});
+
 test.describe("New match form — dynamic player count", () => {
   test("7 Wonders Duel locks at exactly 2 players (no add/remove)", async ({
     page,

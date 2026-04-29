@@ -3,11 +3,14 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../../../lib/api";
+import { authClient } from "../../../lib/auth-client";
 import { Header } from "../../../components/layout/Header";
 import { Pill } from "../../../components/ui/Pill";
 import { Button } from "../../../components/ui/Button";
 import { Icon } from "../../../components/ui/Icon";
 import styles from "./$slug_.new.module.css";
+
+type PlayerSuggestion = { name: string; isSelf: boolean };
 
 export const Route = createFileRoute("/_authenticated/games/$slug_/new")({
   component: NewMatchPage,
@@ -46,28 +49,46 @@ function NewMatchPage() {
     queryFn: () => api<Game>(`/api/games/${slug}`),
   });
 
-  const { data: suggestions = [] } = useQuery<string[]>({
+  const { data: suggestions = [] } = useQuery<PlayerSuggestion[]>({
     queryKey: ["players", "suggestions"],
-    queryFn: () => api<string[]>("/api/players/suggestions"),
+    queryFn: () => api<PlayerSuggestion[]>("/api/players/suggestions"),
   });
 
+  const { data: session } = authClient.useSession();
+  const myUserId = session?.user.id;
+
   const [names, setNames] = useState<string[]>([]);
+  // Parallel array: when a slot was filled by clicking the "self"
+  // suggestion, store the user's id here so we can attribute the Player
+  // on submit. Typing the same name manually leaves this null — the
+  // server only attaches userId on explicit chip selection to avoid
+  // mis-linking friends who happen to share the user's name.
+  const [userIds, setUserIds] = useState<(string | null)[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (game && names.length === 0) {
-      setNames(Array.from({ length: game.minPlayers }, () => ""));
+      const slots = game.minPlayers;
+      setNames(Array.from({ length: slots }, () => ""));
+      setUserIds(Array.from({ length: slots }, () => null));
     }
   }, [game, names.length]);
 
   const createMatch = useMutation({
-    mutationFn: (input: { gameId: string; players: string[] }) =>
+    mutationFn: (input: {
+      gameId: string;
+      players: { name: string; userId: string | null }[];
+    }) =>
       api<Match>("/api/matches", {
         method: "POST",
         body: JSON.stringify({
           gameId: input.gameId,
-          players: input.players.map((name, i) => ({ name, position: i })),
+          players: input.players.map((p, i) => ({
+            name: p.name,
+            position: i,
+            ...(p.userId ? { userId: p.userId } : {}),
+          })),
         }),
       }),
     onSuccess: (match) => {
@@ -95,11 +116,13 @@ function NewMatchPage() {
   const handleAddPlayer = () => {
     if (!canAdd) return;
     setNames((prev) => [...prev, ""]);
+    setUserIds((prev) => [...prev, null]);
   };
 
   const handleRemovePlayer = (index: number) => {
     if (names.length <= game.minPlayers) return;
     setNames((prev) => prev.filter((_, i) => i !== index));
+    setUserIds((prev) => prev.filter((_, i) => i !== index));
     setError(null);
   };
 
@@ -118,7 +141,10 @@ function NewMatchPage() {
       return;
     }
 
-    createMatch.mutate({ gameId: game.id, players: trimmed });
+    createMatch.mutate({
+      gameId: game.id,
+      players: trimmed.map((name, i) => ({ name, userId: userIds[i] ?? null })),
+    });
   };
 
   return (
@@ -157,8 +183,10 @@ function NewMatchPage() {
             const query = value.trim().toLowerCase();
             const filteredSuggestions = isActive
               ? suggestions
-                  .filter((s) => !usedElsewhere.has(s.toLowerCase()))
-                  .filter((s) => query === "" || s.toLowerCase().includes(query))
+                  .filter((s) => !usedElsewhere.has(s.name.toLowerCase()))
+                  .filter(
+                    (s) => query === "" || s.name.toLowerCase().includes(query),
+                  )
               : [];
             return (
               <div key={i}>
@@ -193,10 +221,20 @@ function NewMatchPage() {
                           setActiveIndex((curr) => (curr === i ? null : curr));
                         }}
                         onChange={(e) => {
+                          const nextValue = e.target.value;
                           setNames((prev) => {
                             const nextNames = [...prev];
-                            nextNames[i] = e.target.value;
+                            nextNames[i] = nextValue;
                             return nextNames;
+                          });
+                          // Typing breaks any prior chip-attribution: a
+                          // self-linked slot must be re-confirmed by clicking
+                          // the chip again, otherwise the userId stays null.
+                          setUserIds((prev) => {
+                            if (prev[i] === null) return prev;
+                            const nextIds = [...prev];
+                            nextIds[i] = null;
+                            return nextIds;
                           });
                         }}
                         className={styles.input}
@@ -210,11 +248,11 @@ function NewMatchPage() {
                       >
                         {filteredSuggestions.map((s) => (
                           <button
-                            key={s}
+                            key={s.name}
                             type="button"
                             data-suggestion-for={i}
-                            data-testid={`new-match-suggestion-${i}-${s}`}
-                            className={styles.suggestionChip}
+                            data-testid={`new-match-suggestion-${i}-${s.name}`}
+                            className={`${styles.suggestionChip} ${s.isSelf ? styles.suggestionChipSelf : ""}`}
                             onMouseDown={(e) => {
                               // Prevent the input from blurring before
                               // onClick fires.
@@ -223,13 +261,32 @@ function NewMatchPage() {
                             onClick={() => {
                               setNames((prev) => {
                                 const nextNames = [...prev];
-                                nextNames[i] = s;
+                                nextNames[i] = s.name;
                                 return nextNames;
+                              });
+                              setUserIds((prev) => {
+                                const nextIds = [...prev];
+                                nextIds[i] = s.isSelf ? (myUserId ?? null) : null;
+                                return nextIds;
                               });
                               setActiveIndex(null);
                             }}
                           >
-                            {s}
+                            {s.isSelf && (
+                              <span
+                                className={styles.suggestionSelfBadge}
+                                aria-hidden
+                              >
+                                ●
+                              </span>
+                            )}
+                            {s.name}
+                            {s.isSelf && (
+                              <span className={styles.srOnly}>
+                                {" "}
+                                ({t("matches.newMatch.youSuffix", { defaultValue: "you" })})
+                              </span>
+                            )}
                           </button>
                         ))}
                       </div>
