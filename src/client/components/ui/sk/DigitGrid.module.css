@@ -16,6 +16,10 @@
   cursor: pointer;
   min-height: 44px;
   transition: background 0.12s, border-color 0.12s, transform 0.05s;
+  /* Caveat's italic forward lean shifts each glyph to the right of its
+   * advance box, so a default-aligned digit reads as drifted in a square
+   * cell. Pull the rendered glyph back ~3px so it sits visually centred. */
+  text-indent: -3px;
 }
 
 .cell:hover {
