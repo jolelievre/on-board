@@ -100,11 +100,21 @@ export function ScoreboardScreen({ players, entries, currentRound }: Props) {
 
       <div className={styles.scroll}>
         <div className={styles.tableWrap}>
-          <table className={styles.table}>
+          <table
+            className={styles.table}
+            style={{
+              // Each player column gets a fixed min-width so the header name
+              // never collides with its neighbours. With 5+ players this
+              // pushes the table wider than the viewport and the wrapper's
+              // overflow-x: auto kicks in, surfacing horizontal scroll —
+              // accepted trade-off for legibility at 6–8 players.
+              minWidth: `calc(36px + ${players.length} * 64px)`,
+            }}
+          >
             <colgroup>
               <col style={{ width: 36 }} />
               {players.map((p) => (
-                <col key={p.id} />
+                <col key={p.id} style={{ minWidth: 64 }} />
               ))}
             </colgroup>
             <thead>

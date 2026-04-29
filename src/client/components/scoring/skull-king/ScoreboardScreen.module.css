@@ -41,6 +41,13 @@
   font-size: 1.05rem;
   font-weight: 700;
   color: var(--color-ink);
+  /* Long player names wrap onto a second line within the cell rather than
+   * spilling into neighbours. overflow-wrap breaks single tokens (no spaces)
+   * so even an 11-char alias fits the 64px column. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.05;
 }
 
 .thRound {
