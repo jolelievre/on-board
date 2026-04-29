@@ -82,6 +82,11 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Caveat's italic lean spills the last glyph past its advance box; without
+   * a hair of trailing room the right edge gets visually clipped against the
+   * row's overflow. ~0.25em is enough to reveal the last char on most
+   * names without changing layout. */
+  padding-inline-end: 0.25em;
 }
 
 .rowBid {
