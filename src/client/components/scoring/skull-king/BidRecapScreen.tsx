@@ -72,9 +72,6 @@ export function BidRecapScreen({
                   className={`${styles.entryValue} ${isZero ? styles.zero : ""}`}
                 >
                   {v}
-                  {isZero && (
-                    <span className={styles.entryZeroTag}>·BID·0</span>
-                  )}
                 </span>
               </div>
             );

@@ -54,14 +54,6 @@
   color: var(--color-primary);
 }
 
-.entryZeroTag {
-  font-family: var(--font-mono);
-  font-size: 0.55rem;
-  margin-left: 4px;
-  letter-spacing: 0.1em;
-  color: var(--color-primary);
-}
-
 .actions {
   display: flex;
   gap: 8px;
