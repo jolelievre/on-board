@@ -39,7 +39,12 @@ function LoginPage() {
     <div className={styles.page}>
       <div className={styles.hero}>
         <Logo size={84} glyphOnly animate loop />
-        <h1 className={styles.title}>{t("app.name")}</h1>
+        {/* Brand wordmark — split into two color tones to match the design.
+         * "OnBoard" is the fixed brand name (not localized via t()). */}
+        <h1 className={styles.title} aria-label={t("app.name")}>
+          <span className={styles.titleOn}>On</span>
+          <span className={styles.titleBoard}>Board</span>
+        </h1>
         <p className={styles.tagline}>{t("app.tagline")}</p>
       </div>
 
