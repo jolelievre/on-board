@@ -1,0 +1,6 @@
+/* Font @font-face declarations are imported as JS modules in main.tsx
+ * so Vite resolves and bundles the .woff2 assets into dist/.
+ * Do not @import the @fontsource CSS files here — Vite can't resolve
+ * their `./files/…woff` paths through CSS @import.
+ *
+ * This file is kept as a placeholder for any future global font tweaks. */

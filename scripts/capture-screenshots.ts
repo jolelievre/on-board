@@ -2,14 +2,23 @@
  * Captures mobile-viewport (Pixel 5) screenshots of every current screen into
  * `plan-assets/screenshots/` to ship with the Phase 3 design brief.
  *
+ * Both themes are captured in a single run: each authenticated screen produces
+ * a parchment (light, no suffix) and a candlelit (dark, `-dark` suffix) PNG.
+ *
  * Standalone — not part of the E2E test campaign. Run via:
  *   npm run screenshots
  *
  * The npm script resets the test DB first, then this script:
  *   1. Boots a fresh Vite dev server in test mode (VITE_TEST_AUTH=true, NODE_ENV=test)
- *   2. Signs up a throwaway test user via the dev-only email/password form
- *   3. Walks the app, captures one PNG per screen
- *   4. Tears the dev server down
+ *   2. Captures the signed-out login screens in parchment
+ *   3. Signs up a throwaway test user via the dev-only email/password form
+ *   4. Walks the app twice (parchment then candlelit), capturing one PNG per
+ *      screen per theme. The theme is flipped via the real Settings toggle so
+ *      the change persists server-side and the session-sync effect doesn't
+ *      fight a localStorage-only override.
+ *   5. Signs out and captures the login screens in candlelit
+ *      (localStorage carries the theme across the sign-out)
+ *   6. Tears the dev server down
  */
 
 import { chromium, devices, type Page } from "playwright";
@@ -22,6 +31,12 @@ const PORT = 5173;
 const BASE_URL = `http://localhost:${PORT}`;
 const OUT_DIR = path.resolve(import.meta.dirname, "..", "plan-assets", "screenshots");
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+
+type Theme = "parchment" | "candlelit";
+const PASSES: ReadonlyArray<{ theme: Theme; suffix: string }> = [
+  { theme: "parchment", suffix: "" },
+  { theme: "candlelit", suffix: "-dark" },
+];
 
 async function waitForPort(port: number, timeoutMs = 30_000) {
   const start = Date.now();
@@ -76,6 +91,35 @@ async function shoot(page: Page, name: string) {
   });
 }
 
+// Click a PillSwitch radio button by its visible label. Used for both the
+// language and theme toggles on /settings, which both render as
+// `button[role='radio']` with stable label text (English/Français and, when
+// the UI is in English, Parchment/Candlelit).
+async function clickPillOption(page: Page, label: string) {
+  const button = page
+    .locator("button[role='radio']", { hasText: new RegExp(`^${label}$`) })
+    .first();
+  if ((await button.getAttribute("aria-checked")) === "true") return;
+  await button.click();
+}
+
+async function ensureLanguage(page: Page, lang: "en" | "fr") {
+  await clickPillOption(page, lang === "en" ? "English" : "Français");
+  // i18next swap is sync but DOM updates land on next tick.
+  await page.waitForTimeout(200);
+}
+
+async function ensureTheme(page: Page, theme: Theme) {
+  const current = await page.evaluate(() => document.documentElement.dataset.theme);
+  if (current === theme) return;
+  // ThemeToggle labels are translated; only stable when the UI is in English.
+  await clickPillOption(page, theme === "parchment" ? "Parchment" : "Candlelit");
+  await page.waitForFunction(
+    (t) => document.documentElement.dataset.theme === t,
+    theme,
+  );
+}
+
 async function signUp(page: Page) {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   await page.goto(BASE_URL);
@@ -88,14 +132,14 @@ async function signUp(page: Page) {
   await page.waitForURL(`${BASE_URL}/games`, { timeout: 10_000 });
 }
 
-async function captureLogin(page: Page) {
+async function captureLoginScreens(page: Page, suffix: string) {
   await page.context().clearCookies();
   await page.goto(BASE_URL);
   await page.waitForLoadState("domcontentloaded");
   await page.waitForSelector("h1");
 
   // (a) dev variant — the email/password form actually rendered here.
-  await shoot(page, "01-login-dev");
+  await shoot(page, `01-login-dev${suffix}`);
 
   // (b) production variant — swap the test form for the real Google button
   // via DOM only, so the design session sees what real users encounter.
@@ -109,10 +153,10 @@ async function captureLogin(page: Page) {
     btn.textContent = "Sign in with Google";
     form.replaceWith(btn);
   });
-  await shoot(page, "01-login-prod");
+  await shoot(page, `01-login-prod${suffix}`);
 }
 
-async function captureScoringFlow(page: Page) {
+async function captureScoringFlow(page: Page, suffix: string) {
   const p1 = "Alice";
   const p2 = "Bob";
 
@@ -120,11 +164,16 @@ async function captureScoringFlow(page: Page) {
   await page.waitForLoadState("domcontentloaded");
   await page.fill("[data-testid='new-match-player-0']", p1);
   await page.fill("[data-testid='new-match-player-1']", p2);
+  // Dismiss the autocomplete dropdown that opened on the last filled input —
+  // its chips appear below the input and shift layout while the click
+  // resolves, which can race the submit click in pass 2 where prior players
+  // have populated the suggestions list.
+  await page.locator("[data-testid='new-match-player-1']").blur();
   await page.click("[data-testid='new-match-submit']");
   await page.waitForURL(/\/matches\/[a-z0-9-]+/i);
   await page.waitForSelector("[data-testid^='score-grid-player-']");
 
-  await shoot(page, "05-scoring-empty");
+  await shoot(page, `05-scoring-empty${suffix}`);
 
   const playerId = (name: string) =>
     page
@@ -162,16 +211,55 @@ async function captureScoringFlow(page: Page) {
     { timeout: 5_000 },
   );
 
-  await shoot(page, "06-scoring-filled");
+  await shoot(page, `06-scoring-filled${suffix}`);
 
   await page.click("[data-testid='complete-match']");
   await page.waitForSelector("[data-testid='winner-banner']");
-  await shoot(page, "07-match-completed");
+  await shoot(page, `07-match-completed${suffix}`);
 
   await page.click("[data-testid='back-to-game']");
   await page.waitForURL(`${BASE_URL}/games/7-wonders-duel`);
   await page.waitForSelector("[data-testid='match-history']");
-  await shoot(page, "08-game-detail-with-history");
+  await shoot(page, `08-game-detail-with-history${suffix}`);
+}
+
+async function captureAuthScreens(page: Page, theme: Theme, suffix: string) {
+  // Establish baseline: English language (so the theme button labels are
+  // stable) and the requested theme. Both pill toggles live on /settings.
+  await page.goto(`${BASE_URL}/settings`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("h1");
+  await ensureLanguage(page, "en");
+  await ensureTheme(page, theme);
+
+  await page.goto(`${BASE_URL}/games`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("h1");
+  await shoot(page, `02-games-list${suffix}`);
+
+  await page.goto(`${BASE_URL}/games/7-wonders-duel`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='new-match-button']");
+  await shoot(page, `03-game-detail-empty${suffix}`);
+
+  await page.goto(`${BASE_URL}/games/7-wonders-duel/new`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='new-match-player-0']");
+  await shoot(page, `04-new-match-form${suffix}`);
+
+  await captureScoringFlow(page, suffix);
+
+  await page.goto(`${BASE_URL}/settings`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("h1");
+  await shoot(page, `09-settings${suffix}`);
+
+  await ensureLanguage(page, "fr");
+  await shoot(page, `10-settings-french${suffix}`);
+
+  // Reset language so the next pass (or the post-loop login capture) starts
+  // from a known English baseline.
+  await ensureLanguage(page, "en");
 }
 
 async function main() {
@@ -190,40 +278,21 @@ async function main() {
     const ctx = await browser.newContext({ ...devices["Pixel 5"] });
     const page = await ctx.newPage();
 
-    // Signed-out screens first.
-    await captureLogin(page);
+    // Signed-out, parchment (default theme on a fresh visit).
+    await captureLoginScreens(page, "");
 
-    // Sign up and capture authenticated screens.
+    // Sign up — server defaults user.theme to "parchment".
     await signUp(page);
 
-    await page.goto(`${BASE_URL}/games`);
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForSelector("h1");
-    await shoot(page, "02-games-list");
-
-    await page.goto(`${BASE_URL}/games/7-wonders-duel`);
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForSelector("[data-testid='new-match-button']");
-    await shoot(page, "03-game-detail-empty");
-
-    await page.goto(`${BASE_URL}/games/7-wonders-duel/new`);
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForSelector("[data-testid='new-match-player-0']");
-    await shoot(page, "04-new-match-form");
-
-    await captureScoringFlow(page);
-
-    await page.goto(`${BASE_URL}/settings`);
-    await page.waitForLoadState("domcontentloaded");
-    await page.waitForSelector("h1");
-    await shoot(page, "09-settings");
-
-    const frButton = page.locator("button", { hasText: /Français|French|FR/ }).first();
-    if (await frButton.isVisible().catch(() => false)) {
-      await frButton.click();
-      await page.waitForTimeout(300);
+    // Authenticated screens, both themes.
+    for (const { theme, suffix } of PASSES) {
+      await captureAuthScreens(page, theme, suffix);
     }
-    await shoot(page, "10-settings-french");
+
+    // Signed-out, candlelit. The Settings toggle persisted candlelit to
+    // localStorage; clearing cookies in captureLoginScreens drops the session
+    // but keeps localStorage, so the login page renders in dark.
+    await captureLoginScreens(page, "-dark");
 
     console.log(`Captured screenshots into ${OUT_DIR}`);
   } finally {

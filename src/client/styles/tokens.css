@@ -1,0 +1,136 @@
+/* Theme contract.
+ *
+ * Every theme defines values for the same set of CSS custom properties.
+ * `:root` carries the defaults (parchment / light); add a new theme by
+ * creating a file under `themes/<name>.css` that overrides values under
+ * `[data-theme="<name>"]`.
+ *
+ * The active theme is set by `<html data-theme="...">` (see ThemeContext
+ * and the pre-paint script in index.html).
+ */
+
+:root,
+[data-theme="parchment"] {
+  /* Surfaces */
+  --color-bg: #f4ecdc;
+  --color-bg-deep: #eadfc5;
+  --color-surface: #fbf6e9;
+  --color-surface-alt: #f0e6d0;
+
+  /* Ink */
+  --color-ink: #1f1a12;
+  --color-ink-soft: #5a4f3b;
+  --color-ink-faint: #8c7e62;
+
+  /* Strokes */
+  --color-border: #d9c9a4;
+  --color-border-strong: #b8a480;
+
+  /* Brand */
+  --color-primary: #9f2d1a;
+  --color-primary-fg: #fcf7e8;
+  --color-accent: #1b5e5a;
+  --color-success: #2f6d43;
+  --color-warning: #b8731a;
+  --color-danger: #9f2d1a;
+
+  /* Categories — 7 Wonders Duel */
+  --color-cat-civil-bg: #d6e4f0;
+  --color-cat-civil-strong: #2f6fb0;
+  --color-cat-civil-ink: #0f2a4e;
+
+  --color-cat-scientific-bg: #d6e8d4;
+  --color-cat-scientific-strong: #2f7a37;
+  --color-cat-scientific-ink: #143918;
+
+  --color-cat-commercial-bg: #f5e2a7;
+  --color-cat-commercial-strong: #b5871a;
+  --color-cat-commercial-ink: #4a3508;
+
+  --color-cat-guilds-bg: #e0d2eb;
+  --color-cat-guilds-strong: #6f44a4;
+  --color-cat-guilds-ink: #2d1a47;
+
+  --color-cat-wonders-bg: #e8dfd0;
+  --color-cat-wonders-strong: #8e7659;
+  --color-cat-wonders-ink: #3a2f1e;
+
+  --color-cat-progress-bg: #d8e5dd;
+  --color-cat-progress-strong: #3f7a60;
+  --color-cat-progress-ink: #143323;
+
+  --color-cat-treasury-bg: #f1e2c2;
+  --color-cat-treasury-strong: #a8862a;
+  --color-cat-treasury-ink: #3d2f0a;
+
+  --color-cat-military-bg: #f0cfc2;
+  --color-cat-military-strong: #a2391f;
+  --color-cat-military-ink: #3d1108;
+
+  /* Typography */
+  --font-display: "Caveat", "Patrick Hand", cursive;
+  --font-body: "Caveat", "Patrick Hand", cursive;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-scale: 1.18;
+
+  /* Geometry */
+  --radius-sm: 10px;
+  --radius-lg: 18px;
+  --shadow-soft: 0 1px 0 rgba(31, 26, 18, 0.02),
+    0 14px 30px -10px rgba(80, 60, 30, 0.12);
+
+  /* Skin — 22px graph-paper grid (parchment soft ink lines) */
+  --bg-image: repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 21px,
+      rgba(31, 26, 18, 0.07) 21px,
+      rgba(31, 26, 18, 0.07) 22px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 21px,
+      rgba(31, 26, 18, 0.05) 21px,
+      rgba(31, 26, 18, 0.05) 22px
+    );
+}
+
+/* Tailwind v4: expose tokens as utility classes (bg-bg, text-ink, etc.). */
+@theme inline {
+  --color-bg: var(--color-bg);
+  --color-bg-deep: var(--color-bg-deep);
+  --color-surface: var(--color-surface);
+  --color-surface-alt: var(--color-surface-alt);
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-ink-faint: var(--color-ink-faint);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --color-primary: var(--color-primary);
+  --color-primary-fg: var(--color-primary-fg);
+  --color-accent: var(--color-accent);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+  --radius-sm: var(--radius-sm);
+  --radius-lg: var(--radius-lg);
+}
+
+/* Apply font-scale globally. Body text becomes 16px × 1.18 ≈ 19px. */
+:root {
+  font-size: calc(16px * var(--font-scale));
+  font-family: var(--font-body);
+  color: var(--color-ink);
+  background-color: var(--color-bg);
+}
+
+/* Reduced motion: skip the splash + sketch jitter animations. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-splash-duration: 0ms;
+  }
+}

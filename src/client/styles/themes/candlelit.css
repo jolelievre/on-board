@@ -1,0 +1,79 @@
+/* Candlelit theme — dark, cozy oak surfaces, candle-amber accent. */
+
+[data-theme="candlelit"] {
+  /* Surfaces */
+  --color-bg: #15120d;
+  --color-bg-deep: #0d0b07;
+  --color-surface: #1f1b14;
+  --color-surface-alt: #262017;
+
+  /* Ink */
+  --color-ink: #f2eada;
+  --color-ink-soft: #b7a78a;
+  --color-ink-faint: #7a6e58;
+
+  /* Strokes */
+  --color-border: #2f2818;
+  --color-border-strong: #4a402b;
+
+  /* Brand */
+  --color-primary: #e5a24a;
+  --color-primary-fg: #15120d;
+  --color-accent: #c44a2c;
+  --color-success: #7cb668;
+  --color-warning: #e5a24a;
+  --color-danger: #d9603a;
+
+  /* Categories — saturated, warm-tinted */
+  --color-cat-civil-bg: #1a2640;
+  --color-cat-civil-strong: #6e94d6;
+  --color-cat-civil-ink: #d8e5f8;
+
+  --color-cat-scientific-bg: #1a2a1f;
+  --color-cat-scientific-strong: #7bb97a;
+  --color-cat-scientific-ink: #dbedd9;
+
+  --color-cat-commercial-bg: #332810;
+  --color-cat-commercial-strong: #e0b760;
+  --color-cat-commercial-ink: #f4e5be;
+
+  --color-cat-guilds-bg: #291b36;
+  --color-cat-guilds-strong: #b488dd;
+  --color-cat-guilds-ink: #eadcf7;
+
+  --color-cat-wonders-bg: #2c2418;
+  --color-cat-wonders-strong: #c7a66e;
+  --color-cat-wonders-ink: #f2e5c9;
+
+  --color-cat-progress-bg: #172821;
+  --color-cat-progress-strong: #7ac7b0;
+  --color-cat-progress-ink: #d6efe6;
+
+  --color-cat-treasury-bg: #33290e;
+  --color-cat-treasury-strong: #e5b940;
+  --color-cat-treasury-ink: #f4e4b0;
+
+  --color-cat-military-bg: #311510;
+  --color-cat-military-strong: #d4634a;
+  --color-cat-military-ink: #f8d5c9;
+
+  /* Geometry */
+  --shadow-soft: 0 1px 0 rgba(255, 220, 170, 0.04),
+    0 14px 30px -10px rgba(0, 0, 0, 0.6);
+
+  /* Skin — graph-paper grid in cream ink */
+  --bg-image: repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 21px,
+      rgba(242, 234, 218, 0.06) 21px,
+      rgba(242, 234, 218, 0.06) 22px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 21px,
+      rgba(242, 234, 218, 0.04) 21px,
+      rgba(242, 234, 218, 0.04) 22px
+    );
+}

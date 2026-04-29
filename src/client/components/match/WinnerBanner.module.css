@@ -1,0 +1,53 @@
+.banner {
+  position: relative;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.875rem 1rem;
+}
+
+.body {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.trophy {
+  font-size: 1.65rem;
+  display: inline-block;
+  transform: rotate(-8deg);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  line-height: 1.1;
+  margin: 0;
+}
+
+.subtitle {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  margin: 0.125rem 0 0;
+}
+
+.draw {
+  text-align: center;
+}
+
+.drawTitle {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  margin: 0;
+}
+
+.drawSubtitle {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  margin: 0.125rem 0 0;
+}

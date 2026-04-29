@@ -1,0 +1,87 @@
+.base {
+  font-family: var(--font-body);
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: transform 80ms ease-out, box-shadow 120ms ease-out;
+  border-radius: calc(var(--radius-sm) + 2px);
+  padding: 0.75rem 1.125rem;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.base:active {
+  transform: translateY(1px);
+}
+
+.base:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.base:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.full {
+  width: 100%;
+}
+
+/* Sizes */
+.sm {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.85rem;
+  border-radius: var(--radius-sm);
+}
+
+.lg {
+  padding: 1rem 1.375rem;
+  font-size: 1.05rem;
+  border-radius: calc(var(--radius-sm) + 4px);
+}
+
+/* Variants */
+.primary {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  box-shadow: var(--shadow-soft);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--color-primary);
+}
+
+.outline {
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-border-strong);
+}
+
+.secondary {
+  background: var(--color-surface-alt);
+  color: var(--color-ink);
+  border: 1px solid var(--color-border);
+}
+
+.destructive {
+  background: color-mix(in srgb, var(--color-danger) 15%, transparent);
+  color: var(--color-danger);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 25%, transparent);
+}
+
+.icon {
+  padding: 0.5rem;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-ink);
+}
+
+.icon:hover {
+  background: var(--color-surface-alt);
+}

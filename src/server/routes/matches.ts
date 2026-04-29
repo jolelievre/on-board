@@ -46,6 +46,18 @@ export const matchesRoutes = new Hono<AuthEnv>()
       }
     }
 
+    // userId attribution is opt-in by the client and only allowed for the
+    // currently authenticated user. Name-based auto-linking would mis-attach
+    // a friend who happens to share the user's name.
+    for (const p of players) {
+      if (p.userId && p.userId !== user.id) {
+        return c.json(
+          { error: "Players can only be linked to your own user account" },
+          403,
+        );
+      }
+    }
+
     const match = await prisma.match.create({
       data: {
         gameId,
@@ -74,7 +86,12 @@ export const matchesRoutes = new Hono<AuthEnv>()
       },
       include: {
         game: { select: { name: true, slug: true } },
-        players: { orderBy: { position: "asc" } },
+        players: {
+          orderBy: { position: "asc" },
+          include: {
+            user: { select: { name: true, alias: true } },
+          },
+        },
         scores: true,
       },
       orderBy: { startedAt: "desc" },
@@ -90,7 +107,12 @@ export const matchesRoutes = new Hono<AuthEnv>()
       where: { id, createdById: user.id },
       include: {
         game: true,
-        players: { orderBy: { position: "asc" } },
+        players: {
+          orderBy: { position: "asc" },
+          include: {
+            user: { select: { name: true, alias: true } },
+          },
+        },
         scores: true,
       },
     });

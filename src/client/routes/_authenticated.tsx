@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../lib/auth-client";
+import { BottomNav } from "../components/layout/BottomNav";
 
 export const Route = createFileRoute("/_authenticated")({
   component: AuthenticatedLayout,
@@ -21,7 +22,7 @@ function AuthenticatedLayout() {
   if (isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-gray-500">{t("common.loading")}</p>
+        <p style={{ color: "var(--color-ink-faint)" }}>{t("common.loading")}</p>
       </div>
     );
   }
@@ -30,5 +31,10 @@ function AuthenticatedLayout() {
     return null;
   }
 
-  return <Outlet />;
+  return (
+    <div className="flex min-h-screen flex-col pb-24">
+      <Outlet />
+      <BottomNav />
+    </div>
+  );
 }

@@ -32,6 +32,17 @@ export const auth = betterAuth({
         defaultValue: "en",
         input: true,
       },
+      theme: {
+        type: "string",
+        required: false,
+        defaultValue: "parchment",
+        input: true,
+      },
+      alias: {
+        type: "string",
+        required: false,
+        input: true,
+      },
     },
   },
 });

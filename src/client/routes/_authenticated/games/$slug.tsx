@@ -1,11 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../../lib/api";
 import {
   computeTotalsByPlayer,
   type SevenWondersVictoryType,
 } from "../../../../shared/scoring/7-wonders-duel";
+import { displayPlayerName } from "../../../../shared/players";
+import { Header } from "../../../components/layout/Header";
+import { Pill } from "../../../components/ui/Pill";
+import { Icon } from "../../../components/ui/Icon";
+import { CoverArt } from "../../../components/games/CoverArt";
+import buttonStyles from "../../../components/ui/Button.module.css";
+import styles from "./$slug.module.css";
 
 export const Route = createFileRoute("/_authenticated/games/$slug")({
   component: GameDetailPage,
@@ -20,7 +28,12 @@ type Game = {
   maxPlayers: number;
 };
 
-type Player = { id: string; name: string; position: number };
+type Player = {
+  id: string;
+  name: string;
+  position: number;
+  user?: { name: string; alias: string | null } | null;
+};
 type ScoreRow = { playerId: string; category: string; value: number };
 type MatchListItem = {
   id: string;
@@ -50,62 +63,84 @@ function GameDetailPage() {
 
   if (isPending) {
     return (
-      <div className="mx-auto max-w-lg p-4">
-        <p className="text-gray-500">{t("common.loading")}</p>
-      </div>
+      <>
+        <Header
+          back={{ to: "/games", label: t("nav.games") }}
+        />
+        <div className="px-5">
+          <p style={{ color: "var(--color-ink-faint)" }}>{t("common.loading")}</p>
+        </div>
+      </>
     );
   }
 
   if (!game) {
     return (
-      <div className="mx-auto max-w-lg p-4">
-        <p className="text-red-500">{t("games.notFound")}</p>
-      </div>
+      <>
+        <Header
+          back={{ to: "/games", label: t("nav.games") }}
+        />
+        <div className="px-5">
+          <p style={{ color: "var(--color-danger)" }}>{t("games.notFound")}</p>
+        </div>
+      </>
     );
   }
 
+  const completedCount = matches?.filter((m) => m.status === "COMPLETED").length ?? 0;
+
   return (
-    <div className="mx-auto max-w-lg p-4">
-      <Link to="/games" className="text-sm text-blue-600 hover:underline">
-        &larr; {t("nav.games")}
-      </Link>
+    <>
+      <Header back={{ to: "/games", label: t("nav.games") }} />
 
-      <h1 className="mt-4 text-2xl font-bold">
-        {t(`games.catalog.${game.slug}.name`, { defaultValue: game.name })}
-      </h1>
-      <p className="mt-2 text-gray-600">
-        {t(`games.catalog.${game.slug}.description`, { defaultValue: game.description })}
-      </p>
-      <p className="mt-1 text-sm text-gray-400">
-        {game.minPlayers}–{game.maxPlayers} {t("games.players")}
-      </p>
+      <div className="px-5">
+        <div className={styles.cover}>
+          <CoverArt slug={game.slug} width={350} height={120} />
+        </div>
 
-      <div className="mt-6">
-        <Link
-          to="/games/$slug/new"
-          params={{ slug }}
-          className="inline-block rounded-md bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700"
-          data-testid="new-match-button"
-        >
-          {t("games.newMatch")}
-        </Link>
-      </div>
+        <h1 className={styles.title}>
+          {t(`games.catalog.${game.slug}.name`, { defaultValue: game.name })}
+        </h1>
+        <p className={styles.description}>
+          {t(`games.catalog.${game.slug}.description`, {
+            defaultValue: game.description,
+          })}
+        </p>
+        <div className={styles.pills}>
+          <Pill tone="muted">
+            {game.minPlayers}–{game.maxPlayers} {t("games.players")}
+          </Pill>
+          {completedCount > 0 && (
+            <Pill tone="primary">
+              {t("games.matchesCount", { count: completedCount })}
+            </Pill>
+          )}
+        </div>
 
-      <div className="mt-8">
-        <h2 className="text-lg font-semibold">{t("games.matchHistory")}</h2>
-        <div className="mt-3" data-testid="match-history">
+        <div className="mt-5">
+          <Link
+            to="/games/$slug/new"
+            params={{ slug }}
+            data-testid="new-match-button"
+            className={`${buttonStyles.base} ${buttonStyles.primary} ${buttonStyles.lg} ${buttonStyles.full}`}
+          >
+            <Icon name="plus" size={18} />
+            {t("games.newMatch")}
+          </Link>
+        </div>
+
+        <h3 className={styles.historyHeader}>{t("games.matchHistory")}</h3>
+        <div data-testid="match-history" className={styles.history}>
           {!matches || matches.length === 0 ? (
-            <p className="text-sm text-gray-400">{t("matches.history.empty")}</p>
+            <EmptyHistory />
           ) : (
-            <ul className="flex flex-col gap-2">
-              {matches.map((m) => (
-                <MatchHistoryRow key={m.id} match={m} locale={i18n.language} />
-              ))}
-            </ul>
+            matches.map((m) => (
+              <MatchHistoryRow key={m.id} match={m} locale={i18n.language} />
+            ))
           )}
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -127,42 +162,79 @@ function MatchHistoryRow({
     day: "numeric",
   });
 
-  return (
-    <li
-      className="rounded-md border border-gray-200 p-3"
-      data-testid={`match-history-row-${match.id}`}
-    >
-      <Link
-        to="/matches/$id"
-        params={{ id: match.id }}
-        className="block hover:underline"
-      >
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500">{dateText}</span>
-          {match.status === "IN_PROGRESS" ? (
-            <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">
-              {t("matches.history.inProgress")}
-            </span>
-          ) : match.victoryType ? (
-            <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
-              {t(`matches.victoryType.${match.victoryType}`)}
-            </span>
-          ) : null}
-        </div>
+  const isCompleted = match.status === "COMPLETED";
 
-        <div className="mt-1 flex flex-wrap gap-x-3 text-sm">
-          {match.players.map((p) => (
-            <span
-              key={p.id}
-              className={
-                winner?.id === p.id ? "font-bold text-gray-900" : "text-gray-700"
-              }
-            >
-              {p.name} ({totals[p.id] ?? 0})
-            </span>
-          ))}
-        </div>
-      </Link>
-    </li>
+  return (
+    <Link
+      to="/matches/$id"
+      params={{ id: match.id }}
+      data-testid={`match-history-row-${match.id}`}
+      className={styles.matchCard}
+    >
+      <div className={styles.matchHead}>
+        <span className={styles.matchDate}>{dateText}</span>
+        {!isCompleted ? (
+          <Pill tone="warning">{t("matches.history.inProgress")}</Pill>
+        ) : match.victoryType ? (
+          <Pill tone={match.victoryType === "score" ? "muted" : "primary"}>
+            {t(`matches.victoryType.${match.victoryType}`)}
+          </Pill>
+        ) : null}
+      </div>
+
+      <div className={styles.players}>
+        {match.players.map((p, idx) => {
+          const isWinner = winner?.id === p.id;
+          const isDim = isCompleted && winner !== null && !isWinner;
+          return (
+            <Fragment key={p.id}>
+              <div
+                className={`${styles.playerCell} ${isWinner ? styles.playerWinner : ""}`}
+              >
+                <span
+                  className={[
+                    styles.playerName,
+                    isWinner && styles.playerNameWinner,
+                    isDim && styles.playerNameDim,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {isWinner && <Icon name="trophy" size={13} />}
+                  {displayPlayerName(p)}
+                </span>
+                <span
+                  data-testid={`match-history-score-${p.id}`}
+                  className={[
+                    styles.playerScore,
+                    isWinner && styles.playerScoreWinner,
+                    isDim && styles.playerScoreDim,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {totals[p.id] ?? 0}
+                </span>
+              </div>
+              {idx < match.players.length - 1 && (
+                <span className={styles.versus}>{t("matches.history.vs")}</span>
+              )}
+            </Fragment>
+          );
+        })}
+      </div>
+    </Link>
+  );
+}
+
+function EmptyHistory() {
+  const { t } = useTranslation();
+  return (
+    <div className={styles.empty}>
+      <span className={styles.emptyIcon}>
+        <Icon name="dice" size={22} />
+      </span>
+      <p className={styles.emptyText}>{t("games.noMatches")}</p>
+    </div>
   );
 }

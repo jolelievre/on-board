@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from "vite";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 import type { IncomingHttpHeaders } from "http";
 import path from "path";
 
@@ -79,6 +80,48 @@ export default defineConfig({
     }),
     react(),
     honoDevServer(),
+    VitePWA({
+      registerType: "autoUpdate",
+      // Don't activate the SW in dev — keeps Vite HMR clean.
+      devOptions: { enabled: false },
+      workbox: {
+        // Precache everything Vite emits, including bundled font files.
+        globPatterns: ["**/*.{js,css,html,woff,woff2,svg,png,ico}"],
+        // The SPA shell handles routing — fall back to index.html for
+        // navigations so the app still loads when offline.
+        navigateFallback: "/index.html",
+        // Don't intercept API calls — let them fail naturally when offline.
+        navigateFallbackDenylist: [/^\/api\//],
+      },
+      manifest: {
+        name: "OnBoard",
+        short_name: "OnBoard",
+        description: "Board game score tracker",
+        start_url: "/",
+        display: "standalone",
+        orientation: "portrait",
+        background_color: "#f4ecdc",
+        theme_color: "#9f2d1a",
+        icons: [
+          {
+            src: "/pwa-icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: "/pwa-icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+          },
+          {
+            src: "/pwa-icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
+      },
+    }),
   ],
   resolve: {
     alias: {

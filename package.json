@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "npm run dev:kill --silent && vite",
     "dev:kill": "lsof -ti :5173 | xargs kill -9 2>/dev/null; echo 'Port 5173 cleared'",
+    "prebuild": "tsx scripts/generate-pwa-icons.ts",
     "build": "vite build && tsc -p tsconfig.server.json",
+    "icons": "tsx scripts/generate-pwa-icons.ts",
     "start": "node dist/server/index.js",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
@@ -20,13 +22,16 @@
     "test:ui": "npx playwright test --ui",
     "screenshots": "./scripts/test-setup.sh && tsx scripts/capture-screenshots.ts",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
     "db:test:reset": "DATABASE_URL=\"postgresql://postgres:postgres@localhost:5432/onboard_test\" prisma db push --force-reset"
   },
   "dependencies": {
+    "@fontsource/caveat": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/patrick-hand": "^5.2.8",
     "@hono/node-server": "^1.13.0",
     "@prisma/adapter-pg": "^6.0.0",
     "@prisma/client": "^6.0.0",
@@ -59,10 +64,13 @@
     "globals": "^15.0.0",
     "postcss": "^8.4.0",
     "prisma": "^6.0.0",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vite-plugin-pwa": "^1.2.0",
+    "workbox-window": "^7.4.0"
   }
 }

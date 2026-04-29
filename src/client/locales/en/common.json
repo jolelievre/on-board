@@ -14,19 +14,34 @@
     "name": "Name",
     "email": "Email",
     "password": "Password",
-    "defaultName": "Test User"
+    "defaultName": "Test User",
+    "or": "or"
   },
   "settings": {
     "title": "Settings",
     "profile": "Profile",
-    "language": "Language"
+    "language": "Language",
+    "alias": {
+      "title": "Alias",
+      "hint": "Shown across the app instead of your full name when set",
+      "placeholder": "e.g. Jo",
+      "saved": "Saved"
+    },
+    "theme": {
+      "title": "Theme",
+      "parchment": "Parchment",
+      "candlelit": "Candlelit"
+    }
   },
   "games": {
     "title": "Games",
+    "subtitle": "Pick a game · start a new match",
     "players": "players",
     "newMatch": "New match",
     "matchHistory": "Match history",
-    "noMatches": "No matches yet.",
+    "noMatches": "No matches yet — start your first one above.",
+    "matchesCount_one": "{{count}} match",
+    "matchesCount_other": "{{count}} matches",
     "notFound": "Game not found.",
     "catalog": {
       "7-wonders-duel": {
@@ -44,6 +59,7 @@
     "saving": "Saving…",
     "saved": "Saved",
     "saveError": "Save failed",
+    "offline": "Offline",
     "completeByScore": "Complete: {{name}} wins by score",
     "completeByTiebreaker": "Complete: {{name}} wins by Civil tiebreaker",
     "completeMilitarySupremacy": "Complete: military supremacy for {{name}}",
@@ -92,6 +108,7 @@
       },
       "total": "Total",
       "treasuryHint": "{{coins}} coins ({{vp}} VP)",
+      "treasuryEmptyHint": "Enter coins",
       "specialVictory": {
         "military": "Military supremacy",
         "scientific": "Scientific supremacy"

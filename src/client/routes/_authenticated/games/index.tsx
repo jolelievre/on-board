@@ -1,6 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { Header } from "../../../components/layout/Header";
+import { Logo } from "../../../components/ui/Logo";
+import { Pill } from "../../../components/ui/Pill";
+import { CoverArt } from "../../../components/games/CoverArt";
+import styles from "./index.module.css";
 
 export const Route = createFileRoute("/_authenticated/games/")({
   component: GamesPage,
@@ -27,33 +32,52 @@ function GamesPage() {
   });
 
   return (
-    <div className="mx-auto max-w-lg p-4">
-      <h1 className="text-2xl font-bold">{t("games.title")}</h1>
+    <>
+      <Header left={<Logo size={44} />} />
+      <div className="px-5 pb-4">
+        <h1 className={styles.title}>{t("games.title")}</h1>
+        <p className={styles.subtitle}>{t("games.subtitle")}</p>
+      </div>
 
-      {isPending && <p className="mt-4 text-gray-500">{t("common.loading")}</p>}
+      <div className="px-5">
+        {isPending && <p className={styles.empty}>{t("common.loading")}</p>}
 
-      {games && (
-        <div className="mt-4 flex flex-col gap-3">
-          {games.map((game) => (
-            <Link
-              key={game.id}
-              to="/games/$slug"
-              params={{ slug: game.slug }}
-              className="rounded-lg border p-4 hover:bg-gray-50"
-            >
-              <h2 className="font-semibold">
-                {t(`games.catalog.${game.slug}.name`, { defaultValue: game.name })}
-              </h2>
-              <p className="mt-1 text-sm text-gray-600">
-                {t(`games.catalog.${game.slug}.description`, { defaultValue: game.description })}
-              </p>
-              <p className="mt-1 text-xs text-gray-400">
-                {game.minPlayers}–{game.maxPlayers} {t("games.players")}
-              </p>
-            </Link>
-          ))}
+        {games && (
+          <div className={styles.list}>
+            {games.map((game) => (
+              <GameCard key={game.id} game={game} />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function GameCard({ game }: { game: Game }) {
+  const { t } = useTranslation();
+  return (
+    <Link
+      to="/games/$slug"
+      params={{ slug: game.slug }}
+      className={styles.card}
+    >
+      <CoverArt slug={game.slug} />
+      <div className={styles.cardBody}>
+        <h2 className={styles.cardName}>
+          {t(`games.catalog.${game.slug}.name`, { defaultValue: game.name })}
+        </h2>
+        <p className={styles.cardDesc}>
+          {t(`games.catalog.${game.slug}.description`, {
+            defaultValue: game.description,
+          })}
+        </p>
+        <div className={styles.cardMeta}>
+          <Pill tone="muted">
+            {game.minPlayers}–{game.maxPlayers} {t("games.players")}
+          </Pill>
         </div>
-      )}
-    </div>
+      </div>
+    </Link>
   );
 }

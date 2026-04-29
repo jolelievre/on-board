@@ -14,19 +14,34 @@
     "name": "Nom",
     "email": "E-mail",
     "password": "Mot de passe",
-    "defaultName": "Utilisateur test"
+    "defaultName": "Utilisateur test",
+    "or": "ou"
   },
   "settings": {
     "title": "Paramètres",
     "profile": "Profil",
-    "language": "Langue"
+    "language": "Langue",
+    "alias": {
+      "title": "Pseudo",
+      "hint": "Affiché dans l'application à la place de votre nom complet",
+      "placeholder": "ex. Jo",
+      "saved": "Enregistré"
+    },
+    "theme": {
+      "title": "Thème",
+      "parchment": "Parchemin",
+      "candlelit": "Chandelle"
+    }
   },
   "games": {
     "title": "Jeux",
+    "subtitle": "Choisissez un jeu · démarrez une partie",
     "players": "joueurs",
     "newMatch": "Nouvelle partie",
-    "matchHistory": "Historique des parties",
-    "noMatches": "Aucune partie pour le moment.",
+    "matchHistory": "Historique",
+    "noMatches": "Aucune partie pour le moment — lancez la première ci-dessus.",
+    "matchesCount_one": "{{count}} partie",
+    "matchesCount_other": "{{count}} parties",
     "notFound": "Jeu introuvable.",
     "catalog": {
       "7-wonders-duel": {
@@ -44,6 +59,7 @@
     "saving": "Sauvegarde…",
     "saved": "Sauvegardé",
     "saveError": "Échec de la sauvegarde",
+    "offline": "Hors ligne",
     "completeByScore": "Terminer : {{name}} gagne aux points",
     "completeByTiebreaker": "Terminer : {{name}} gagne au départage par les Civils",
     "completeMilitarySupremacy": "Terminer : suprématie militaire pour {{name}}",
@@ -92,6 +108,7 @@
       },
       "total": "Total",
       "treasuryHint": "{{coins}} pièces ({{vp}} PV)",
+      "treasuryEmptyHint": "Saisir les pièces",
       "specialVictory": {
         "military": "Suprématie militaire",
         "scientific": "Suprématie scientifique"
