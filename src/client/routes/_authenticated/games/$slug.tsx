@@ -285,20 +285,10 @@ function MatchHistoryRow({
                   ]
                     .filter(Boolean)
                     .join(" ")}
+                  data-testid={`match-history-score-${p.id}`}
+                  data-score={totals[p.id] ?? 0}
                 >
                   {displayPlayerName(p)}
-                </span>
-                <span
-                  data-testid={`match-history-score-${p.id}`}
-                  className={[
-                    styles.podiumScore,
-                    isWinner && styles.playerScoreWinner,
-                    isDim && styles.playerScoreDim,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  {totals[p.id] ?? 0}
                 </span>
               </span>
             );

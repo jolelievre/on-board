@@ -183,15 +183,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.podiumScore {
-  font-family: var(--font-body);
-  font-size: 1rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-ink);
-  flex: 0 0 auto;
+  /* Compensate Caveat's italic lean so the last glyph isn't clipped. */
+  padding-inline-end: 0.25em;
 }
 
 .podiumMore {
