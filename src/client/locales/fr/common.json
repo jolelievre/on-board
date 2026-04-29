@@ -158,8 +158,8 @@
         "sumUnder_other": "📈 {{count}} plis libres — gare aux surenchères.",
         "sumOver_one": "📉 1 pari de trop — sous-enchères récompensées.",
         "sumOver_other": "📉 {{count}} paris de trop — sous-enchères récompensées.",
-        "enterResultsCta": "Saisir les résultats →",
-        "backToBidsCta": "← Retour aux paris"
+        "enterResultsCta": "Résultats →",
+        "backToBidsCta": "← Paris"
       },
       "result": {
         "tricksLabel": "Plis remportés · {{sum}}/{{round}} saisis",
