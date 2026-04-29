@@ -26,6 +26,11 @@
   background: color-mix(in srgb, var(--color-primary) 8%, transparent);
 }
 
+.leftSlot {
+  display: inline-flex;
+  align-items: center;
+}
+
 .spacer {
   flex: 1;
 }

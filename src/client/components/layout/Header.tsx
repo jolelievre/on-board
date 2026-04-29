@@ -15,10 +15,14 @@ type BackProp =
 type Props = {
   back?: BackProp;
   syncState?: SyncState;
+  /** Slot rendered immediately after the back button (or in its place
+   * when there's no back link). Use for the brand logo on the home
+   * screen. */
+  left?: ReactNode;
   right?: ReactNode;
 };
 
-export function Header({ back = false, syncState, right }: Props) {
+export function Header({ back = false, syncState, left, right }: Props) {
   return (
     <header className={styles.header}>
       {back ? (
@@ -31,6 +35,8 @@ export function Header({ back = false, syncState, right }: Props) {
           <Icon name="arrow-left" size={18} />
           <span>{back.label}</span>
         </Link>
+      ) : left ? (
+        <span className={styles.leftSlot}>{left}</span>
       ) : (
         <span style={{ width: 4 }} aria-hidden />
       )}

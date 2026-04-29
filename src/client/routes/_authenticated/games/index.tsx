@@ -33,7 +33,7 @@ function GamesPage() {
 
   return (
     <>
-      <Header right={<Logo size={22} glyphOnly />} />
+      <Header left={<Logo size={44} />} />
       <div className="px-5 pb-4">
         <h1 className={styles.title}>{t("games.title")}</h1>
         <p className={styles.subtitle}>{t("games.subtitle")}</p>
