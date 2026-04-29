@@ -36,7 +36,12 @@ export function RoundTransitionScreen({
   onEditLastRound,
 }: Props) {
   const { t } = useTranslation();
-  const cardCount = Math.min(nextRound, 8);
+  // One card per round number, no cap — round 10 deals 10 cards. The stack
+  // is centred horizontally regardless of count.
+  const cardCount = nextRound;
+  const CARD_WIDTH = 60;
+  const CARD_OVERLAP_STEP = 14;
+  const stackSpan = (cardCount - 1) * CARD_OVERLAP_STEP + CARD_WIDTH;
 
   return (
     <div
@@ -61,14 +66,18 @@ export function RoundTransitionScreen({
       <div className={styles.cardStack} aria-hidden>
         {Array.from({ length: cardCount }).map((_, i) => {
           const isTop = i === cardCount - 1;
+          // Each card's left edge is computed off the centre. The base
+          // offset (-stackSpan/2) anchors the leftmost card so the whole
+          // spread sits centred horizontally; each subsequent card steps
+          // CARD_OVERLAP_STEP px to the right.
           return (
             <div
               key={i}
               className={styles.card}
               style={{
-                left: `calc(50% + ${(i - cardCount / 2) * 14}px)`,
+                left: `calc(50% - ${stackSpan / 2}px + ${i * CARD_OVERLAP_STEP}px)`,
                 top: 8 + i * 1,
-                transform: `rotate(${(i - cardCount / 2) * 4}deg)`,
+                transform: `rotate(${(i - (cardCount - 1) / 2) * 4}deg)`,
               }}
             >
               {isTop && (
