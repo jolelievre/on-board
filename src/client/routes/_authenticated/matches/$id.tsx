@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../../lib/api";
 import { SevenWondersDuelScorer } from "../../../components/scoring/SevenWondersDuelScorer";
+import { SkullKingScorer } from "../../../components/scoring/skull-king/SkullKingScorer";
 import { Header } from "../../../components/layout/Header";
 import { Card } from "../../../components/ui/Card";
+import { Icon } from "../../../components/ui/Icon";
 import {
   SyncPill,
   saveStatusToSyncState,
@@ -21,6 +23,7 @@ function MatchPage() {
   const { id } = Route.useParams();
   const { t } = useTranslation();
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [scoreboardOpen, setScoreboardOpen] = useState(false);
 
   const { data: match, isPending } = useQuery<Match>({
     queryKey: ["matches", id],
@@ -42,8 +45,12 @@ function MatchPage() {
     defaultValue: match.game.name,
   });
 
-  const isInProgress7WD =
-    match.game.slug === "7-wonders-duel" && match.status !== "COMPLETED";
+  const isInProgress = match.status !== "COMPLETED";
+  const is7WD = match.game.slug === "7-wonders-duel";
+  const isSkullKing = match.game.slug === "skull-king";
+
+  const showSyncPill = isInProgress && (is7WD || isSkullKing);
+  const showScoreboardToggle = isSkullKing && isInProgress;
 
   return (
     <>
@@ -54,21 +61,65 @@ function MatchPage() {
           label: gameName,
         }}
         right={
-          isInProgress7WD ? (
-            <SyncPill
-              size="lg"
-              state={saveStatusToSyncState(saveStatus)}
-              data-testid="save-status"
-              data-status={saveStatus}
-            />
-          ) : null
+          <>
+            {showScoreboardToggle && (
+              <button
+                type="button"
+                onClick={() => setScoreboardOpen((v) => !v)}
+                aria-label={t(
+                  scoreboardOpen
+                    ? "scoring.skullKing.closeScoreboard"
+                    : "scoring.skullKing.openScoreboard",
+                )}
+                aria-pressed={scoreboardOpen}
+                data-testid="sk-scoreboard-toggle"
+                style={{
+                  background: scoreboardOpen
+                    ? "var(--color-primary)"
+                    : "transparent",
+                  color: scoreboardOpen
+                    ? "var(--color-primary-fg)"
+                    : "var(--color-ink-soft)",
+                  border: "1.5px solid var(--color-border-strong)",
+                  borderColor: scoreboardOpen
+                    ? "var(--color-primary)"
+                    : "var(--color-border-strong)",
+                  borderRadius: 999,
+                  padding: 6,
+                  width: 36,
+                  height: 36,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <Icon name="cards" size={18} />
+              </button>
+            )}
+            {showSyncPill && (
+              <SyncPill
+                size="lg"
+                state={saveStatusToSyncState(saveStatus)}
+                data-testid="save-status"
+                data-status={saveStatus}
+              />
+            )}
+          </>
         }
       />
 
-      <div className="px-5">
-        {match.game.slug === "7-wonders-duel" ? (
+      <div className="px-5" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        {is7WD ? (
           <SevenWondersDuelScorer
             match={match}
+            onSaveStatusChange={setSaveStatus}
+          />
+        ) : isSkullKing ? (
+          <SkullKingScorer
+            match={match}
+            scoreboardOpen={scoreboardOpen}
+            onScoreboardClose={() => setScoreboardOpen(false)}
             onSaveStatusChange={setSaveStatus}
           />
         ) : (
