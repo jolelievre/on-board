@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./RoundTransitionScreen.module.css";
+import { SkullGlyph } from "../../ui/sk/SkGlyphs";
 import { displayPlayerName } from "../../../../shared/players";
 import type { Player } from "../../../types/match";
 
@@ -58,19 +59,28 @@ export function RoundTransitionScreen({
       </div>
 
       <div className={styles.cardStack} aria-hidden>
-        {Array.from({ length: cardCount }).map((_, i) => (
-          <div
-            key={i}
-            className={styles.card}
-            style={{
-              left: `calc(50% + ${(i - cardCount / 2) * 14}px)`,
-              top: 8 + i * 1,
-              transform: `rotate(${(i - cardCount / 2) * 4}deg)`,
-            }}
-          >
-            {i === cardCount - 1 ? "⚓" : ""}
-          </div>
-        ))}
+        {Array.from({ length: cardCount }).map((_, i) => {
+          const isTop = i === cardCount - 1;
+          return (
+            <div
+              key={i}
+              className={styles.card}
+              style={{
+                left: `calc(50% + ${(i - cardCount / 2) * 14}px)`,
+                top: 8 + i * 1,
+                transform: `rotate(${(i - cardCount / 2) * 4}deg)`,
+              }}
+            >
+              {isTop && (
+                <SkullGlyph
+                  size={44}
+                  color="var(--color-ink-soft)"
+                  crownColor="var(--sk-gold)"
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className={styles.standings} data-testid="sk-transition-standings">
