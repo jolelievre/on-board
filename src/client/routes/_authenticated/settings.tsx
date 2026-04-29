@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { authClient } from "../../lib/auth-client";
+import { authClient, updateProfile } from "../../lib/auth-client";
 import { LanguageSelector } from "../../components/LanguageSelector";
 import { ThemeToggle } from "../../components/ui/ThemeToggle";
 import { Header } from "../../components/layout/Header";
 import { Group } from "../../components/ui/Group";
+import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
 import styles from "./settings.module.css";
@@ -16,7 +18,11 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function SettingsPage() {
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
-  const initial = session?.user.name?.trim().slice(0, 1).toUpperCase() ?? "·";
+  const displayName =
+    (session?.user as { alias?: string | null } | undefined)?.alias?.trim() ||
+    session?.user.name ||
+    "";
+  const initial = displayName.slice(0, 1).toUpperCase() || "·";
 
   return (
     <>
@@ -42,6 +48,18 @@ function SettingsPage() {
             </div>
           )}
 
+          <Group
+            title={t("settings.alias.title", { defaultValue: "Alias" })}
+          >
+            <AliasInput
+              initialValue={
+                (session?.user as { alias?: string | null } | undefined)
+                  ?.alias ?? ""
+              }
+            />
+            <p className={styles.hint}>{t("settings.alias.hint")}</p>
+          </Group>
+
           <Group title={t("settings.language")}>
             <LanguageSelector />
           </Group>
@@ -66,5 +84,61 @@ function SettingsPage() {
         </div>
       </div>
     </>
+  );
+}
+
+function AliasInput({ initialValue }: { initialValue: string }) {
+  const { t } = useTranslation();
+  const [value, setValue] = useState(initialValue);
+  const [persisted, setPersisted] = useState(initialValue);
+  const [showSaved, setShowSaved] = useState(false);
+
+  // Hydrate from session as soon as it lands
+  useEffect(() => {
+    setValue(initialValue);
+    setPersisted(initialValue);
+  }, [initialValue]);
+
+  const commit = () => {
+    const trimmed = value.trim();
+    if (trimmed === persisted) return;
+    setPersisted(trimmed);
+    setValue(trimmed);
+    void updateProfile({ alias: trimmed })
+      .then(() => {
+        setShowSaved(true);
+        window.setTimeout(() => setShowSaved(false), 1500);
+      })
+      .catch(() => {
+        /* offline / unauthenticated — local change still visible until reload */
+      });
+  };
+
+  return (
+    <div className={styles.aliasRow}>
+      <Input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        placeholder={t("settings.alias.placeholder", { defaultValue: "e.g. Jo" })}
+        data-testid="settings-alias-input"
+      />
+      <span
+        className={`${styles.savedBadge} ${showSaved ? styles.savedBadgeVisible : ""}`}
+        aria-live="polite"
+        data-testid="settings-alias-saved"
+      >
+        <Icon name="check" size={14} />
+        <span>{t("settings.alias.saved", { defaultValue: "Saved" })}</span>
+      </span>
+    </div>
   );
 }

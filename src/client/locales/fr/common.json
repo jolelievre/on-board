@@ -21,6 +21,12 @@
     "title": "Paramètres",
     "profile": "Profil",
     "language": "Langue",
+    "alias": {
+      "title": "Pseudo",
+      "hint": "Affiché dans l'application à la place de votre nom complet",
+      "placeholder": "ex. Jo",
+      "saved": "Enregistré"
+    },
     "theme": {
       "title": "Thème",
       "parchment": "Parchemin",

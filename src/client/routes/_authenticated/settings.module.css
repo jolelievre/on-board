@@ -75,3 +75,47 @@
 .signOut {
   margin-top: 0.5rem;
 }
+
+.hint {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  color: var(--color-ink-faint);
+  margin: 0.5rem 0 0;
+  line-height: 1.4;
+}
+
+.aliasRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.aliasRow > :first-child {
+  flex: 1;
+}
+
+.savedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 180ms ease-out, transform 180ms ease-out;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.savedBadgeVisible {
+  opacity: 1;
+  transform: translateY(0);
+}

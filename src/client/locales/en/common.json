@@ -21,6 +21,12 @@
     "title": "Settings",
     "profile": "Profile",
     "language": "Language",
+    "alias": {
+      "title": "Alias",
+      "hint": "Shown across the app instead of your full name when set",
+      "placeholder": "e.g. Jo",
+      "saved": "Saved"
+    },
     "theme": {
       "title": "Theme",
       "parchment": "Parchment",

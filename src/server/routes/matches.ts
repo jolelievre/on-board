@@ -86,7 +86,12 @@ export const matchesRoutes = new Hono<AuthEnv>()
       },
       include: {
         game: { select: { name: true, slug: true } },
-        players: { orderBy: { position: "asc" } },
+        players: {
+          orderBy: { position: "asc" },
+          include: {
+            user: { select: { name: true, alias: true } },
+          },
+        },
         scores: true,
       },
       orderBy: { startedAt: "desc" },
@@ -102,7 +107,12 @@ export const matchesRoutes = new Hono<AuthEnv>()
       where: { id, createdById: user.id },
       include: {
         game: true,
-        players: { orderBy: { position: "asc" } },
+        players: {
+          orderBy: { position: "asc" },
+          include: {
+            user: { select: { name: true, alias: true } },
+          },
+        },
         scores: true,
       },
     });

@@ -7,6 +7,7 @@ import {
   computeTotalsByPlayer,
   type SevenWondersVictoryType,
 } from "../../../../shared/scoring/7-wonders-duel";
+import { displayPlayerName } from "../../../../shared/players";
 import { Header } from "../../../components/layout/Header";
 import { Pill } from "../../../components/ui/Pill";
 import { Icon } from "../../../components/ui/Icon";
@@ -27,7 +28,12 @@ type Game = {
   maxPlayers: number;
 };
 
-type Player = { id: string; name: string; position: number };
+type Player = {
+  id: string;
+  name: string;
+  position: number;
+  user?: { name: string; alias: string | null } | null;
+};
 type ScoreRow = { playerId: string; category: string; value: number };
 type MatchListItem = {
   id: string;
@@ -195,7 +201,7 @@ function MatchHistoryRow({
                     .join(" ")}
                 >
                   {isWinner && <Icon name="trophy" size={13} />}
-                  {p.name}
+                  {displayPlayerName(p)}
                 </span>
                 <span
                   data-testid={`match-history-score-${p.id}`}

@@ -11,7 +11,13 @@ export const authClient = createAuthClient({
  * (locale, theme) in one place — better-auth's client doesn't infer
  * server-side `additionalFields` without a custom plugin.
  */
-type ProfileUpdate = { locale?: string; theme?: string };
+type ProfileUpdate = {
+  locale?: string;
+  theme?: string;
+  /** Short display name preferred over `name` in the UI. Pass an empty
+   * string to clear the alias. */
+  alias?: string;
+};
 
 export function updateProfile(fields: ProfileUpdate) {
   type UpdateArgs = Parameters<typeof authClient.updateUser>[0];

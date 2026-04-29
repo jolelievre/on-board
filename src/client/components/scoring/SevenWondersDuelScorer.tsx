@@ -9,6 +9,7 @@ import type {
   SupremacySelection,
 } from "../match/HandMatchGrid";
 import { WinnerBanner } from "../match/WinnerBanner";
+import { displayPlayerName } from "../../../shared/players";
 import { SyncPill, type SyncState } from "../ui/SyncPill";
 import { Button } from "../ui/Button";
 import {
@@ -196,6 +197,16 @@ export function SevenWondersDuelScorer({ match }: Props) {
   const supremacyPlayer = supremacy
     ? (match.players.find((p) => p.id === supremacy.playerId) ?? null)
     : null;
+  const supremacyPlayerName = supremacyPlayer
+    ? displayPlayerName(supremacyPlayer)
+    : "";
+
+  // Display-name-resolved players passed to the score grid. The grid
+  // doesn't need to know about User vs Player — we resolve at the edge.
+  const displayPlayers = match.players.map((p) => ({
+    id: p.id,
+    name: displayPlayerName(p),
+  }));
 
   const handleComplete = async () => {
     await flushPendingSave();
@@ -217,6 +228,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
   const winner = match.winnerId
     ? (match.players.find((p) => p.id === match.winnerId) ?? null)
     : null;
+  const winnerName = winner ? displayPlayerName(winner) : null;
   const winnerTotal = winner ? (totals[winner.id] ?? 0) : null;
   const loserTotal =
     isCompleted && winner
@@ -227,7 +239,10 @@ export function SevenWondersDuelScorer({ match }: Props) {
 
   const scoreWinnerName =
     outcome.kind === "winner"
-      ? (match.players.find((p) => p.id === outcome.winnerId)?.name ?? "")
+      ? (() => {
+          const p = match.players.find((p) => p.id === outcome.winnerId);
+          return p ? displayPlayerName(p) : "";
+        })()
       : "";
 
   const completeButtonLabel = (() => {
@@ -236,7 +251,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
         supremacy.type === "military_supremacy"
           ? "matches.completeMilitarySupremacy"
           : "matches.completeScientificSupremacy";
-      return t(key, { name: supremacyPlayer.name });
+      return t(key, { name: supremacyPlayerName });
     }
     if (outcome.kind === "draw") return t("matches.declareDraw");
     if (outcome.kind === "winner") {
@@ -263,7 +278,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
 
       {isCompleted && (
         <WinnerBanner
-          winnerName={winner?.name ?? null}
+          winnerName={winnerName}
           winnerScore={winnerTotal}
           loserScore={loserTotal}
           victoryType={match.victoryType}
@@ -272,7 +287,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
 
       <div className="mt-3">
         <HandMatchGrid
-          players={match.players}
+          players={displayPlayers}
           values={values}
           onChange={handleScoreChange}
           supremacy={supremacy}

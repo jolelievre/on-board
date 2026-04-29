@@ -16,6 +16,7 @@ model User {
   id            String    @id @default(cuid())
   email         String    @unique
   name          String
+  alias         String?   /// Short display name (preferred over name in the UI)
   emailVerified Boolean   @default(false)
   avatarUrl     String?   /// Profile picture URL (from Google OAuth)
   locale        String    @default("en") /// Preferred language ("en" or "fr")

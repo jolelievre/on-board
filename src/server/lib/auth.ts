@@ -38,6 +38,11 @@ export const auth = betterAuth({
         defaultValue: "parchment",
         input: true,
       },
+      alias: {
+        type: "string",
+        required: false,
+        input: true,
+      },
     },
   },
 });

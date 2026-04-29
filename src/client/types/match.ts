@@ -2,6 +2,12 @@ export type Player = {
   id: string;
   name: string;
   position: number;
+  /** Linked user (when the Player was attributed via the self chip).
+   * Preferred display name = user.alias ?? user.name ?? player.name. */
+  user?: {
+    name: string;
+    alias: string | null;
+  } | null;
 };
 
 export type ScoreRow = {
