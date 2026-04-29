@@ -561,12 +561,19 @@ test.describe("Skull King — Classic flow", () => {
     // The "vs" separator only renders for 2-player matches and must not
     // appear here.
     await expect(row.locator("text=/^vs$/")).toHaveCount(0);
+    // Compact podium: the new card uses the data-testid='match-history-podium'
+    // container with top-3 in a single line.
+    await expect(
+      row.locator("[data-testid='match-history-podium']"),
+    ).toBeVisible();
     for (const n of names) {
       await expect(row).toContainText(n);
     }
     await expect(row).toContainText("#1");
     await expect(row).toContainText("#2");
     await expect(row).toContainText("#3");
+    // With exactly 3 players there's no "+N more" overflow indicator.
+    await expect(row.locator("text=/^\\+\\d+$/")).toHaveCount(0);
   });
 
   test("scoreboard totals row carries a rank badge per cell", async ({

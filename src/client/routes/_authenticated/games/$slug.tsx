@@ -267,32 +267,31 @@ function MatchHistoryRow({
           })}
         </div>
       ) : (
-        <ul className={styles.playerList}>
-          {orderedPlayers.map((p, idx) => {
+        <div className={styles.podium} data-testid="match-history-podium">
+          {orderedPlayers.slice(0, 3).map((p, idx) => {
             const isWinner = winner?.id === p.id;
             const isDim = isCompleted && winner !== null && !isWinner;
             return (
-              <li
+              <span
                 key={p.id}
-                className={`${styles.playerRow} ${isWinner ? styles.playerWinner : ""}`}
+                className={`${styles.podiumEntry} ${isWinner ? styles.podiumWinner : ""}`}
               >
-                <span className={styles.playerRank}>#{idx + 1}</span>
+                <span className={styles.podiumRank}>#{idx + 1}</span>
                 <span
                   className={[
-                    styles.playerName,
+                    styles.podiumName,
                     isWinner && styles.playerNameWinner,
                     isDim && styles.playerNameDim,
                   ]
                     .filter(Boolean)
                     .join(" ")}
                 >
-                  {isWinner && <Icon name="trophy" size={13} />}
                   {displayPlayerName(p)}
                 </span>
                 <span
                   data-testid={`match-history-score-${p.id}`}
                   className={[
-                    styles.playerScore,
+                    styles.podiumScore,
                     isWinner && styles.playerScoreWinner,
                     isDim && styles.playerScoreDim,
                   ]
@@ -301,10 +300,15 @@ function MatchHistoryRow({
                 >
                   {totals[p.id] ?? 0}
                 </span>
-              </li>
+              </span>
             );
           })}
-        </ul>
+          {orderedPlayers.length > 3 && (
+            <span className={styles.podiumMore}>
+              +{orderedPlayers.length - 3}
+            </span>
+          )}
+        </div>
       )}
     </Link>
   );
