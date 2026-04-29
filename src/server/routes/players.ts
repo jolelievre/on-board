@@ -8,16 +8,26 @@ type AuthEnv = {
   };
 };
 
+export type PlayerSuggestion = {
+  name: string;
+  /** True only for the entry that represents the current user themselves.
+   * Clients use this to send `userId` on POST /api/matches and avoid
+   * attaching unrelated friends-with-the-same-name to the user account. */
+  isSelf: boolean;
+};
+
 export const playersRoutes = new Hono<AuthEnv>().get(
   "/suggestions",
   async (c) => {
     const user = c.get("user");
     const query = c.req.query("q") || "";
 
-    // Find distinct player names from matches created by this user
+    // Match scope: matches I created OR matches where I'm a participant
+    // (Player.userId === user.id). The latter catches "I played in a match
+    // someone else created" — provided the creator chose to attribute me.
     const players = await prisma.player.findMany({
       where: {
-        match: { createdById: user.id },
+        OR: [{ match: { createdById: user.id } }, { userId: user.id }],
         ...(query
           ? { name: { contains: query, mode: "insensitive" as const } }
           : {}),
@@ -28,6 +38,22 @@ export const playersRoutes = new Hono<AuthEnv>().get(
       take: 20,
     });
 
-    return c.json(players.map((p) => p.name));
+    // Always include the current user's own name as a flagged suggestion,
+    // even when they've never been added to a match yet.
+    const selfName = user.name?.trim() ?? "";
+    const matchesQuery =
+      !query || selfName.toLowerCase().includes(query.toLowerCase());
+    const includeSelf = selfName.length > 0 && matchesQuery;
+
+    const others: PlayerSuggestion[] = players
+      .map((p) => p.name)
+      .filter((n) => n !== selfName)
+      .map((n) => ({ name: n, isSelf: false }));
+
+    const out: PlayerSuggestion[] = includeSelf
+      ? [{ name: selfName, isSelf: true }, ...others]
+      : others;
+
+    return c.json(out);
   },
 );
