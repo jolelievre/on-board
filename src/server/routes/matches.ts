@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import type { AuthUser } from "../middleware/auth.js";
 
@@ -13,9 +14,10 @@ export const matchesRoutes = new Hono<AuthEnv>()
     const user = c.get("user");
     const body = await c.req.json();
 
-    const { gameId, players } = body as {
+    const { gameId, players, metadata } = body as {
       gameId?: string;
       players?: { name: string; userId?: string; position: number }[];
+      metadata?: Record<string, unknown>;
     };
 
     if (!gameId || !players || !Array.isArray(players) || players.length === 0) {
@@ -62,6 +64,9 @@ export const matchesRoutes = new Hono<AuthEnv>()
       data: {
         gameId,
         createdById: user.id,
+        ...(metadata
+          ? { metadata: metadata as Prisma.InputJsonValue }
+          : {}),
         players: {
           create: players.map((p) => ({
             name: p.name.trim(),
@@ -169,4 +174,104 @@ export const matchesRoutes = new Hono<AuthEnv>()
     });
 
     return c.json(match);
+  })
+  .patch("/:id", async (c) => {
+    const user = c.get("user");
+    const id = c.req.param("id");
+    const body = await c.req.json();
+
+    const { metadata, playerOrder } = body as {
+      metadata?: Record<string, unknown>;
+      playerOrder?: { playerId: string; position: number }[];
+    };
+
+    const existing = await prisma.match.findFirst({
+      where: { id, createdById: user.id },
+      include: { players: true },
+    });
+
+    if (!existing) {
+      return c.json({ error: "Match not found" }, 404);
+    }
+
+    if (existing.status === "COMPLETED") {
+      return c.json(
+        { error: "Cannot edit a completed match" },
+        400,
+      );
+    }
+
+    if (playerOrder) {
+      if (!Array.isArray(playerOrder) || playerOrder.length === 0) {
+        return c.json({ error: "playerOrder must be a non-empty array" }, 400);
+      }
+      const existingIds = new Set(existing.players.map((p) => p.id));
+      const seenIds = new Set<string>();
+      const seenPositions = new Set<number>();
+      for (const entry of playerOrder) {
+        if (!entry || typeof entry.playerId !== "string") {
+          return c.json({ error: "Each playerOrder entry must have playerId" }, 400);
+        }
+        if (typeof entry.position !== "number" || !Number.isInteger(entry.position)) {
+          return c.json({ error: "playerOrder positions must be integers" }, 400);
+        }
+        if (!existingIds.has(entry.playerId)) {
+          return c.json(
+            { error: `Player ${entry.playerId} is not in this match` },
+            400,
+          );
+        }
+        if (seenIds.has(entry.playerId)) {
+          return c.json({ error: "Duplicate playerId in playerOrder" }, 400);
+        }
+        if (seenPositions.has(entry.position)) {
+          return c.json({ error: "Duplicate position in playerOrder" }, 400);
+        }
+        seenIds.add(entry.playerId);
+        seenPositions.add(entry.position);
+      }
+      // Reorder must cover every player so the unique [matchId, position]
+      // constraint can't be violated by leaving stale rows.
+      if (seenIds.size !== existing.players.length) {
+        return c.json(
+          { error: "playerOrder must include every player in the match" },
+          400,
+        );
+      }
+    }
+
+    // Two-phase position swap to dodge the unique [matchId, position]
+    // constraint: park rows at temporary negative positions, then write the
+    // final values. Wrapped in a transaction with the metadata update so a
+    // partial failure can't leave orphans.
+    const result = await prisma.$transaction(async (tx) => {
+      if (playerOrder) {
+        for (const entry of playerOrder) {
+          await tx.player.update({
+            where: { id: entry.playerId },
+            data: { position: -1 - entry.position },
+          });
+        }
+        for (const entry of playerOrder) {
+          await tx.player.update({
+            where: { id: entry.playerId },
+            data: { position: entry.position },
+          });
+        }
+      }
+      return tx.match.update({
+        where: { id },
+        data: {
+          ...(metadata !== undefined
+            ? { metadata: metadata as Prisma.InputJsonValue }
+            : {}),
+        },
+        include: {
+          players: { orderBy: { position: "asc" } },
+          scores: true,
+        },
+      });
+    });
+
+    return c.json(result);
   });

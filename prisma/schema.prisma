@@ -101,6 +101,7 @@ model Match {
   status      String    @default("IN_PROGRESS") /// "IN_PROGRESS" or "COMPLETED"
   victoryType String?   /// How the game ended (e.g. "score", "military_supremacy")
   winnerId    String?   /// References Player.id (not a FK to avoid circular deps)
+  metadata    Json      @default("{}") /// Game-specific match settings (e.g. { skullKing: { dealerStart: 0 } })
   startedAt   DateTime  @default(now())
   completedAt DateTime?
 

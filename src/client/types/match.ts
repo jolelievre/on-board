@@ -14,6 +14,7 @@ export type ScoreRow = {
   playerId: string;
   category: string;
   value: number;
+  metadata?: Record<string, unknown>;
 };
 
 export type Match = {
@@ -24,4 +25,5 @@ export type Match = {
   game: { id: string; slug: string; name: string };
   players: Player[];
   scores: ScoreRow[];
+  metadata?: Record<string, unknown>;
 };
