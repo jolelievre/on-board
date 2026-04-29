@@ -22,7 +22,7 @@
     "test:ui": "npx playwright test --ui",
     "screenshots": "./scripts/test-setup.sh && tsx scripts/capture-screenshots.ts",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
