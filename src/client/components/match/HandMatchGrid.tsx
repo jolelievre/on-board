@@ -1,7 +1,8 @@
+import { useRef, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import type { CSSProperties } from "react";
 import { SketchRect } from "../ui/SketchRect";
 import { SketchUnderline } from "../ui/SketchUnderline";
+import { SketchCheckbox } from "../ui/SketchCheckbox";
 import { CatGlyph } from "../ui/CatGlyph";
 import { jp } from "../ui/sketch";
 import {
@@ -9,6 +10,7 @@ import {
   categoryFromScoringId,
   type Category,
 } from "../ui/category";
+import { useElementSize } from "../../hooks/useElementSize";
 import {
   SEVEN_WONDERS_CATEGORIES,
   categoryToVictoryPoints,
@@ -205,19 +207,24 @@ function PlayerNameCell({
   tilt: number;
 }) {
   const seed = 10 + (player.id.charCodeAt(0) % 100);
+  const cellRef = useRef<HTMLDivElement>(null);
+  const size = useElementSize(cellRef);
   return (
     <div
+      ref={cellRef}
       className={styles.playerNameCell}
       style={{ transform: `rotate(${tilt}deg)` }}
     >
-      <SketchRect
-        width={150}
-        height={56}
-        stroke="var(--color-ink)"
-        fill="var(--color-surface)"
-        strokeWidth={2}
-        seed={seed}
-      />
+      {size && (
+        <SketchRect
+          width={size.width}
+          height={size.height}
+          stroke="var(--color-ink)"
+          fill="var(--color-surface)"
+          strokeWidth={2}
+          seed={seed}
+        />
+      )}
       <div className={styles.playerNameInner}>
         <div
           className={styles.playerName}
@@ -238,6 +245,8 @@ function CategoryIconCell({
   category: Category | null;
   seedBase: number;
 }) {
+  const boxRef = useRef<HTMLSpanElement>(null);
+  const boxSize = useElementSize(boxRef);
   if (!category) {
     return <div className={styles.iconCell} />;
   }
@@ -254,15 +263,17 @@ function CategoryIconCell({
         } as CSSProperties
       }
     >
-      <span className={styles.iconBox}>
-        <SketchRect
-          width={48}
-          height={42}
-          stroke={stroke}
-          fill="transparent"
-          strokeWidth={1.8}
-          seed={seed}
-        />
+      <span ref={boxRef} className={styles.iconBox}>
+        {boxSize && (
+          <SketchRect
+            width={boxSize.width}
+            height={boxSize.height}
+            stroke={stroke}
+            fill="transparent"
+            strokeWidth={1.8}
+            seed={seed}
+          />
+        )}
         <CatGlyph id={category} size={24} color="currentColor" />
       </span>
     </div>
@@ -303,53 +314,74 @@ function ScoreCell({
       ? `color-mix(in srgb, ${categoryColor(visualCategory, "bg")} 70%, var(--color-surface))`
       : "var(--color-surface)";
 
+  const isTreasury = category === "treasury";
   const cellStyle = {
     transform: `rotate(${tilt.toFixed(2)}deg)`,
     ["--cat-strong" as string]: stroke,
     ["--cat-ink" as string]: ink,
   } as CSSProperties;
 
-  const showTreasuryHint = category === "treasury" && value > 0;
-  const treasuryVp = showTreasuryHint
+  const treasuryVp = isTreasury
     ? categoryToVictoryPoints("treasury", value)
     : 0;
+  const treasuryHintText = isTreasury
+    ? value > 0
+      ? t("scoring.sevenWondersDuel.treasuryHint", {
+          coins: value,
+          vp: treasuryVp,
+        })
+      : t("scoring.sevenWondersDuel.treasuryEmptyHint", {
+          defaultValue: "Enter coins",
+        })
+    : null;
+
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const surfaceSize = useElementSize(surfaceRef);
 
   return (
-    <div className={styles.cell} style={cellStyle}>
-      <SketchRect
-        width={150}
-        height={42}
-        stroke={isZero ? "var(--color-ink-faint)" : stroke}
-        fill={fill}
-        strokeWidth={isZero ? 1.2 : 1.8}
-        opacity={isZero ? 0.6 : 1}
-        seed={seedBase}
-      />
-      <div className={styles.cellInner}>
-        <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          value={value === 0 ? "" : String(value)}
-          placeholder="·"
-          disabled={disabled}
-          onChange={(e) => onChange(playerId, category, parseInput(e.target.value))}
-          data-testid={`score-input-${playerId}-${category}`}
-          className={styles.scoreInput}
-          aria-label={`${category} score for player`}
-        />
+    <div
+      className={`${styles.cell} ${isTreasury ? styles.cellWithHint : ""}`}
+      style={cellStyle}
+    >
+      <div ref={surfaceRef} className={styles.cellSurface}>
+        {surfaceSize && (
+          <SketchRect
+            width={surfaceSize.width}
+            height={surfaceSize.height}
+            stroke={isZero ? "var(--color-ink-faint)" : stroke}
+            fill={fill}
+            strokeWidth={isZero ? 1.2 : 1.8}
+            opacity={isZero ? 0.6 : 1}
+            seed={seedBase}
+          />
+        )}
+        <div className={styles.cellSurfaceMain}>
+          <div className={styles.cellInner}>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={value === 0 ? "" : String(value)}
+              placeholder="·"
+              disabled={disabled}
+              onChange={(e) =>
+                onChange(playerId, category, parseInput(e.target.value))
+              }
+              data-testid={`score-input-${playerId}-${category}`}
+              className={styles.scoreInput}
+              aria-label={`${category} score for player`}
+            />
+          </div>
+        </div>
+        {isTreasury && (
+          <span
+            className={`${styles.treasuryHint} ${value === 0 ? styles.treasuryHintEmpty : ""}`}
+            data-testid={`score-treasury-hint-${playerId}`}
+          >
+            {treasuryHintText}
+          </span>
+        )}
       </div>
-      {showTreasuryHint && (
-        <span
-          className={styles.treasuryHint}
-          data-testid={`score-treasury-hint-${playerId}`}
-        >
-          {t("scoring.sevenWondersDuel.treasuryHint", {
-            coins: value,
-            vp: treasuryVp,
-          })}
-        </span>
-      )}
     </div>
   );
 }
@@ -367,30 +399,36 @@ function TotalCell({
   isWinner: boolean;
   seedBase: number;
 }) {
+  const innerRef = useRef<HTMLDivElement>(null);
+  const size = useElementSize(innerRef);
   return (
     <div
       className={styles.totalCell}
       style={{ transform: `rotate(${tilt}deg)` }}
     >
-      <SketchRect
-        width={150}
-        height={46}
-        stroke={isWinner ? "var(--color-accent)" : "var(--color-ink)"}
-        fill={
-          isWinner
-            ? "color-mix(in srgb, var(--color-accent) 14%, var(--color-surface))"
-            : "var(--color-surface)"
-        }
-        strokeWidth={isWinner ? 2.8 : 2}
-        seed={seedBase}
-      />
-      <span
-        className={`${styles.totalNumber} ${isWinner ? styles.totalNumberWinner : ""}`}
-        data-testid={`score-grid-total-${playerId}`}
-      >
-        {total}
-      </span>
-      {isWinner && <span className={styles.winnerStar}>★</span>}
+      <div ref={innerRef} className={styles.totalCellInner}>
+        {size && (
+          <SketchRect
+            width={size.width}
+            height={size.height}
+            stroke={isWinner ? "var(--color-accent)" : "var(--color-ink)"}
+            fill={
+              isWinner
+                ? "color-mix(in srgb, var(--color-accent) 14%, var(--color-surface))"
+                : "var(--color-surface)"
+            }
+            strokeWidth={isWinner ? 2.8 : 2}
+            seed={seedBase}
+          />
+        )}
+        <span
+          className={`${styles.totalNumber} ${isWinner ? styles.totalNumberWinner : ""}`}
+          data-testid={`score-grid-total-${playerId}`}
+        >
+          {total}
+        </span>
+        {isWinner && <span className={styles.winnerStar}>★</span>}
+      </div>
     </div>
   );
 }
@@ -429,17 +467,17 @@ function SupremacyRow({
       <div className={styles.iconCell}>
         <CatGlyph id={glyphId} size={28} color={accent} />
       </div>
-      {players.map((p) => {
+      {players.map((p, i) => {
         const checked = supremacy?.type === type && supremacy.playerId === p.id;
         return (
           <div key={p.id} className={styles.supremacyCheckboxCell}>
-            <input
-              type="checkbox"
+            <SketchCheckbox
               checked={checked}
               disabled={disabled}
               onChange={() => onToggle(type, p.id)}
               data-testid={`supremacy-${type}-${p.id}`}
-              className={styles.supremacyCheckbox}
+              accent={accent}
+              seed={300 + i * 7 + (type === "military_supremacy" ? 0 : 11)}
               aria-label={`${type} for ${p.name}`}
             />
           </div>

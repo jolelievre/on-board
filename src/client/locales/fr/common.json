@@ -102,6 +102,7 @@
       },
       "total": "Total",
       "treasuryHint": "{{coins}} pièces ({{vp}} PV)",
+      "treasuryEmptyHint": "Saisir les pièces",
       "specialVictory": {
         "military": "Suprématie militaire",
         "scientific": "Suprématie scientifique"

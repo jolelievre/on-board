@@ -102,6 +102,7 @@
       },
       "total": "Total",
       "treasuryHint": "{{coins}} coins ({{vp}} VP)",
+      "treasuryEmptyHint": "Enter coins",
       "specialVictory": {
         "military": "Military supremacy",
         "scientific": "Scientific supremacy"
