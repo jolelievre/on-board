@@ -113,6 +113,106 @@
         "military": "Suprématie militaire",
         "scientific": "Suprématie scientifique"
       }
+    },
+    "skullKing": {
+      "header": "Skull King",
+      "scoreboardLabel": "Tableau",
+      "openScoreboard": "Ouvrir le tableau des scores",
+      "closeScoreboard": "Fermer le tableau des scores",
+      "round": "Manche {{n}}",
+      "roundOf": "Manche {{n}} sur {{total}}",
+      "matchStart": {
+        "caption": "Nouvelle partie",
+        "summary": "{{count}} joueurs · 10 manches · règles classiques",
+        "seatingTitle": "Placement · sens horaire depuis le donneur",
+        "seatingHint": "Glisser pour réordonner · taper pour choisir le donneur",
+        "dealerBadge": "Donneur",
+        "rulesTitle": "Aide-mémoire",
+        "ruleBidZeroTitle": "Pari 0 ?",
+        "ruleBidZeroLine": "Réussi : +10×M · Raté : −10×M",
+        "ruleBidNTitle": "Pari N ?",
+        "ruleBidNLine": "Réussi : +20×N · Raté : −10·|Δ|",
+        "rule14sTitle": "14 colorés",
+        "rule14sLine": "+10 chacun · max 3",
+        "ruleBlack14Title": "14 noir",
+        "ruleBlack14Line": "+20",
+        "ruleMermaidPirateTitle": "Sirène par pirate",
+        "ruleMermaidPirateLine": "+20 chacune",
+        "ruleSkMermaidTitle": "RDP par sirène",
+        "ruleSkMermaidLine": "+40",
+        "startCta": "Distribuer la manche 1 →"
+      },
+      "bid": {
+        "caption": "Tapez un joueur pour modifier",
+        "playerBid": "Pari de {{name}}",
+        "progress": "{{done}}/{{total}}",
+        "bidPrompt": "PARI ?",
+        "revealCta": "Révéler & démarrer",
+        "scoreboardLabel": "Tableau"
+      },
+      "bidRecap": {
+        "caption": "Tous les paris sont posés",
+        "title": "Manche {{n}} · {{sum}}/{{round}} pariés",
+        "sumExact": "⚖ Les paris correspondent exactement aux plis — quelqu'un se trompe.",
+        "sumUnder_one": "📈 1 pli libre — gare aux surenchères.",
+        "sumUnder_other": "📈 {{count}} plis libres — gare aux surenchères.",
+        "sumOver_one": "📉 1 pari de trop — sous-enchères récompensées.",
+        "sumOver_other": "📉 {{count}} paris de trop — sous-enchères récompensées.",
+        "enterResultsCta": "Saisir les résultats →",
+        "backToBidsCta": "← Retour aux paris"
+      },
+      "result": {
+        "tricksLabel": "Plis remportés · {{sum}}/{{round}} saisis",
+        "bonusesLabel": "Bonus",
+        "bidLabel": "Pari",
+        "roundScoreLabel": "Score de la manche",
+        "totalAfterRound": "Total après M{{n}}",
+        "bidZeroMade": "Pari 0 réussi : {{score}}",
+        "bidZeroFailed": "Pari 0 raté : {{score}}",
+        "bidMade": "Pari {{bid}} réussi : {{score}}",
+        "bidMissed": "Pari {{bid}} raté : {{score}}",
+        "bonusInline": "Bonus : +{{points}}",
+        "prevPlayer": "‹ Préc.",
+        "nextPlayer": "Suivant : {{name}} →",
+        "endRound": "Terminer la manche →"
+      },
+      "transition": {
+        "caption": "Manche {{n}} terminée",
+        "roundTitle": "Manche {{n}}",
+        "cardsEach_one": "1 carte chacun · {{name}} distribue",
+        "cardsEach_other": "{{count}} cartes chacun · {{name}} distribue",
+        "standingsTitle": "Classement",
+        "continueCta": "Pari de la M{{n}} →"
+      },
+      "scoreboard": {
+        "title": "Tableau des scores",
+        "currentRound": "Manche {{n}}/10",
+        "trajectoryTitle": "Évolution par manche",
+        "totalsRowLabel": "Σ"
+      },
+      "complete": {
+        "caption": "Partie terminée",
+        "winnerWins": "{{name}} gagne !",
+        "summary_one": "{{score}} doublons · 1 manche jouée",
+        "summary_other": "{{score}} doublons · {{count}} manches jouées",
+        "draw": "Égalité",
+        "drawSummary": "{{score}} doublons · {{count}} manches jouées",
+        "finalStandings": "Classement final",
+        "rematchCta": "Revanche →",
+        "backCta": "Retour au jeu"
+      },
+      "bonus": {
+        "color14Label": "14 colorés",
+        "color14Hint": "+10 ch. · max 3",
+        "black14Label": "14 noir",
+        "black14Hint": "+20",
+        "mermaidByPirateLabel": "Sirène par pirate",
+        "mermaidByPirateHint": "+20 ch. · max 2",
+        "pirateBySkLabel": "Pirate par RDP",
+        "pirateBySkHint": "+30 ch. · max 6",
+        "skByMermaidLabel": "RDP par sirène",
+        "skByMermaidHint": "+40"
+      }
     }
   },
   "common": {
