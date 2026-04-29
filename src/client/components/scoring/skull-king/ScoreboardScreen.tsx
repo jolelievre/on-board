@@ -51,7 +51,28 @@ export function ScoreboardScreen({ players, entries, currentRound }: Props) {
     }
     totals[p.id] = sum;
   }
-  const maxTotal = Math.max(0, ...Object.values(totals));
+
+  // Modified competition ranking: distinct totals get distinct ranks (1, 2,
+  // 3…); ties share the lower rank and skip the next ("1, 1, 3"). Computed
+  // once so every cell can render its own #N badge in the totals row.
+  const ranks: Record<string, number> = {};
+  {
+    const sortedDescending = [...players].sort(
+      (a, b) => (totals[b.id] ?? 0) - (totals[a.id] ?? 0),
+    );
+    let lastValue: number | null = null;
+    let lastRank = 0;
+    sortedDescending.forEach((p, idx) => {
+      const v = totals[p.id] ?? 0;
+      if (v === lastValue) {
+        ranks[p.id] = lastRank;
+      } else {
+        ranks[p.id] = idx + 1;
+        lastValue = v;
+        lastRank = idx + 1;
+      }
+    });
+  }
 
   // Sparkline data: cumulative per round per player.
   const cumulative: Record<string, number[]> = {};
@@ -159,18 +180,28 @@ export function ScoreboardScreen({ players, entries, currentRound }: Props) {
                 </td>
                 {players.map((p) => {
                   const v = totals[p.id];
-                  const isLeader = v > 0 && v === maxTotal;
+                  const rank = ranks[p.id];
+                  const isLeader = rank === 1 && v > 0;
                   return (
                     <td
                       key={p.id}
                       className={`${styles.td} ${isLeader ? styles.totalLeader : ""}`}
                       data-testid={`sk-scoreboard-total-${p.id}`}
+                      data-rank={rank}
                     >
-                      <span
-                        className={`${styles.totalValue} ${isLeader ? styles.leader : ""}`}
-                      >
-                        {v}
-                      </span>
+                      <div className={styles.totalCell}>
+                        <span
+                          className={`${styles.rankBadge} ${isLeader ? styles.rankBadgeLeader : ""}`}
+                          data-testid={`sk-scoreboard-rank-${p.id}`}
+                        >
+                          #{rank}
+                        </span>
+                        <span
+                          className={`${styles.totalValue} ${isLeader ? styles.leader : ""}`}
+                        >
+                          {v}
+                        </span>
+                      </div>
                     </td>
                   );
                 })}

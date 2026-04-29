@@ -222,18 +222,27 @@ export function SkullKingScorer({
   const [activeResultIdx, setActiveResultIdx] = useState(
     () => persistedDraft?.activeResultIdx ?? 0,
   );
+  // Set when the user opens "Edit round N" from the round-transition screen.
+  // While non-null, the result screen renders for that round and End-round
+  // upserts back to its row instead of progressing to a new round.
+  const [editingRound, setEditingRound] = useState<number | null>(null);
+  /** Round we're currently editing (in edit mode) or about to finalize. */
+  const activeResultRound = editingRound ?? currentRound;
 
   // When the round changes (after End-round → server bumps lastDoneRound),
-  // clear the in-memory state so the next round starts fresh.
+  // clear the in-memory state so the next round starts fresh. Don't reset
+  // while editing a previous round — the round-change race after a re-save
+  // would clobber the user's still-in-flight edit.
   const previousRoundRef = useRef(currentRound);
   useEffect(() => {
     if (previousRoundRef.current === currentRound) return;
     previousRoundRef.current = currentRound;
+    if (editingRound !== null) return;
     setBids({});
     setEntries({});
     setActiveBidIdx(0);
     setActiveResultIdx(0);
-  }, [currentRound]);
+  }, [currentRound, editingRound]);
 
   // ── Save plumbing ──────────────────────────────────────────────────────
 
@@ -456,21 +465,50 @@ export function SkullKingScorer({
 
   const cumulativeBefore = useMemo(
     () =>
-      computeCumulativeBefore(orderedPlayers, persistedEntries, currentRound),
-    [orderedPlayers, persistedEntries, currentRound],
+      computeCumulativeBefore(
+        orderedPlayers,
+        persistedEntries,
+        activeResultRound,
+      ),
+    [orderedPlayers, persistedEntries, activeResultRound],
   );
 
+  /** Re-enter the result phase for the round that was just finalized so the
+   * scribe can correct a typo. Pre-fills bids + entries from the persisted
+   * scores and locks the round number to the one being edited. */
+  const handleEditLastRound = () => {
+    if (lastDoneRound < 1) return;
+    const target = lastDoneRound;
+    const reloadedBids: Record<string, number | undefined> = {};
+    const reloadedEntries: Record<string, SkullKingRoundEntry> = {};
+    for (const p of orderedPlayers) {
+      const e = persistedEntries[p.id]?.[target];
+      if (e) {
+        reloadedEntries[p.id] = e;
+        reloadedBids[p.id] = e.bid;
+      }
+    }
+    setBids(reloadedBids);
+    setEntries(reloadedEntries);
+    setActiveResultIdx(0);
+    setEditingRound(target);
+    setPhase("result");
+  };
+
   const handleEndRound = async () => {
+    const targetRound = activeResultRound;
+    const isEditing = editingRound !== null;
+
     // Build the score payloads.
     const payloads = orderedPlayers.map((p) => {
       const e = entries[p.id] ?? {
         ...EMPTY_SK_ROUND,
         bid: bids[p.id] ?? 0,
       };
-      const s = scoreSkullKingRound(currentRound, e);
+      const s = scoreSkullKingRound(targetRound, e);
       return {
         playerId: p.id,
-        category: roundCategory(currentRound),
+        category: roundCategory(targetRound),
         value: s.total,
         metadata: {
           bid: e.bid,
@@ -492,7 +530,20 @@ export function SkullKingScorer({
     // and no row to show for it.
     await clearDraft();
 
-    if (currentRound >= SKULL_KING_TOTAL_ROUNDS) {
+    if (isEditing) {
+      // Re-saved an earlier round. Drop the editing flag, clear the
+      // scratchpad, and bounce back to the transition recap so the user
+      // sees the updated standings.
+      setEditingRound(null);
+      setBids({});
+      setEntries({});
+      setActiveBidIdx(0);
+      setActiveResultIdx(0);
+      setPhase("round-transition");
+      return;
+    }
+
+    if (targetRound >= SKULL_KING_TOTAL_ROUNDS) {
       // Compute totals from the freshly persisted history (saved scores
       // round-trip via the invalidation; we duplicate the math here so the
       // completion call doesn't race the refetch).
@@ -646,7 +697,7 @@ export function SkullKingScorer({
   if (phase === "result") {
     return (
       <RoundResultScreen
-        round={currentRound}
+        round={activeResultRound}
         players={orderedPlayers}
         bids={bids}
         entries={entries}
@@ -660,22 +711,25 @@ export function SkullKingScorer({
   }
 
   if (phase === "round-transition") {
-    const justFinished = currentRound;
-    const next = justFinished + 1;
+    // After End-round the server's scores have been refreshed, so
+    // `lastDoneRound` reflects the round we just finalized and `currentRound`
+    // is the upcoming round (currentRound = lastDoneRound + 1). Don't add
+    // another +1 — that's the off-by-one we used to ship.
+    const justFinished = lastDoneRound;
+    const next = currentRound;
     const dealerIdxNext = dealerForRound(next, dealerStart, playerCount);
     const nextDealer = orderedPlayers[dealerIdxNext];
 
-    // Standings = totals after the round just played.
+    // Standings = totals after the round just played, all sourced from the
+    // server. (No need to fall back to in-memory `entries`: the End-round
+    // save resolved before this render, so persistedEntries is current.)
     const totals: Record<string, number> = {};
     const lastDeltas: Record<string, number> = {};
     for (const p of orderedPlayers) {
       let sum = 0;
       let last = 0;
       for (let r = 1; r <= justFinished; r++) {
-        const e =
-          r === justFinished
-            ? entries[p.id]
-            : persistedEntries[p.id]?.[r];
+        const e = persistedEntries[p.id]?.[r];
         if (!e) continue;
         const s = scoreSkullKingRound(r, e).total;
         sum += s;
@@ -699,6 +753,7 @@ export function SkullKingScorer({
         nextDealer={nextDealer}
         standings={standings}
         onContinue={handleTransitionContinue}
+        onEditLastRound={handleEditLastRound}
       />
     );
   }

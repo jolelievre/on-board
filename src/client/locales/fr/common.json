@@ -182,7 +182,8 @@
         "cardsEach_one": "1 carte chacun · {{name}} distribue",
         "cardsEach_other": "{{count}} cartes chacun · {{name}} distribue",
         "standingsTitle": "Classement",
-        "continueCta": "Pari de la M{{n}} →"
+        "continueCta": "Pari de la M{{n}} →",
+        "editLastRoundCta": "← Modifier la manche {{n}}"
       },
       "scoreboard": {
         "title": "Tableau des scores",

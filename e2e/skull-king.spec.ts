@@ -418,13 +418,143 @@ test.describe("Skull King — Classic flow", () => {
     await page.click("[data-testid='sk-scoreboard-toggle']");
     await expect(page.locator("[data-testid='sk-scoreboard']")).toBeVisible();
 
-    // Find each player's total cell by name (column header) → playerId,
-    // then assert the total cell text. The scoreboard renders headers in
-    // player-position order, so we can map by index.
     const totals = page.locator(
       "[data-testid^='sk-scoreboard-total-']",
     );
     const totalsTexts = await totals.allTextContents();
-    expect(totalsTexts).toEqual(["10", "30", "0"]);
+    // Totals row renders as "#rank{score}" inside one cell — check substrings.
+    expect(totalsTexts.length).toBe(3);
+    expect(totalsTexts[0]).toContain("10");
+    expect(totalsTexts[1]).toContain("30");
+    expect(totalsTexts[2]).toContain("0");
+  });
+
+  test("round transition: round number, card count and dealer aligned with the played round", async ({
+    page,
+  }) => {
+    const names = uniqueNames(3);
+    await startMatchAndDeal(page, names);
+
+    // Finish round 1.
+    await enterBids(page, [0, 0, 0]);
+    await enterResults(page, [0, 0, 0]);
+    const transition = page.locator("[data-testid='sk-transition']");
+    await expect(transition).toBeVisible();
+    // Caption should mention the round we *just finished* (round 1).
+    await expect(transition).toContainText("Round 1 complete");
+    // Heading shows the *upcoming* round (round 2) and its card count.
+    await expect(transition).toContainText("Round 2");
+    await expect(transition).toContainText(/2 cards each/);
+  });
+
+  test("round transition: edit last round opens result phase pre-filled", async ({
+    page,
+  }) => {
+    const names = uniqueNames(2);
+    await startMatchAndDeal(page, names);
+
+    // Round 1: P1 bids 1 takes 1 (made → +20), P2 bids 0 takes 0 (made → +10).
+    await enterBids(page, [1, 0]);
+    await enterResults(page, [1, 0]);
+    await expect(page.locator("[data-testid='sk-transition']")).toBeVisible();
+
+    // Tap "Edit round 1".
+    await page.click("[data-testid='sk-transition-edit-last']");
+    await expect(page.locator("[data-testid='sk-result']")).toBeVisible();
+
+    // P1's tricks=1 should be pre-selected on the digit grid.
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='1']"),
+    ).toHaveAttribute("data-selected", "true");
+    await expect(page.locator("[data-testid='sk-round-total']")).toHaveText(
+      "+20",
+    );
+
+    // Change P1: tricks 0 (now bid 1 missed → -10).
+    await pickTricks(page, 0);
+    await expect(page.locator("[data-testid='sk-round-total']")).toHaveText(
+      "-10",
+    );
+    await page.click("[data-testid='sk-result-next']");
+
+    // P2 stays at 0 (already 0 from initial entry).
+    await page.click("[data-testid='sk-result-end-round']");
+
+    // Bounced back to the transition recap with the corrected round-1 total.
+    await expect(page.locator("[data-testid='sk-transition']")).toBeVisible();
+    await page.click("[data-testid='sk-scoreboard-toggle']");
+    const totals = page.locator(
+      "[data-testid^='sk-scoreboard-total-']",
+    );
+    const totalsTexts = await totals.allTextContents();
+    expect(totalsTexts[0]).toContain("-10");
+    expect(totalsTexts[1]).toContain("10");
+  });
+
+  test("result: bonuses disabled when tricks=0 and clear when tricks drop to 0", async ({
+    page,
+  }) => {
+    const names = uniqueNames(2);
+    await startMatchAndDeal(page, names);
+
+    // Round 1: P1 bids 1, P2 bids 0.
+    await enterBids(page, [1, 0]);
+
+    // P1: tricks=1, then add a black-14 toggle (+20) on top of the +20 base.
+    await pickTricks(page, 1);
+    await page.click("[data-testid='sk-bonus-black14']");
+    await expect(page.locator("[data-testid='sk-round-total']")).toHaveText(
+      "+40",
+    );
+    await expect(
+      page.locator("[data-testid='sk-bonus-black14']"),
+    ).toHaveAttribute("data-on", "true");
+
+    // Drop to tricks=0 — bonus should auto-clear, total drops to base only
+    // (bid 1 missed → -10).
+    await pickTricks(page, 0);
+    await expect(page.locator("[data-testid='sk-round-total']")).toHaveText(
+      "-10",
+    );
+    await expect(
+      page.locator("[data-testid='sk-bonus-black14']"),
+    ).toHaveAttribute("data-on", "false");
+    // All bonus chips are now disabled.
+    for (const id of [
+      "sk-bonus-color14",
+      "sk-bonus-mermaidByPirate",
+      "sk-bonus-pirateBySK",
+      "sk-bonus-black14",
+      "sk-bonus-skByMermaid",
+    ]) {
+      await expect(page.locator(`[data-testid='${id}']`)).toBeDisabled();
+    }
+  });
+
+  test("scoreboard totals row carries a rank badge per cell", async ({
+    page,
+  }) => {
+    const names = uniqueNames(3);
+    await startMatchAndDeal(page, names);
+
+    // Round 1: P1 bids 1 takes 1 (+20), P2 bids 0 takes 0 (+10), P3 bids 0
+    // takes 1 (-10). Ranks should be P1=#1, P2=#2, P3=#3.
+    await enterBids(page, [1, 0, 0]);
+    await enterResults(page, [1, 0, 1]);
+    await expect(page.locator("[data-testid='sk-transition']")).toBeVisible();
+    await page.click("[data-testid='sk-scoreboard-toggle']");
+    await expect(page.locator("[data-testid='sk-scoreboard']")).toBeVisible();
+
+    const totalCells = page.locator(
+      "[data-testid^='sk-scoreboard-total-']",
+    );
+    expect(await totalCells.nth(0).getAttribute("data-rank")).toBe("1");
+    expect(await totalCells.nth(1).getAttribute("data-rank")).toBe("2");
+    expect(await totalCells.nth(2).getAttribute("data-rank")).toBe("3");
+
+    // Each cell renders a #N badge.
+    await expect(totalCells.nth(0)).toContainText("#1");
+    await expect(totalCells.nth(1)).toContainText("#2");
+    await expect(totalCells.nth(2)).toContainText("#3");
   });
 });

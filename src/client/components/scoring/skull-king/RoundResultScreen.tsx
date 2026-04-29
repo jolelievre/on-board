@@ -60,10 +60,29 @@ export function RoundResultScreen({
   );
 
   const update = (patch: Partial<SkullKingRoundEntry>) => {
-    onChange(active.id, { ...entry, ...patch });
+    let next: SkullKingRoundEntry = { ...entry, ...patch };
+    // Bonuses require winning the trick that contained the bonus card. If
+    // the player has zero tricks they cannot have any bonus — clear them
+    // automatically so the score breakdown stays consistent. The parent
+    // re-render is also blocked from re-introducing them by the disabled
+    // chips below.
+    if (next.tricks === 0) {
+      next = {
+        ...next,
+        color14: 0,
+        black14: 0,
+        mermaidByPirate: 0,
+        pirateBySK: 0,
+        skByMermaid: 0,
+      };
+    }
+    onChange(active.id, next);
   };
 
+  const tricksZero = entry.tricks === 0;
+
   const cycleCounter = (key: SkullKingBonusKey) => {
+    if (tricksZero) return;
     const max = SK_BONUS_MAX[key];
     const current = entry[key];
     update({ [key]: (current + 1) % (max + 1) } as Partial<SkullKingRoundEntry>);
@@ -136,6 +155,7 @@ export function RoundResultScreen({
             count={entry.color14}
             accent="var(--sk-gold)"
             onTap={() => cycleCounter("color14")}
+            disabled={tricksZero}
             testId="sk-bonus-color14"
           />
           <CounterChip
@@ -145,6 +165,7 @@ export function RoundResultScreen({
             count={entry.mermaidByPirate}
             accent="var(--sk-sea)"
             onTap={() => cycleCounter("mermaidByPirate")}
+            disabled={tricksZero}
             testId="sk-bonus-mermaidByPirate"
           />
           <CounterChip
@@ -154,6 +175,7 @@ export function RoundResultScreen({
             count={entry.pirateBySK}
             accent="var(--sk-blood)"
             onTap={() => cycleCounter("pirateBySK")}
+            disabled={tricksZero}
             testId="sk-bonus-pirateBySK"
           />
         </div>
@@ -167,6 +189,7 @@ export function RoundResultScreen({
             on={entry.black14 === 1}
             accent="var(--sk-black)"
             onToggle={(v) => update({ black14: v ? 1 : 0 })}
+            disabled={tricksZero}
             testId="sk-bonus-black14"
           />
           <ToggleChip
@@ -176,6 +199,7 @@ export function RoundResultScreen({
             on={entry.skByMermaid === 1}
             accent="var(--sk-sea-deep)"
             onToggle={(v) => update({ skByMermaid: v ? 1 : 0 })}
+            disabled={tricksZero}
             testId="sk-bonus-skByMermaid"
           />
         </div>
@@ -261,6 +285,7 @@ function CounterChip({
   count,
   accent,
   onTap,
+  disabled,
   testId,
 }: {
   icon: React.ReactNode;
@@ -269,6 +294,7 @@ function CounterChip({
   count: number;
   accent: string;
   onTap: () => void;
+  disabled?: boolean;
   testId: string;
 }) {
   const isActive = count > 0;
@@ -278,8 +304,10 @@ function CounterChip({
       className={`${styles.chip} ${isActive ? styles.active : ""}`}
       style={{ ["--accent" as string]: accent }}
       onClick={onTap}
+      disabled={disabled}
       data-testid={testId}
       data-count={count}
+      data-disabled={disabled ? "true" : undefined}
     >
       <span className={styles.chipIcon}>{icon}</span>
       <span className={styles.chipLabel}>{label}</span>
@@ -296,6 +324,7 @@ function ToggleChip({
   on,
   accent,
   onToggle,
+  disabled,
   testId,
 }: {
   icon: React.ReactNode;
@@ -304,6 +333,7 @@ function ToggleChip({
   on: boolean;
   accent: string;
   onToggle: (v: boolean) => void;
+  disabled?: boolean;
   testId: string;
 }) {
   return (
@@ -312,8 +342,10 @@ function ToggleChip({
       className={`${styles.chip} ${on ? styles.active : ""}`}
       style={{ ["--accent" as string]: accent }}
       onClick={() => onToggle(!on)}
+      disabled={disabled}
       data-testid={testId}
       data-on={on ? "true" : "false"}
+      data-disabled={disabled ? "true" : undefined}
       aria-pressed={on}
     >
       <span className={styles.chipIcon}>{icon}</span>

@@ -21,6 +21,9 @@ type Props = {
   /** Standings sorted by total (leader first). */
   standings: Standing[];
   onContinue: () => void;
+  /** Re-enter the result phase for the round that just ended (typo fix
+   * affordance). */
+  onEditLastRound?: () => void;
 };
 
 export function RoundTransitionScreen({
@@ -29,6 +32,7 @@ export function RoundTransitionScreen({
   nextDealer,
   standings,
   onContinue,
+  onEditLastRound,
 }: Props) {
   const { t } = useTranslation();
   const cardCount = Math.min(nextRound, 8);
@@ -96,15 +100,36 @@ export function RoundTransitionScreen({
         })}
       </div>
 
-      <button
-        type="button"
-        className={shared.btnPrimary}
-        onClick={onContinue}
-        style={{ marginTop: "auto" }}
-        data-testid="sk-transition-continue"
+      <div
+        style={{
+          marginTop: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
       >
-        {t("scoring.skullKing.transition.continueCta", { n: nextRound })}
-      </button>
+        {onEditLastRound && (
+          <button
+            type="button"
+            className={shared.btnGhost}
+            onClick={onEditLastRound}
+            data-testid="sk-transition-edit-last"
+            style={{ alignSelf: "center" }}
+          >
+            {t("scoring.skullKing.transition.editLastRoundCta", {
+              n: completedRound,
+            })}
+          </button>
+        )}
+        <button
+          type="button"
+          className={shared.btnPrimary}
+          onClick={onContinue}
+          data-testid="sk-transition-continue"
+        >
+          {t("scoring.skullKing.transition.continueCta", { n: nextRound })}
+        </button>
+      </div>
     </div>
   );
 }

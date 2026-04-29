@@ -98,6 +98,18 @@
   box-shadow: var(--shadow-soft);
 }
 
+.chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--color-surface-alt);
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
+.chip:disabled:hover {
+  background: var(--color-surface-alt);
+}
+
 .chipIcon {
   display: flex;
   align-items: center;

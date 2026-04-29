@@ -182,7 +182,8 @@
         "cardsEach_one": "1 card each · {{name}} deals",
         "cardsEach_other": "{{count}} cards each · {{name}} deals",
         "standingsTitle": "Standings",
-        "continueCta": "Bidding for R{{n}} →"
+        "continueCta": "Bidding for R{{n}} →",
+        "editLastRoundCta": "← Edit round {{n}}"
       },
       "scoreboard": {
         "title": "Scoreboard",
