@@ -1,0 +1,143 @@
+.section {
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow-soft);
+}
+
+.seatList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.seatRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  background: var(--color-surface);
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: background 0.12s, border-color 0.12s, transform 0.12s;
+}
+
+.seatRow.dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
+}
+
+.seatRow.dropTarget {
+  border-color: var(--color-primary);
+}
+
+.seatHandle {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--color-ink-faint);
+  width: 14px;
+  flex: 0 0 auto;
+}
+
+.seatHandle span {
+  display: block;
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px;
+}
+
+.seatBadge {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--color-surface-alt);
+  color: var(--color-ink-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.seatBadge.dealer {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+.seatName {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dealerLabel {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+
+.rules {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ruleTile {
+  background: var(--color-surface-alt);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.ruleTile h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.ruleTile p {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-soft);
+}
+
+.summary {
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  margin-top: 2px;
+  color: var(--color-ink-soft);
+}
+
+.body {
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cta {
+  margin-top: auto;
+}

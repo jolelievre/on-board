@@ -1,0 +1,116 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 14px 16px 16px;
+  gap: 14px;
+  overflow-y: auto;
+  align-items: stretch;
+}
+
+.heading {
+  text-align: center;
+  margin-top: 4px;
+}
+
+.bigTitle {
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2.4rem;
+  color: var(--color-ink);
+  line-height: 1;
+}
+
+.subtitle {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  color: var(--color-ink-soft);
+  margin: 4px 0 0;
+}
+
+.cardStack {
+  position: relative;
+  height: 110px;
+  display: flex;
+  justify-content: center;
+}
+
+.card {
+  position: absolute;
+  width: 60px;
+  height: 86px;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  color: var(--color-ink-faint);
+  font-size: 1.1rem;
+}
+
+.standings {
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.standingsRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.standingsRow:first-of-type {
+  border-top: none;
+}
+
+.standingsRank {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--color-ink-soft);
+  width: 22px;
+  flex: 0 0 auto;
+}
+
+.standingsName {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standingsDelta {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  flex: 0 0 auto;
+}
+
+.standingsDelta.up {
+  color: var(--color-success);
+}
+
+.standingsDelta.down {
+  color: var(--color-danger);
+}
+
+.standingsTotal {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  min-width: 50px;
+  text-align: right;
+  flex: 0 0 auto;
+  color: var(--color-ink);
+}

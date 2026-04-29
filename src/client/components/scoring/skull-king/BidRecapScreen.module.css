@@ -1,0 +1,77 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 14px 16px 16px;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.commentary {
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  color: var(--color-ink-soft);
+  margin: 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.entry {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--color-surface);
+  border-radius: 10px;
+  border: 1.5px solid var(--color-border);
+}
+
+.entryName {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entryValue {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  flex: 0 0 auto;
+}
+
+.entryValue.zero {
+  color: var(--color-primary);
+}
+
+.entryZeroTag {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  margin-left: 4px;
+  letter-spacing: 0.1em;
+  color: var(--color-primary);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.actions > button:first-child {
+  flex: 0 0 auto;
+}
+
+.actions > button:last-child {
+  flex: 1;
+}
