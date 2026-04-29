@@ -1,10 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../../lib/api";
 import { SevenWondersDuelScorer } from "../../../components/scoring/SevenWondersDuelScorer";
 import { Header } from "../../../components/layout/Header";
 import { Card } from "../../../components/ui/Card";
+import {
+  SyncPill,
+  saveStatusToSyncState,
+  type SaveStatus,
+} from "../../../components/ui/SyncPill";
 import type { Match } from "../../../types/match";
 
 export const Route = createFileRoute("/_authenticated/matches/$id")({
@@ -14,6 +20,7 @@ export const Route = createFileRoute("/_authenticated/matches/$id")({
 function MatchPage() {
   const { id } = Route.useParams();
   const { t } = useTranslation();
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
 
   const { data: match, isPending } = useQuery<Match>({
     queryKey: ["matches", id],
@@ -35,6 +42,9 @@ function MatchPage() {
     defaultValue: match.game.name,
   });
 
+  const isInProgress7WD =
+    match.game.slug === "7-wonders-duel" && match.status !== "COMPLETED";
+
   return (
     <>
       <Header
@@ -43,11 +53,24 @@ function MatchPage() {
           params: { slug: match.game.slug },
           label: gameName,
         }}
+        right={
+          isInProgress7WD ? (
+            <SyncPill
+              size="lg"
+              state={saveStatusToSyncState(saveStatus)}
+              data-testid="save-status"
+              data-status={saveStatus}
+            />
+          ) : null
+        }
       />
 
       <div className="px-5">
         {match.game.slug === "7-wonders-duel" ? (
-          <SevenWondersDuelScorer match={match} />
+          <SevenWondersDuelScorer
+            match={match}
+            onSaveStatusChange={setSaveStatus}
+          />
         ) : (
           <UnsupportedScorer match={match} gameName={gameName} />
         )}

@@ -10,7 +10,7 @@ import type {
 } from "../match/HandMatchGrid";
 import { WinnerBanner } from "../match/WinnerBanner";
 import { displayPlayerName } from "../../../shared/players";
-import { SyncPill, type SyncState } from "../ui/SyncPill";
+import type { SaveStatus } from "../ui/SyncPill";
 import { Button } from "../ui/Button";
 import {
   SEVEN_WONDERS_CATEGORY_KEYS,
@@ -22,9 +22,11 @@ import {
 import type { Match, Player, ScoreRow } from "../../types/match";
 
 const SAVE_DEBOUNCE_MS = 300;
+/** How long the "saved" badge lingers before reverting to the idle
+ * (just the wifi icon) state. Matches the alias saved-badge timing. */
+const SAVED_INDICATOR_MS = 1500;
 
 type CompletedVictoryType = SevenWondersVictoryType | "draw";
-type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 type ScorePayload = {
   playerId: string;
@@ -62,22 +64,14 @@ function valuesToScores(values: ScoreGridValues): ScorePayload[] {
   return out;
 }
 
-function saveStatusToSyncState(status: SaveStatus): SyncState {
-  switch (status) {
-    case "idle":
-      return "idle";
-    case "saving":
-      return "saving";
-    case "saved":
-      return "saved";
-    case "error":
-      return "error";
-  }
-}
+type Props = {
+  match: Match;
+  /** Notifies the parent of save-status changes so it can render the
+   * sync pill inside the page Header (rather than inline in the scorer). */
+  onSaveStatusChange?: (status: SaveStatus) => void;
+};
 
-type Props = { match: Match };
-
-export function SevenWondersDuelScorer({ match }: Props) {
+export function SevenWondersDuelScorer({ match, onSaveStatusChange }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const matchId = match.id;
@@ -88,7 +82,15 @@ export function SevenWondersDuelScorer({ match }: Props) {
   const [supremacy, setSupremacy] = useState<SupremacySelection>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedRevertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef<Promise<unknown> | null>(null);
+
+  const clearSavedRevertTimer = () => {
+    if (savedRevertTimer.current) {
+      clearTimeout(savedRevertTimer.current);
+      savedRevertTimer.current = null;
+    }
+  };
 
   const saveScores = useMutation({
     mutationFn: (scores: ScorePayload[]) =>
@@ -96,9 +98,24 @@ export function SevenWondersDuelScorer({ match }: Props) {
         method: "PATCH",
         body: JSON.stringify({ scores }),
       }),
-    onMutate: () => setSaveStatus("saving"),
-    onSuccess: () => setSaveStatus("saved"),
-    onError: () => setSaveStatus("error"),
+    onMutate: () => {
+      clearSavedRevertTimer();
+      setSaveStatus("saving");
+    },
+    onSuccess: () => {
+      setSaveStatus("saved");
+      clearSavedRevertTimer();
+      // Briefly show "saved" then return to the idle (wifi-only) state
+      // so the header stays calm.
+      savedRevertTimer.current = setTimeout(() => {
+        setSaveStatus("idle");
+        savedRevertTimer.current = null;
+      }, SAVED_INDICATOR_MS);
+    },
+    onError: () => {
+      clearSavedRevertTimer();
+      setSaveStatus("error");
+    },
   });
 
   const flushPendingSave = useCallback(async () => {
@@ -147,8 +164,15 @@ export function SevenWondersDuelScorer({ match }: Props) {
   useEffect(() => {
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      if (savedRevertTimer.current) clearTimeout(savedRevertTimer.current);
     };
   }, []);
+
+  // Surface the save status to the parent (the route renders the
+  // SyncPill in the Header).
+  useEffect(() => {
+    onSaveStatusChange?.(saveStatus);
+  }, [saveStatus, onSaveStatusChange]);
 
   const completeMatch = useMutation({
     mutationFn: (input: {
@@ -266,16 +290,6 @@ export function SevenWondersDuelScorer({ match }: Props) {
 
   return (
     <>
-      {!isCompleted && (
-        <div className="flex justify-end">
-          <SyncPill
-            state={saveStatusToSyncState(saveStatus)}
-            data-testid="save-status"
-            data-status={saveStatus}
-          />
-        </div>
-      )}
-
       {isCompleted && (
         <WinnerBanner
           winnerName={winnerName}

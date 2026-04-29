@@ -12,10 +12,24 @@
   line-height: 1;
 }
 
+/* Larger variant for the page Header. The icon doubles in size to be
+ * legible at a glance; the label uses an even smaller badge font so the
+ * momentary "SAVED" state stays compact and doesn't dominate the header. */
+.lg {
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+}
+
 .idle {
   background: transparent;
   color: var(--color-ink-faint);
   padding: 0.3rem;
+}
+
+.lg.idle {
+  padding: 0.5rem;
 }
 
 .saving {
