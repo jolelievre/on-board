@@ -7,6 +7,7 @@ import {
   computeTotalsByPlayer,
   type SevenWondersVictoryType,
 } from "../../../../shared/scoring/7-wonders-duel";
+import { parseRoundCategory } from "../../../../shared/scoring/skull-king";
 import { displayPlayerName } from "../../../../shared/players";
 import { Header } from "../../../components/layout/Header";
 import { Pill } from "../../../components/ui/Pill";
@@ -135,7 +136,12 @@ function GameDetailPage() {
             <EmptyHistory />
           ) : (
             matches.map((m) => (
-              <MatchHistoryRow key={m.id} match={m} locale={i18n.language} />
+              <MatchHistoryRow
+                key={m.id}
+                match={m}
+                locale={i18n.language}
+                gameSlug={slug}
+              />
             ))
           )}
         </div>
@@ -144,15 +150,39 @@ function GameDetailPage() {
   );
 }
 
+/** Sum of round_N values per player. Skull King writes one Score row per
+ * (player, round_N) with the round's total in `value`, so a flat sum is
+ * the match total. */
+function computeSkullKingTotalsByPlayer(
+  scores: { playerId: string; category: string; value: number }[],
+): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const s of scores) {
+    if (parseRoundCategory(s.category) === null) continue;
+    totals[s.playerId] = (totals[s.playerId] ?? 0) + s.value;
+  }
+  return totals;
+}
+
+function computeMatchTotalsBySlug(
+  slug: string,
+  scores: { playerId: string; category: string; value: number }[],
+): Record<string, number> {
+  if (slug === "skull-king") return computeSkullKingTotalsByPlayer(scores);
+  return computeTotalsByPlayer(scores);
+}
+
 function MatchHistoryRow({
   match,
   locale,
+  gameSlug,
 }: {
   match: MatchListItem;
   locale: string;
+  gameSlug: string;
 }) {
   const { t } = useTranslation();
-  const totals = computeTotalsByPlayer(match.scores);
+  const totals = computeMatchTotalsBySlug(gameSlug, match.scores);
   const winner = match.winnerId
     ? match.players.find((p) => p.id === match.winnerId)
     : null;
@@ -163,6 +193,16 @@ function MatchHistoryRow({
   });
 
   const isCompleted = match.status === "COMPLETED";
+  const compact = match.players.length === 2;
+
+  // Multi-player matches sort the player rows by score (leader first) so the
+  // standings read at a glance — even mid-match. Two-player matches keep
+  // their position-ordered "vs" layout.
+  const orderedPlayers = compact
+    ? match.players
+    : [...match.players].sort(
+        (a, b) => (totals[b.id] ?? 0) - (totals[a.id] ?? 0),
+      );
 
   return (
     <Link
@@ -182,15 +222,61 @@ function MatchHistoryRow({
         ) : null}
       </div>
 
-      <div className={styles.players}>
-        {match.players.map((p, idx) => {
-          const isWinner = winner?.id === p.id;
-          const isDim = isCompleted && winner !== null && !isWinner;
-          return (
-            <Fragment key={p.id}>
-              <div
-                className={`${styles.playerCell} ${isWinner ? styles.playerWinner : ""}`}
+      {compact ? (
+        <div className={styles.players}>
+          {orderedPlayers.map((p, idx) => {
+            const isWinner = winner?.id === p.id;
+            const isDim = isCompleted && winner !== null && !isWinner;
+            return (
+              <Fragment key={p.id}>
+                <div
+                  className={`${styles.playerCell} ${isWinner ? styles.playerWinner : ""}`}
+                >
+                  <span
+                    className={[
+                      styles.playerName,
+                      isWinner && styles.playerNameWinner,
+                      isDim && styles.playerNameDim,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    {isWinner && <Icon name="trophy" size={13} />}
+                    {displayPlayerName(p)}
+                  </span>
+                  <span
+                    data-testid={`match-history-score-${p.id}`}
+                    className={[
+                      styles.playerScore,
+                      isWinner && styles.playerScoreWinner,
+                      isDim && styles.playerScoreDim,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    {totals[p.id] ?? 0}
+                  </span>
+                </div>
+                {idx < orderedPlayers.length - 1 && (
+                  <span className={styles.versus}>
+                    {t("matches.history.vs")}
+                  </span>
+                )}
+              </Fragment>
+            );
+          })}
+        </div>
+      ) : (
+        <ul className={styles.playerList}>
+          {orderedPlayers.map((p, idx) => {
+            const isWinner = winner?.id === p.id;
+            const isDim = isCompleted && winner !== null && !isWinner;
+            return (
+              <li
+                key={p.id}
+                className={`${styles.playerRow} ${isWinner ? styles.playerWinner : ""}`}
               >
+                <span className={styles.playerRank}>#{idx + 1}</span>
                 <span
                   className={[
                     styles.playerName,
@@ -215,14 +301,11 @@ function MatchHistoryRow({
                 >
                   {totals[p.id] ?? 0}
                 </span>
-              </div>
-              {idx < match.players.length - 1 && (
-                <span className={styles.versus}>{t("matches.history.vs")}</span>
-              )}
-            </Fragment>
-          );
-        })}
-      </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </Link>
   );
 }

@@ -531,6 +531,44 @@ test.describe("Skull King — Classic flow", () => {
     }
   });
 
+  test("match history: 3-player match renders one row per player with rank, sorted by score", async ({
+    page,
+  }) => {
+    const names = uniqueNames(3);
+    await startMatchAndDeal(page, names);
+
+    // Capture the match id we just created so we can scope assertions to its
+    // row — the shared test user accumulates matches across parallel workers,
+    // and `.first()` would otherwise hit whatever happens to be most recent.
+    const matchId = page.url().match(/\/matches\/([^/?#]+)/)?.[1];
+    expect(matchId).toBeTruthy();
+
+    // Round 1: P1 bids 1 takes 1 (+20), P2 bids 0 takes 0 (+10), P3 bids 0
+    // takes 1 (-10). Expected ranking: P1 first, P2 second, P3 third.
+    await enterBids(page, [1, 0, 0]);
+    await enterResults(page, [1, 0, 1]);
+    await expect(page.locator("[data-testid='sk-transition']")).toBeVisible();
+
+    await page.goto("/games/skull-king");
+    await page.waitForLoadState("domcontentloaded");
+    const history = page.locator("[data-testid='match-history']");
+    await expect(history).toBeVisible();
+
+    const row = history.locator(
+      `[data-testid='match-history-row-${matchId}']`,
+    );
+    await expect(row).toBeVisible();
+    // The "vs" separator only renders for 2-player matches and must not
+    // appear here.
+    await expect(row.locator("text=/^vs$/")).toHaveCount(0);
+    for (const n of names) {
+      await expect(row).toContainText(n);
+    }
+    await expect(row).toContainText("#1");
+    await expect(row).toContainText("#2");
+    await expect(row).toContainText("#3");
+  });
+
   test("scoreboard totals row carries a rank badge per cell", async ({
     page,
   }) => {
