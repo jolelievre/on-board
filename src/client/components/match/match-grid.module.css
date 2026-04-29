@@ -23,7 +23,10 @@
   align-items: stretch;
   justify-content: center;
   color: var(--cat-strong, var(--color-ink));
-  padding: 2px 0;
+  /* Match the score cell's cellSurface padding (4px 0) so the icon
+   * block's SketchRect ends up the same height as the score block's,
+   * aligning the visual rectangles across the row. */
+  padding: 4px 0;
 }
 
 .iconBox {
@@ -41,6 +44,13 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
+  /* Inset the SketchRect from the row edges. Padding lives on the cell
+   * (not on cellSurface) so that SketchRect — which positions itself
+   * relative to its parent's padding box — sits inside the inset, in
+   * the same vertical band as the icon block (whose iconCell has the
+   * same 4px-vertical inset). Otherwise the score rectangle drifts to
+   * the top of the row and the icon stays centered. */
+  padding: 4px 0;
 }
 
 .cellWithHint {
@@ -54,7 +64,6 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  padding: 4px 0;
 }
 
 .cellSurfaceMain {
@@ -88,6 +97,10 @@
   line-height: 1;
   color: var(--cat-ink, var(--color-ink));
   padding: 0;
+  /* Caveat's digits sit in the lower half of the em-square — without
+   * this nudge "4" / "5" etc. read as visually low against the SketchRect.
+   * Translates the rendered glyph up; cursor + click target follow. */
+  transform: translateY(-3px);
   /* Hide spinners on number-like inputs */
   appearance: textfield;
   -moz-appearance: textfield;
@@ -119,6 +132,7 @@
   color: var(--color-ink-faint);
   opacity: 0.5;
   pointer-events: none;
+  transform: translateY(-3px);
 }
 
 .treasuryHint {
