@@ -35,7 +35,6 @@ function GamesPage() {
     <>
       <Header right={<Logo size={22} glyphOnly />} />
       <div className="px-5 pb-4">
-        <p className={styles.eyebrow}>{t("games.welcome")}</p>
         <h1 className={styles.title}>{t("games.title")}</h1>
         <p className={styles.subtitle}>{t("games.subtitle")}</p>
       </div>
