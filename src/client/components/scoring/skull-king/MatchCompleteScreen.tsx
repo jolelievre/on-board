@@ -16,6 +16,9 @@ type Props = {
   /** Game slug used by the back link (e.g. "skull-king"). */
   gameSlug: string;
   roundsPlayed: number;
+  /** Opens the round-by-round scoreboard overlay. Same component as the
+   * in-match toggle. */
+  onOpenScoreboard?: () => void;
 };
 
 export function MatchCompleteScreen({
@@ -25,6 +28,7 @@ export function MatchCompleteScreen({
   isDraw,
   gameSlug,
   roundsPlayed,
+  onOpenScoreboard,
 }: Props) {
   const { t } = useTranslation();
   const ranked = [...players].sort(
@@ -89,6 +93,18 @@ export function MatchCompleteScreen({
           );
         })}
       </div>
+
+      {onOpenScoreboard && (
+        <button
+          type="button"
+          className={shared.btnSecondary}
+          onClick={onOpenScoreboard}
+          data-testid="sk-complete-open-scoreboard"
+          style={{ width: "100%" }}
+        >
+          {t("scoring.skullKing.complete.viewScoreboardCta")}
+        </button>
+      )}
 
       <div className={styles.actions}>
         <Link

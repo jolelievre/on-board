@@ -199,6 +199,7 @@
         "draw": "Draw",
         "drawSummary": "{{score}} doubloons · {{count}} rounds played",
         "finalStandings": "Final standings",
+        "viewScoreboardCta": "See match details",
         "rematchCta": "Rematch →",
         "backCta": "Back to game"
       },

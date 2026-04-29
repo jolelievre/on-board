@@ -32,6 +32,7 @@ type Phase =
 type Props = {
   match: Match;
   scoreboardOpen: boolean;
+  onScoreboardOpen: () => void;
   onScoreboardClose: () => void;
   onSaveStatusChange?: (status: SaveStatus) => void;
 };
@@ -126,6 +127,7 @@ function computeCumulativeBefore(
 export function SkullKingScorer({
   match,
   scoreboardOpen,
+  onScoreboardOpen,
   onScoreboardClose,
   onSaveStatusChange,
 }: Props) {
@@ -662,6 +664,7 @@ export function SkullKingScorer({
         isDraw={outcome.kind === "draw"}
         gameSlug={match.game.slug}
         roundsPlayed={lastDoneRound}
+        onOpenScoreboard={onScoreboardOpen}
       />
     );
   }

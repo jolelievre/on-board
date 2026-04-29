@@ -199,6 +199,7 @@
         "draw": "Égalité",
         "drawSummary": "{{score}} doublons · {{count}} manches jouées",
         "finalStandings": "Classement final",
+        "viewScoreboardCta": "Voir le détail de la partie",
         "rematchCta": "Revanche →",
         "backCta": "Retour au jeu"
       },

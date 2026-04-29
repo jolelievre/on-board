@@ -620,6 +620,42 @@ test.describe("Skull King — Classic flow", () => {
     await expect(row.locator("text=/^\\+\\d+$/")).toHaveCount(0);
   });
 
+  test("match-complete: 'See match details' opens the in-match scoreboard component", async ({
+    page,
+  }) => {
+    const names = uniqueNames(2);
+    await startMatchAndDeal(page, names);
+
+    // Play through all 10 rounds with bid=0 / tricks=0 (both made) to land
+    // on the match-complete screen quickly.
+    for (let r = 1; r <= 10; r++) {
+      await enterBids(page, [0, 0]);
+      await pickTricks(page, 0);
+      await page.click("[data-testid='sk-result-next']");
+      await pickTricks(page, 0);
+      await page.click("[data-testid='sk-result-end-round']");
+      if (r < 10) {
+        await expect(
+          page.locator("[data-testid='sk-transition']"),
+        ).toBeVisible();
+        await page.click("[data-testid='sk-transition-continue']");
+      }
+    }
+
+    await expect(page.locator("[data-testid='sk-match-complete']")).toBeVisible();
+
+    // The scoreboard CTA is on the completion screen and opens the same
+    // grill-style scoreboard used mid-match.
+    const cta = page.locator("[data-testid='sk-complete-open-scoreboard']");
+    await expect(cta).toBeVisible();
+    await cta.click();
+    await expect(page.locator("[data-testid='sk-scoreboard']")).toBeVisible();
+    // Trajectory sparkline is part of the in-match scoreboard component.
+    await expect(
+      page.locator("[data-testid='sk-scoreboard-sparkline']"),
+    ).toBeVisible();
+  });
+
   test("scoreboard totals row carries a rank badge per cell", async ({
     page,
   }) => {

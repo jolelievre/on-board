@@ -50,7 +50,10 @@ function MatchPage() {
   const isSkullKing = match.game.slug === "skull-king";
 
   const showSyncPill = isInProgress && (is7WD || isSkullKing);
-  const showScoreboardToggle = isSkullKing && isInProgress;
+  // Scoreboard toggle is available throughout a Skull King match — including
+  // after completion — so the header chrome is consistent with the explicit
+  // CTA on the match-complete screen.
+  const showScoreboardToggle = isSkullKing;
 
   return (
     <>
@@ -119,6 +122,7 @@ function MatchPage() {
           <SkullKingScorer
             match={match}
             scoreboardOpen={scoreboardOpen}
+            onScoreboardOpen={() => setScoreboardOpen(true)}
             onScoreboardClose={() => setScoreboardOpen(false)}
             onSaveStatusChange={setSaveStatus}
           />
