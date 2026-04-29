@@ -7,6 +7,7 @@ export type AuthUser = {
   name: string;
   avatarUrl: string | null;
   locale: string;
+  theme: string;
 };
 
 export type AuthSession = {
@@ -43,6 +44,7 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
     name: rawUser.name as string,
     avatarUrl: (rawUser.avatarUrl ?? rawUser.image ?? null) as string | null,
     locale: (rawUser.locale as string) || "en",
+    theme: (rawUser.theme as string) || "parchment",
   };
 
   c.set("user", user);

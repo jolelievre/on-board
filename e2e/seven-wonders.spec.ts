@@ -90,8 +90,12 @@ test.describe("7 Wonders Duel — full flow", () => {
     const history = page.locator("[data-testid='match-history']");
     await expect(history).toContainText(names.p1);
     await expect(history).toContainText(names.p2);
-    await expect(history).toContainText("(14)");
-    await expect(history).toContainText("(4)");
+    await expect(
+      history.locator(`[data-testid='match-history-score-${p1Id}']`),
+    ).toHaveText("14");
+    await expect(
+      history.locator(`[data-testid='match-history-score-${p2Id}']`),
+    ).toHaveText("4");
   });
 
   test("special victory: military supremacy via checkbox + Complete", async ({

@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api } from "../../../lib/api";
 import { SevenWondersDuelScorer } from "../../../components/scoring/SevenWondersDuelScorer";
+import { Header } from "../../../components/layout/Header";
+import { Card } from "../../../components/ui/Card";
 import type { Match } from "../../../types/match";
 
 export const Route = createFileRoute("/_authenticated/matches/$id")({
@@ -20,9 +22,12 @@ function MatchPage() {
 
   if (isPending || !match) {
     return (
-      <div className="mx-auto max-w-lg p-4">
-        <p className="text-gray-500">{t("common.loading")}</p>
-      </div>
+      <>
+        <Header back={{ to: "/games", label: t("nav.games") }} />
+        <div className="px-5">
+          <p style={{ color: "var(--color-ink-faint)" }}>{t("common.loading")}</p>
+        </div>
+      </>
     );
   }
 
@@ -31,21 +36,23 @@ function MatchPage() {
   });
 
   return (
-    <div className="mx-auto max-w-lg p-4">
-      <Link
-        to="/games/$slug"
-        params={{ slug: match.game.slug }}
-        className="text-sm text-blue-600 hover:underline"
-      >
-        &larr; {gameName}
-      </Link>
+    <>
+      <Header
+        back={{
+          to: "/games/$slug",
+          params: { slug: match.game.slug },
+          label: gameName,
+        }}
+      />
 
-      {match.game.slug === "7-wonders-duel" ? (
-        <SevenWondersDuelScorer match={match} />
-      ) : (
-        <UnsupportedScorer match={match} gameName={gameName} />
-      )}
-    </div>
+      <div className="px-5">
+        {match.game.slug === "7-wonders-duel" ? (
+          <SevenWondersDuelScorer match={match} />
+        ) : (
+          <UnsupportedScorer match={match} gameName={gameName} />
+        )}
+      </div>
+    </>
   );
 }
 
@@ -59,19 +66,28 @@ function UnsupportedScorer({
   const { t } = useTranslation();
   return (
     <>
-      <h1 className="mt-2 text-2xl font-bold">{t("matches.title")}</h1>
-      <div
-        className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 p-3"
-        data-testid="scoring-not-supported"
+      <h1
+        style={{
+          fontFamily: "var(--font-display)",
+          fontWeight: 700,
+          fontSize: "1.75rem",
+          margin: 0,
+          letterSpacing: "-0.025em",
+          color: "var(--color-ink)",
+        }}
       >
-        <p className="text-sm text-yellow-900">
+        {t("matches.title")}
+      </h1>
+      <Card className="mt-4" data-testid="scoring-not-supported">
+        <p style={{ color: "var(--color-warning)", margin: 0 }}>
           {t("matches.scoringNotSupported", { game: gameName })}
         </p>
-      </div>
+      </Card>
       <Link
         to="/games/$slug"
         params={{ slug: match.game.slug }}
-        className="mt-6 block text-center text-sm text-blue-600 hover:underline"
+        className="mt-6 block text-center text-sm"
+        style={{ color: "var(--color-primary)" }}
         data-testid="back-to-game"
       >
         {t("matches.back")}

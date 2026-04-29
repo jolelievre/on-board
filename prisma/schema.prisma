@@ -19,6 +19,7 @@ model User {
   emailVerified Boolean   @default(false)
   avatarUrl     String?   /// Profile picture URL (from Google OAuth)
   locale        String    @default("en") /// Preferred language ("en" or "fr")
+  theme         String    @default("parchment") /// Preferred theme ("parchment" or "candlelit")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

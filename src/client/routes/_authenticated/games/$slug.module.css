@@ -1,0 +1,169 @@
+.cover {
+  margin-top: 0.25rem;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-soft);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.75rem;
+  color: var(--color-ink);
+  margin: 0.75rem 0 0;
+  letter-spacing: -0.025em;
+}
+
+.description {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  margin: 0.375rem 0 0;
+  line-height: 1.4;
+}
+
+.pills {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+  flex-wrap: wrap;
+}
+
+.historyHeader {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--color-ink);
+  margin: 1.25rem 0 0.5rem;
+  letter-spacing: -0.015em;
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.matchCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: 0.75rem 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.matchHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.matchDate {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-ink-faint);
+  letter-spacing: 0.04em;
+}
+
+.players {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.playerCell {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  justify-content: space-between;
+  padding: 0.375rem 0.625rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.playerWinner {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.playerName {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--color-ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.playerNameWinner {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.playerNameDim {
+  color: var(--color-ink-faint);
+}
+
+.playerScore {
+  font-family: var(--font-body);
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+
+.playerScoreWinner {
+  color: var(--color-primary);
+}
+
+.playerScoreDim {
+  color: var(--color-ink-faint);
+}
+
+.versus {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--color-ink-faint);
+  font-weight: 600;
+}
+
+.empty {
+  padding: 1.5rem 1rem;
+  border-radius: var(--radius-lg);
+  border: 1.5px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.emptyIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--color-surface-alt);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-ink-soft);
+}
+
+.emptyText {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  margin: 0;
+  max-width: 16rem;
+  line-height: 1.4;
+}

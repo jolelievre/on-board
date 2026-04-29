@@ -3,11 +3,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../lib/api";
-import {
-  SevenWondersScoreGrid,
-  type ScoreGridValues,
-  type SupremacySelection,
-} from "./SevenWondersScoreGrid";
+import { HandMatchGrid } from "../match/HandMatchGrid";
+import type {
+  ScoreGridValues,
+  SupremacySelection,
+} from "../match/HandMatchGrid";
+import { MatchTitleBar } from "../match/MatchTitleBar";
+import { WinnerBanner } from "../match/WinnerBanner";
+import { SyncPill, type SyncState } from "../ui/SyncPill";
+import { Button } from "../ui/Button";
 import {
   SEVEN_WONDERS_CATEGORY_KEYS,
   computeTotalsByPlayer,
@@ -20,6 +24,7 @@ import type { Match, Player, ScoreRow } from "../../types/match";
 const SAVE_DEBOUNCE_MS = 300;
 
 type CompletedVictoryType = SevenWondersVictoryType | "draw";
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 type ScorePayload = {
   playerId: string;
@@ -35,9 +40,7 @@ function buildValuesFromScores(
   for (const p of players) values[p.id] = {};
   for (const s of scores) {
     if (
-      !(SEVEN_WONDERS_CATEGORY_KEYS as ReadonlyArray<string>).includes(
-        s.category,
-      )
+      !(SEVEN_WONDERS_CATEGORY_KEYS as ReadonlyArray<string>).includes(s.category)
     ) {
       continue;
     }
@@ -59,6 +62,19 @@ function valuesToScores(values: ScoreGridValues): ScorePayload[] {
   return out;
 }
 
+function saveStatusToSyncState(status: SaveStatus): SyncState {
+  switch (status) {
+    case "idle":
+      return "idle";
+    case "saving":
+      return "saving";
+    case "saved":
+      return "saved";
+    case "error":
+      return "error";
+  }
+}
+
 type Props = { match: Match };
 
 export function SevenWondersDuelScorer({ match }: Props) {
@@ -70,9 +86,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
     buildValuesFromScores(match.players, match.scores),
   );
   const [supremacy, setSupremacy] = useState<SupremacySelection>(null);
-  const [saveStatus, setSaveStatus] = useState<
-    "idle" | "saving" | "saved" | "error"
-  >("idle");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef<Promise<unknown> | null>(null);
 
@@ -100,7 +114,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
       try {
         await pendingSaveRef.current;
       } catch {
-        // surface via saveStatus
+        /* surfaced via saveStatus */
       } finally {
         pendingSaveRef.current = null;
       }
@@ -202,8 +216,15 @@ export function SevenWondersDuelScorer({ match }: Props) {
   };
 
   const winner = match.winnerId
-    ? match.players.find((p) => p.id === match.winnerId)
+    ? (match.players.find((p) => p.id === match.winnerId) ?? null)
     : null;
+  const winnerTotal = winner ? (totals[winner.id] ?? 0) : null;
+  const loserTotal =
+    isCompleted && winner
+      ? (match.players
+          .filter((p) => p.id !== winner.id)
+          .map((p) => totals[p.id] ?? 0)[0] ?? null)
+      : null;
 
   const scoreWinnerName =
     outcome.kind === "winner"
@@ -228,63 +249,61 @@ export function SevenWondersDuelScorer({ match }: Props) {
   })();
 
   const completeOutcomeAttr = supremacy ? supremacy.type : outcome.kind;
+  const titleText = isCompleted
+    ? t("matches.completed", { defaultValue: "Match done!" })
+    : t("matches.title");
 
   return (
     <>
-      <div className="mt-2 flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">{t("matches.title")}</h1>
-        {!isCompleted && (
-          <span
-            className="text-xs text-gray-500"
-            data-testid="save-status"
-            data-status={saveStatus}
-          >
-            {saveStatus === "saving" && t("matches.saving")}
-            {saveStatus === "saved" && t("matches.saved")}
-            {saveStatus === "error" && t("matches.saveError")}
-          </span>
-        )}
-      </div>
+      <MatchTitleBar
+        title={titleText}
+        underlineWidth={isCompleted ? 200 : 130}
+        right={
+          !isCompleted && (
+            <SyncPill
+              state={saveStatusToSyncState(saveStatus)}
+              data-testid="save-status"
+              data-status={saveStatus}
+            />
+          )
+        }
+      />
 
       {isCompleted && (
-        <div
-          className="mt-4 rounded-md border border-green-200 bg-green-50 p-3"
-          data-testid="winner-banner"
-        >
-          <p className="text-sm font-semibold text-green-900">
-            {winner ? t("matches.winner", { name: winner.name }) : t("matches.draw")}
-          </p>
-          {match.victoryType && (
-            <p className="text-xs text-green-700">
-              {t(`matches.victoryType.${match.victoryType}`)}
-            </p>
-          )}
-        </div>
+        <WinnerBanner
+          winnerName={winner?.name ?? null}
+          winnerScore={winnerTotal}
+          loserScore={loserTotal}
+          victoryType={match.victoryType}
+        />
       )}
 
-      <div className="mt-4">
-        <SevenWondersScoreGrid
+      <div className="mt-3">
+        <HandMatchGrid
           players={match.players}
           values={values}
           onChange={handleScoreChange}
           supremacy={supremacy}
           onSupremacyChange={setSupremacy}
           disabled={isCompleted}
+          winnerId={match.winnerId}
         />
       </div>
 
       {!isCompleted && (
-        <div className="mt-6 flex flex-col gap-3">
-          <button
+        <div className="mt-6">
+          <Button
             type="button"
             onClick={handleComplete}
             disabled={completeMatch.isPending}
             data-testid="complete-match"
             data-outcome={completeOutcomeAttr}
-            className="rounded-md bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700 disabled:bg-gray-400"
+            variant="primary"
+            size="lg"
+            fullWidth
           >
             {completeButtonLabel}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -292,7 +311,8 @@ export function SevenWondersDuelScorer({ match }: Props) {
         <Link
           to="/games/$slug"
           params={{ slug: match.game.slug }}
-          className="mt-6 block text-center text-sm text-blue-600 hover:underline"
+          className="mt-6 block text-center text-sm"
+          style={{ color: "var(--color-primary)" }}
           data-testid="back-to-game"
         >
           {t("matches.back")}

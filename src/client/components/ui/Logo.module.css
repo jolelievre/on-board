@@ -1,0 +1,50 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  color: var(--color-ink);
+}
+
+.glyph {
+  overflow: visible;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+
+.wordmarkOn {
+  color: var(--color-primary);
+}
+
+.wordmarkBoard {
+  color: var(--color-accent);
+}
+
+@keyframes ob-dust {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
+.dust {
+  animation: ob-dust 0.5s ease-out forwards;
+  transform-origin: 22px 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dust {
+    animation: none;
+  }
+}

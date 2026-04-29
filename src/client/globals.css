@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+@import "./styles/fonts.css";
+@import "./styles/tokens.css";
+@import "./styles/themes/candlelit.css";
+
+/* Body skin — the graph-paper grid lives on body so it scrolls with content. */
+body {
+  background-color: var(--color-bg);
+  background-image: var(--bg-image);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  min-height: 100vh;
+}
+

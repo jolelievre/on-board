@@ -1,29 +1,32 @@
 import { useTranslation } from "react-i18next";
+import { updateProfile } from "../lib/auth-client";
+import { PillSwitch } from "./ui/PillSwitch";
 
 const LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "fr", label: "Français" },
+  { value: "en", label: "English" },
+  { value: "fr", label: "Français" },
 ] as const;
 
+type LangCode = (typeof LANGUAGES)[number]["value"];
+
 export function LanguageSelector() {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
+  const current = (LANGUAGES.find((l) => l.value === i18n.language)?.value
+    ?? "en") as LangCode;
+
+  const changeLanguage = (code: LangCode) => {
+    void i18n.changeLanguage(code);
+    void updateProfile({ locale: code }).catch(() => {
+      /* unauthenticated / offline — local change still applies */
+    });
+  };
 
   return (
-    <div className="flex gap-2">
-      {LANGUAGES.map((lang) => (
-        <button
-          key={lang.code}
-          type="button"
-          onClick={() => i18n.changeLanguage(lang.code)}
-          className={`rounded-lg px-4 py-2 text-sm font-medium ${
-            i18n.language === lang.code
-              ? "bg-blue-600 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          {lang.label}
-        </button>
-      ))}
-    </div>
+    <PillSwitch
+      value={current}
+      options={LANGUAGES}
+      onChange={changeLanguage}
+      ariaLabel={t("settings.language")}
+    />
   );
 }

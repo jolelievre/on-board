@@ -1,8 +1,13 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../../../lib/api";
+import { Header } from "../../../components/layout/Header";
+import { Pill } from "../../../components/ui/Pill";
+import { Button } from "../../../components/ui/Button";
+import { Icon } from "../../../components/ui/Icon";
+import styles from "./$slug_.new.module.css";
 
 export const Route = createFileRoute("/_authenticated/games/$slug_/new")({
   component: NewMatchPage,
@@ -19,6 +24,17 @@ type Game = {
 type Match = {
   id: string;
 };
+
+const AVATAR_CLASSES = [
+  styles.avatarA,
+  styles.avatarB,
+  styles.avatarC,
+  styles.avatarD,
+  styles.avatarE,
+  styles.avatarF,
+  styles.avatarG,
+  styles.avatarH,
+];
 
 function NewMatchPage() {
   const { slug } = Route.useParams();
@@ -38,7 +54,6 @@ function NewMatchPage() {
   const [names, setNames] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize player slots once the game's minPlayers is known.
   useEffect(() => {
     if (game && names.length === 0) {
       setNames(Array.from({ length: game.minPlayers }, () => ""));
@@ -64,9 +79,12 @@ function NewMatchPage() {
 
   if (isPending || !game) {
     return (
-      <div className="mx-auto max-w-lg p-4">
-        <p className="text-gray-500">{t("common.loading")}</p>
-      </div>
+      <>
+        <Header back={{ to: "/games", label: t("nav.games") }} />
+        <div className="px-5">
+          <p style={{ color: "var(--color-ink-faint)" }}>{t("common.loading")}</p>
+        </div>
+      </>
     );
   }
 
@@ -103,94 +121,116 @@ function NewMatchPage() {
   };
 
   return (
-    <div className="mx-auto max-w-lg p-4">
-      <Link
-        to="/games/$slug"
-        params={{ slug }}
-        className="text-sm text-blue-600 hover:underline"
-      >
-        &larr; {t(`games.catalog.${game.slug}.name`, { defaultValue: game.name })}
-      </Link>
+    <>
+      <Header
+        back={{
+          to: "/games/$slug",
+          params: { slug },
+          label: t(`games.catalog.${game.slug}.name`, { defaultValue: game.name }),
+        }}
+      />
 
-      <h1 className="mt-4 text-2xl font-bold">{t("matches.newMatch.title")}</h1>
-      <p className="mt-1 text-sm text-gray-500">
-        {t("matches.newMatch.playerRange", {
-          min: game.minPlayers,
-          max: game.maxPlayers,
-        })}
-      </p>
+      <div className="px-5">
+        <h1 className={styles.title}>{t("matches.newMatch.title")}</h1>
+        <div className={styles.range}>
+          <Pill tone="muted">
+            {t("matches.newMatch.playerRange", {
+              min: game.minPlayers,
+              max: game.maxPlayers,
+            })}
+          </Pill>
+        </div>
 
-      <datalist id="player-suggestions">
-        {suggestions.map((s) => (
-          <option key={s} value={s} />
-        ))}
-      </datalist>
+        <datalist id="player-suggestions">
+          {suggestions.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
 
-      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-        {names.map((value, i) => (
-          <div key={i} className="flex items-end gap-2">
-            <label className="flex flex-1 flex-col gap-1">
-              <span className="text-sm font-medium text-gray-700">
-                {t("matches.newMatch.playerLabel", { n: i + 1 })}
-              </span>
-              <input
-                type="text"
-                name={`player-${i}`}
-                data-testid={`new-match-player-${i}`}
-                list="player-suggestions"
-                autoComplete="off"
-                placeholder={t("matches.newMatch.playerPlaceholder")}
-                value={value}
-                onChange={(e) => {
-                  setNames((prev) => {
-                    const next = [...prev];
-                    next[i] = e.target.value;
-                    return next;
-                  });
-                }}
-                className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-blue-500 focus:outline-none"
-              />
-            </label>
-            {canRemove && (
-              <button
-                type="button"
-                onClick={() => handleRemovePlayer(i)}
-                aria-label={t("matches.newMatch.removePlayer", { n: i + 1 })}
-                data-testid={`new-match-remove-${i}`}
-                className="h-10 w-10 shrink-0 rounded-md border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-red-600"
-              >
-                ×
-              </button>
-            )}
-          </div>
-        ))}
+        <form onSubmit={handleSubmit} className={styles.form}>
+          {names.map((value, i) => {
+            const initial = value.trim().slice(0, 1).toUpperCase() || String(i + 1);
+            const avatarClass = AVATAR_CLASSES[i % AVATAR_CLASSES.length];
+            return (
+              <div key={i}>
+                <label className={styles.label} htmlFor={`new-match-player-${i}`}>
+                  {t("matches.newMatch.playerLabel", { n: i + 1 })}
+                </label>
+                <div className={styles.row}>
+                  <div className={styles.fieldWrap}>
+                    <div className={styles.field}>
+                      <span className={`${styles.avatar} ${avatarClass}`} aria-hidden>
+                        {initial}
+                      </span>
+                      <input
+                        id={`new-match-player-${i}`}
+                        type="text"
+                        name={`player-${i}`}
+                        data-testid={`new-match-player-${i}`}
+                        list="player-suggestions"
+                        autoComplete="off"
+                        placeholder={t("matches.newMatch.playerPlaceholder")}
+                        value={value}
+                        onChange={(e) => {
+                          setNames((prev) => {
+                            const next = [...prev];
+                            next[i] = e.target.value;
+                            return next;
+                          });
+                        }}
+                        className={styles.input}
+                      />
+                      <Icon name="pencil" size={16} />
+                    </div>
+                  </div>
+                  {canRemove && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePlayer(i)}
+                      aria-label={t("matches.newMatch.removePlayer", { n: i + 1 })}
+                      data-testid={`new-match-remove-${i}`}
+                      className={styles.removeButton}
+                    >
+                      <Icon name="x" size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
 
-        {canAdd && (
-          <button
-            type="button"
-            onClick={handleAddPlayer}
-            data-testid="new-match-add-player"
-            className="self-start rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:border-blue-500 hover:text-blue-700"
+          {canAdd && (
+            <button
+              type="button"
+              onClick={handleAddPlayer}
+              data-testid="new-match-add-player"
+              className={styles.addButton}
+            >
+              <Icon name="plus" size={14} />
+              {t("matches.newMatch.addPlayer")}
+            </button>
+          )}
+
+          {error && (
+            <p className={styles.error} data-testid="new-match-error">
+              {error}
+            </p>
+          )}
+
+          <Button
+            type="submit"
+            disabled={createMatch.isPending}
+            data-testid="new-match-submit"
+            variant="primary"
+            size="lg"
+            fullWidth
+            iconBefore={<Icon name="play" size={18} />}
+            className={styles.submit}
           >
-            + {t("matches.newMatch.addPlayer")}
-          </button>
-        )}
-
-        {error && (
-          <p className="text-sm text-red-600" data-testid="new-match-error">
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={createMatch.isPending}
-          data-testid="new-match-submit"
-          className="mt-2 rounded-md bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700 disabled:bg-gray-400"
-        >
-          {t("matches.newMatch.start")}
-        </button>
-      </form>
-    </div>
+            {t("matches.newMatch.start")}
+          </Button>
+        </form>
+      </div>
+    </>
   );
 }
