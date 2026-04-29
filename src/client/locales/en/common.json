@@ -147,7 +147,7 @@
         "playerBid": "{{name}}'s bid",
         "progress": "{{done}}/{{total}}",
         "bidPrompt": "BID?",
-        "revealCta": "Reveal & start round",
+        "startRoundCta": "Start round",
         "scoreboardLabel": "Scoreboard"
       },
       "bidRecap": {

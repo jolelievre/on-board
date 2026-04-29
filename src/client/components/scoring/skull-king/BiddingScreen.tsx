@@ -132,7 +132,7 @@ export function BiddingScreen({
           disabled={!allDone}
           data-testid="sk-bid-reveal"
         >
-          {t("scoring.skullKing.bid.revealCta")}
+          {t("scoring.skullKing.bid.startRoundCta")}
         </button>
       </div>
     </div>

@@ -147,7 +147,7 @@
         "playerBid": "Pari de {{name}}",
         "progress": "{{done}}/{{total}}",
         "bidPrompt": "PARI ?",
-        "revealCta": "Révéler & démarrer",
+        "startRoundCta": "Démarrer la manche",
         "scoreboardLabel": "Tableau"
       },
       "bidRecap": {
