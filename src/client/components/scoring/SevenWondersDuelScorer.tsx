@@ -8,7 +8,6 @@ import type {
   ScoreGridValues,
   SupremacySelection,
 } from "../match/HandMatchGrid";
-import { MatchTitleBar } from "../match/MatchTitleBar";
 import { WinnerBanner } from "../match/WinnerBanner";
 import { SyncPill, type SyncState } from "../ui/SyncPill";
 import { Button } from "../ui/Button";
@@ -249,25 +248,18 @@ export function SevenWondersDuelScorer({ match }: Props) {
   })();
 
   const completeOutcomeAttr = supremacy ? supremacy.type : outcome.kind;
-  const titleText = isCompleted
-    ? t("matches.completed", { defaultValue: "Match done!" })
-    : t("matches.title");
 
   return (
     <>
-      <MatchTitleBar
-        title={titleText}
-        underlineWidth={isCompleted ? 200 : 130}
-        right={
-          !isCompleted && (
-            <SyncPill
-              state={saveStatusToSyncState(saveStatus)}
-              data-testid="save-status"
-              data-status={saveStatus}
-            />
-          )
-        }
-      />
+      {!isCompleted && (
+        <div className="flex justify-end">
+          <SyncPill
+            state={saveStatusToSyncState(saveStatus)}
+            data-testid="save-status"
+            data-status={saveStatus}
+          />
+        </div>
+      )}
 
       {isCompleted && (
         <WinnerBanner
