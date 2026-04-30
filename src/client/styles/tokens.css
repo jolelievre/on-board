@@ -67,6 +67,25 @@
   --color-cat-military-strong: #a2391f;
   --color-cat-military-ink: #3d1108;
 
+  /* Skull King — pirate accents (parchment) */
+  --sk-gold: #b58a2a;
+  --sk-gold-soft: #e6c66a;
+  --sk-sea: #1e6b6b;
+  --sk-sea-deep: #103e3e;
+  --sk-bone: #f3e9d2;
+  --sk-blood: #8b1f12;
+  --sk-rope: #8e6a3a;
+
+  /* Skull King — suit cards (parchment) */
+  --sk-yellow: #d8a01a;
+  --sk-yellow-bg: #fbe7a8;
+  --sk-green: #3f7a40;
+  --sk-green-bg: #d1e3c0;
+  --sk-purple: #6f44a4;
+  --sk-purple-bg: #e0d2eb;
+  --sk-black: #1f1a12;
+  --sk-black-bg: #d6cfc0;
+
   /* Typography */
   --font-display: "Caveat", "Patrick Hand", cursive;
   --font-body: "Caveat", "Patrick Hand", cursive;

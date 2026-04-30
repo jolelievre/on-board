@@ -57,6 +57,25 @@
   --color-cat-military-strong: #d4634a;
   --color-cat-military-ink: #f8d5c9;
 
+  /* Skull King — pirate accents (candlelit) */
+  --sk-gold: #e5b940;
+  --sk-gold-soft: #f4d57a;
+  --sk-sea: #5fb8b0;
+  --sk-sea-deep: #2c6f6a;
+  --sk-bone: #efe2c2;
+  --sk-blood: #d9603a;
+  --sk-rope: #c79867;
+
+  /* Skull King — suit cards (candlelit) */
+  --sk-yellow: #e5b940;
+  --sk-yellow-bg: #3a2e10;
+  --sk-green: #7cb668;
+  --sk-green-bg: #1c2c19;
+  --sk-purple: #b488dd;
+  --sk-purple-bg: #281c34;
+  --sk-black: #f2eada;
+  --sk-black-bg: #2a2418;
+
   /* Geometry */
   --shadow-soft: 0 1px 0 rgba(255, 220, 170, 0.04),
     0 14px 30px -10px rgba(0, 0, 0, 0.6);

@@ -1,0 +1,49 @@
+.grid {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.cell {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 12px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.4rem;
+  padding: 6px 0;
+  cursor: pointer;
+  min-height: 44px;
+  transition: background 0.12s, border-color 0.12s, transform 0.05s;
+  /* Caveat's italic forward lean shifts each glyph to the right of its
+   * advance box, so a default-aligned digit reads as drifted in a square
+   * cell. Pull the rendered glyph back ~3px so it sits visually centred. */
+  text-indent: -3px;
+}
+
+.cell:hover {
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface));
+}
+
+.cell:active {
+  transform: scale(0.96);
+}
+
+.cell:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cell.selected {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-soft);
+}
+
+.big .cell {
+  font-size: 1.7rem;
+  padding: 10px 0;
+  min-height: 52px;
+}

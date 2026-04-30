@@ -113,6 +113,108 @@
         "military": "Military supremacy",
         "scientific": "Scientific supremacy"
       }
+    },
+    "skullKing": {
+      "header": "Skull King",
+      "scoreboardLabel": "Scoreboard",
+      "openScoreboard": "Open scoreboard",
+      "closeScoreboard": "Close scoreboard",
+      "round": "Round {{n}}",
+      "roundOf": "Round {{n}} of {{total}}",
+      "matchStart": {
+        "caption": "New match",
+        "summary": "{{count}} players · 10 rounds · classic rules",
+        "seatingTitle": "Seating · clockwise from dealer",
+        "seatingHint": "Drag to reorder · tap to set the dealer",
+        "dealerBadge": "Dealer",
+        "rulesTitle": "Quick rules",
+        "ruleBidZeroTitle": "Bid 0?",
+        "ruleBidZeroLine": "Make: +10×R · Miss: −10×R",
+        "ruleBidNTitle": "Bid N?",
+        "ruleBidNLine": "Hit: +20×N · Miss: −10·|Δ|",
+        "rule14sTitle": "Coloured 14s",
+        "rule14sLine": "+10 each · max 3",
+        "ruleBlack14Title": "Black 14",
+        "ruleBlack14Line": "+20",
+        "ruleMermaidPirateTitle": "Mermaid by pirate",
+        "ruleMermaidPirateLine": "+20 each",
+        "ruleSkMermaidTitle": "SK by mermaid",
+        "ruleSkMermaidLine": "+40",
+        "startCta": "Deal round 1 →"
+      },
+      "bid": {
+        "caption": "Tap a player to edit",
+        "playerBid": "{{name}}'s bid",
+        "progress": "{{done}}/{{total}}",
+        "bidPrompt": "BID?",
+        "startRoundCta": "Start round",
+        "scoreboardLabel": "Scoreboard"
+      },
+      "bidRecap": {
+        "caption": "All bids in",
+        "title": "Round {{n}} · {{sum}}/{{round}} bid",
+        "sumExact": "⚖ Bids exactly match tricks — someone is wrong.",
+        "sumUnder_one": "📈 1 extra trick loose — overbids beware.",
+        "sumUnder_other": "📈 {{count}} extra tricks loose — overbids beware.",
+        "sumOver_one": "📉 1 bid too many — underbids reward.",
+        "sumOver_other": "📉 {{count}} bids too many — underbids reward.",
+        "enterResultsCta": "Enter results →",
+        "backToBidsCta": "← Back to bids"
+      },
+      "result": {
+        "tricksLabel": "Tricks won · {{sum}}/{{round}} recorded",
+        "bonusesLabel": "Bonuses",
+        "bidLabel": "Bid",
+        "roundScoreLabel": "Round score",
+        "totalAfterRound": "Total after R{{n}}",
+        "bidZeroMade": "Bid 0 made: {{score}}",
+        "bidZeroFailed": "Bid 0 failed: {{score}}",
+        "bidMade": "Bid {{bid}} made: {{score}}",
+        "bidMissed": "Bid {{bid}} missed: {{score}}",
+        "bonusInline": "Bonus: +{{points}}",
+        "prevPlayer": "‹ Prev",
+        "nextPlayer": "Next: {{name}} →",
+        "endRound": "End round →"
+      },
+      "transition": {
+        "caption": "Round {{n}} complete",
+        "roundTitle": "Round {{n}}",
+        "cardsEach_one": "1 card each · {{name}} deals",
+        "cardsEach_other": "{{count}} cards each · {{name}} deals",
+        "standingsTitle": "Standings",
+        "continueCta": "Bidding for R{{n}} →",
+        "editLastRoundCta": "← Edit round {{n}}"
+      },
+      "scoreboard": {
+        "title": "Scoreboard",
+        "currentRound": "Round {{n}}/10",
+        "trajectoryTitle": "Per-round trajectory",
+        "totalsRowLabel": "Σ"
+      },
+      "complete": {
+        "caption": "Match complete",
+        "winnerWins": "{{name}} wins!",
+        "summary_one": "{{score}} doubloons · 1 round played",
+        "summary_other": "{{score}} doubloons · {{count}} rounds played",
+        "draw": "Draw",
+        "drawSummary": "{{score}} doubloons · {{count}} rounds played",
+        "finalStandings": "Final standings",
+        "viewScoreboardCta": "See match details",
+        "rematchCta": "Rematch →",
+        "backCta": "Back to game"
+      },
+      "bonus": {
+        "color14Label": "14s held",
+        "color14Hint": "+10 each · max 3",
+        "black14Label": "Black 14",
+        "black14Hint": "+20",
+        "mermaidByPirateLabel": "Mermaid by pirate",
+        "mermaidByPirateHint": "+20 each · max 2",
+        "pirateBySkLabel": "Pirate by SK",
+        "pirateBySkHint": "+30 each · max 6",
+        "skByMermaidLabel": "SK by mermaid",
+        "skByMermaidHint": "+40"
+      }
     }
   },
   "common": {
