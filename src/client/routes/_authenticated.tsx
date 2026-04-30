@@ -6,8 +6,11 @@ import {
 } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { authClient } from "../lib/auth-client";
+import { useAuthSession } from "../hooks/useAuthSession";
+import { useOnlineStatus } from "../hooks/useOnlineStatus";
+import { usePrefetchGames } from "../hooks/usePrefetchGames";
 import { BottomNav } from "../components/layout/BottomNav";
+import { OfflineBanner } from "../components/layout/OfflineBanner";
 
 export const Route = createFileRoute("/_authenticated")({
   component: AuthenticatedLayout,
@@ -23,7 +26,9 @@ function shouldHideBottomNav(pathname: string): boolean {
 function AuthenticatedLayout() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { data: session, isPending } = authClient.useSession();
+  const { session, isPending } = useAuthSession();
+  const { isOnline } = useOnlineStatus();
+  usePrefetchGames();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const hideBottomNav = shouldHideBottomNav(pathname);
 
@@ -49,6 +54,7 @@ function AuthenticatedLayout() {
     <div
       className={`flex min-h-screen flex-col ${hideBottomNav ? "" : "pb-24"}`}
     >
+      {!isOnline && <OfflineBanner />}
       <Outlet />
       {!hideBottomNav && <BottomNav />}
     </div>

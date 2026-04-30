@@ -31,6 +31,11 @@
       "title": "Thème",
       "parchment": "Parchemin",
       "candlelit": "Chandelle"
+    },
+    "install": {
+      "title": "Installer l'appli",
+      "hint": "Ajoutez OnBoard à votre écran d'accueil pour un accès rapide",
+      "cta": "Ajouter à l'écran d'accueil"
     }
   },
   "games": {
@@ -218,6 +223,9 @@
     }
   },
   "common": {
-    "loading": "Chargement…"
+    "loading": "Chargement…",
+    "offlineBanner": "Hors ligne — les modifications seront synchronisées à la reconnexion",
+    "syncPending_one": "1 modification en attente de sync",
+    "syncPending_other": "{{count}} modifications en attente de sync"
   }
 }

@@ -31,6 +31,11 @@
       "title": "Theme",
       "parchment": "Parchment",
       "candlelit": "Candlelit"
+    },
+    "install": {
+      "title": "Install app",
+      "hint": "Add OnBoard to your home screen for quick access",
+      "cta": "Add to home screen"
     }
   },
   "games": {
@@ -218,6 +223,9 @@
     }
   },
   "common": {
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "offlineBanner": "Offline — changes will sync when you reconnect",
+    "syncPending_one": "1 change pending sync",
+    "syncPending_other": "{{count}} changes pending sync"
   }
 }

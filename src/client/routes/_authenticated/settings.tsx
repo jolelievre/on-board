@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient, updateProfile } from "../../lib/auth-client";
+import { useInstallPrompt } from "../../hooks/useInstallPrompt";
+import { clearSessionCache } from "../../hooks/useAuthSession";
 import { LanguageSelector } from "../../components/LanguageSelector";
 import { ThemeToggle } from "../../components/ui/ThemeToggle";
 import { Header } from "../../components/layout/Header";
@@ -18,6 +20,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function SettingsPage() {
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
+  const { canInstall, install } = useInstallPrompt();
   const displayName =
     (session?.user as { alias?: string | null } | undefined)?.alias?.trim() ||
     session?.user.name ||
@@ -70,9 +73,28 @@ function SettingsPage() {
             <ThemeToggle />
           </Group>
 
+          {canInstall && (
+            <Group title={t("settings.install.title", { defaultValue: "Install app" })}>
+              <p className={styles.hint}>
+                {t("settings.install.hint", { defaultValue: "Add OnBoard to your home screen for quick access" })}
+              </p>
+              <Button
+                type="button"
+                onClick={() => void install()}
+                variant="secondary"
+                size="md"
+                fullWidth
+                iconBefore={<Icon name="plus" size={16} />}
+                data-testid="install-app-button"
+              >
+                {t("settings.install.cta", { defaultValue: "Add to home screen" })}
+              </Button>
+            </Group>
+          )}
+
           <Button
             type="button"
-            onClick={() => authClient.signOut()}
+            onClick={() => { clearSessionCache(); void authClient.signOut(); }}
             variant="destructive"
             size="md"
             fullWidth

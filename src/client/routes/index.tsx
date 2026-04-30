@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../lib/auth-client";
+import { useAuthSession } from "../hooks/useAuthSession";
 import { LanguageSelector } from "../components/LanguageSelector";
 import { Logo } from "../components/ui/Logo";
 import { Button } from "../components/ui/Button";
@@ -15,13 +16,16 @@ export const Route = createFileRoute("/")({
 function LoginPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { data: session, isPending } = authClient.useSession();
+  // Use isOfflineFallback to avoid auto-redirecting when offline — if the user
+  // intentionally navigated here while offline we should show the login screen,
+  // not silently push them to /games with stale cached credentials.
+  const { session, isPending, isOfflineFallback } = useAuthSession();
 
   useEffect(() => {
-    if (session) {
+    if (session && !isOfflineFallback) {
       navigate({ to: "/games" });
     }
-  }, [session, navigate]);
+  }, [session, isOfflineFallback, navigate]);
 
   if (isPending) {
     return (
@@ -31,7 +35,7 @@ function LoginPage() {
     );
   }
 
-  if (session) {
+  if (session && !isOfflineFallback) {
     return null;
   }
 

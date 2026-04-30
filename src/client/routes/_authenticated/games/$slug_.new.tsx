@@ -4,13 +4,12 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../../../lib/api";
 import { authClient } from "../../../lib/auth-client";
+import { usePlayerSuggestions, persistPlayersToLocalProfiles } from "../../../hooks/usePlayerSuggestions";
 import { Header } from "../../../components/layout/Header";
 import { Pill } from "../../../components/ui/Pill";
 import { Button } from "../../../components/ui/Button";
 import { Icon } from "../../../components/ui/Icon";
 import styles from "./$slug_.new.module.css";
-
-type PlayerSuggestion = { name: string; isSelf: boolean };
 
 export const Route = createFileRoute("/_authenticated/games/$slug_/new")({
   component: NewMatchPage,
@@ -49,10 +48,7 @@ function NewMatchPage() {
     queryFn: () => api<Game>(`/api/games/${slug}`),
   });
 
-  const { data: suggestions = [] } = useQuery<PlayerSuggestion[]>({
-    queryKey: ["players", "suggestions"],
-    queryFn: () => api<PlayerSuggestion[]>("/api/players/suggestions"),
-  });
+  const { data: suggestions = [] } = usePlayerSuggestions();
 
   const { data: session } = authClient.useSession();
   const myUserId = session?.user.id;
@@ -91,7 +87,12 @@ function NewMatchPage() {
           })),
         }),
       }),
-    onSuccess: (match) => {
+    onSuccess: (match, input) => {
+      const selfSuggestion = suggestions.find((s) => s.isSelf);
+      void persistPlayersToLocalProfiles(
+        input.players.map((p) => p.name),
+        selfSuggestion?.name,
+      );
       navigate({ to: "/matches/$id", params: { id: match.id } });
     },
     onError: (err: unknown) => {

@@ -8,7 +8,7 @@ export type SyncState = "idle" | "saving" | "saved" | "offline" | "error";
 /** Save-mutation status emitted by features (e.g. score grid). Maps to a
  * SyncState for display via `saveStatusToSyncState`. Kept here so the
  * mapping lives next to the visual states. */
-export type SaveStatus = "idle" | "saving" | "saved" | "error";
+export type SaveStatus = "idle" | "saving" | "saved" | "offline" | "error";
 
 export function saveStatusToSyncState(status: SaveStatus): SyncState {
   switch (status) {
@@ -18,6 +18,8 @@ export function saveStatusToSyncState(status: SaveStatus): SyncState {
       return "saving";
     case "saved":
       return "saved";
+    case "offline":
+      return "offline";
     case "error":
       return "error";
   }
