@@ -147,6 +147,222 @@ test.describe("API: Matches (authenticated)", () => {
 
     expect(res.status()).toBe(400);
   });
+
+  test("POST /api/matches stores and returns metadata", async ({ request }) => {
+    const gamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gamesRes.json();
+
+    const res = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { name: "Alice", position: 0 },
+          { name: "Bob", position: 1 },
+        ],
+        metadata: { skullKing: { dealerStart: 1 } },
+      },
+    });
+
+    expect(res.status()).toBe(201);
+    const match = await res.json();
+    expect(match.metadata).toEqual({ skullKing: { dealerStart: 1 } });
+  });
+});
+
+test.describe("API: PATCH /api/matches/:id (authenticated)", () => {
+  test("updates metadata", async ({ request }) => {
+    const gamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gamesRes.json();
+
+    const createRes = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { name: "Alice", position: 0 },
+          { name: "Bob", position: 1 },
+        ],
+      },
+    });
+    const created = await createRes.json();
+
+    const res = await request.patch(`/api/matches/${created.id}`, {
+      data: { metadata: { foo: "bar", count: 42 } },
+    });
+
+    expect(res.ok()).toBeTruthy();
+    const match = await res.json();
+    expect(match.id).toBe(created.id);
+    expect(match.metadata).toEqual({ foo: "bar", count: 42 });
+  });
+
+  test("reorders players", async ({ request }) => {
+    const gamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gamesRes.json();
+
+    const createRes = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { name: "Alice", position: 0 },
+          { name: "Bob", position: 1 },
+        ],
+      },
+    });
+    const created = await createRes.json();
+    const alice = created.players.find(
+      (p: { name: string }) => p.name === "Alice",
+    )!;
+    const bob = created.players.find(
+      (p: { name: string }) => p.name === "Bob",
+    )!;
+
+    const res = await request.patch(`/api/matches/${created.id}`, {
+      data: {
+        playerOrder: [
+          { playerId: alice.id, position: 1 },
+          { playerId: bob.id, position: 0 },
+        ],
+      },
+    });
+
+    expect(res.ok()).toBeTruthy();
+    const match = await res.json();
+    expect(match.players[0].id).toBe(bob.id);
+    expect(match.players[1].id).toBe(alice.id);
+  });
+
+  test("updates metadata and player order together", async ({ request }) => {
+    const gamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gamesRes.json();
+
+    const createRes = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { name: "Alice", position: 0 },
+          { name: "Bob", position: 1 },
+        ],
+      },
+    });
+    const created = await createRes.json();
+    const alice = created.players.find(
+      (p: { name: string }) => p.name === "Alice",
+    )!;
+    const bob = created.players.find(
+      (p: { name: string }) => p.name === "Bob",
+    )!;
+
+    const res = await request.patch(`/api/matches/${created.id}`, {
+      data: {
+        metadata: { gameVariant: "classic" },
+        playerOrder: [
+          { playerId: alice.id, position: 1 },
+          { playerId: bob.id, position: 0 },
+        ],
+      },
+    });
+
+    expect(res.ok()).toBeTruthy();
+    const match = await res.json();
+    expect(match.metadata).toEqual({ gameVariant: "classic" });
+    expect(match.players[0].id).toBe(bob.id);
+    expect(match.players[1].id).toBe(alice.id);
+  });
+
+  test("rejects editing a completed match", async ({ request }) => {
+    const gamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gamesRes.json();
+
+    const createRes = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { name: "Alice", position: 0 },
+          { name: "Bob", position: 1 },
+        ],
+      },
+    });
+    const created = await createRes.json();
+
+    await request.put(`/api/matches/${created.id}`, {
+      data: {
+        status: "COMPLETED",
+        victoryType: "score",
+        winnerId: created.players[0].id,
+      },
+    });
+
+    const res = await request.patch(`/api/matches/${created.id}`, {
+      data: { metadata: { skullKing: { dealerStart: 0 } } },
+    });
+
+    expect(res.status()).toBe(400);
+  });
+
+  test("rejects playerOrder missing a player", async ({ request }) => {
+    const gamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gamesRes.json();
+
+    const createRes = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { name: "Alice", position: 0 },
+          { name: "Bob", position: 1 },
+        ],
+      },
+    });
+    const created = await createRes.json();
+    const alice = created.players.find(
+      (p: { name: string }) => p.name === "Alice",
+    )!;
+
+    const res = await request.patch(`/api/matches/${created.id}`, {
+      data: {
+        playerOrder: [{ playerId: alice.id, position: 0 }],
+      },
+    });
+
+    expect(res.status()).toBe(400);
+  });
+
+  test("rejects playerOrder with unknown player id", async ({ request }) => {
+    const gamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gamesRes.json();
+
+    const createRes = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { name: "Alice", position: 0 },
+          { name: "Bob", position: 1 },
+        ],
+      },
+    });
+    const created = await createRes.json();
+    const bob = created.players.find(
+      (p: { name: string }) => p.name === "Bob",
+    )!;
+
+    const res = await request.patch(`/api/matches/${created.id}`, {
+      data: {
+        playerOrder: [
+          { playerId: "nonexistent-id", position: 0 },
+          { playerId: bob.id, position: 1 },
+        ],
+      },
+    });
+
+    expect(res.status()).toBe(400);
+  });
+
+  test("returns 404 for unknown match", async ({ request }) => {
+    const res = await request.patch("/api/matches/nonexistent-id", {
+      data: { metadata: {} },
+    });
+
+    expect(res.status()).toBe(404);
+  });
 });
 
 test.describe("API: Matches (unauthenticated)", () => {
