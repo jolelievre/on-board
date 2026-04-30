@@ -361,3 +361,32 @@ Both are implemented together — caching the shell without offline data would s
 - v1.0.0 release → production deploy
 
 **Validation**: Lighthouse PWA score 100, friends can install and use the app.
+
+---
+
+## Phase 7: Skull King — Rascal Variant
+
+**Goal**: Complete the Phase 4 scope by adding the Rascal variant alongside Classic.
+
+### Scoring rules — Rascal
+
+- Potential per round = 10 × N
+- Direct hit (exact bid): 100% of potential
+- Ricochet (off by 1): 50% of potential
+- Miss (off by 2+): 0 points
+- Optional Cannonball: potential = 15 × N if bid is correct, 0 if wrong
+- Bonuses (pirates captured by Skull King, etc.) still apply on top
+
+### What to build
+
+- `src/shared/scoring/skull-king.ts`: add Rascal calculation alongside Classic
+- `MatchStartScreen`: variant switcher (Classic / Rascal), stored in `Match.metadata`
+- `RoundResultScreen`: conditional Cannonball toggle when Rascal is active
+- `SkullKingScorer`: read variant from metadata, pass it down to scoring logic
+- Draft persistence already stores metadata — variant just rides along
+
+### E2E
+
+- `e2e/skull-king.spec.ts`: Rascal full game (direct hit, ricochet, miss, Cannonball on/off, score verification)
+
+**Validation**: complete Skull King game in both variants with correct scores.
