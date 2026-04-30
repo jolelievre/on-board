@@ -5,6 +5,7 @@
 Board game score tracker PWA. SPA architecture (React + Vite) with Hono API server.
 
 See [PLAN.md](PLAN.md) for the full development plan (tech stack rationale, phases, data model).
+See [docs/offline-architecture.md](docs/offline-architecture.md) for the offline/online workflow, cache layers, and sync engine logic.
 
 ## Development
 
