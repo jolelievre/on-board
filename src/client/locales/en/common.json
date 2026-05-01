@@ -225,6 +225,7 @@
   "common": {
     "loading": "Loading…",
     "offlineBanner": "Offline — changes will sync when you reconnect",
+    "offlineNoCache": "This page wasn't saved for offline use. Reconnect to load it.",
     "syncPending_one": "1 change pending sync",
     "syncPending_other": "{{count}} changes pending sync"
   }

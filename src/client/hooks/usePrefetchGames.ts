@@ -11,8 +11,8 @@ const PREFETCH_THRESHOLD = 60 * 60 * 1000;
 
 /**
  * Fires on every authenticated session.
- * Fetches the game list, then prefetches each game's detail page so that
- * unvisited games are available in the offline cache.
+ * Fetches the game list, then prefetches each game's detail page AND its
+ * match history so the full per-game screen is available offline.
  */
 export function usePrefetchGames() {
   const queryClient = useQueryClient();
@@ -28,6 +28,13 @@ export function usePrefetchGames() {
       void queryClient.prefetchQuery({
         queryKey: ["games", game.slug],
         queryFn: () => api(`/api/games/${game.slug}`),
+        staleTime: PREFETCH_THRESHOLD,
+      });
+      // Also prefetch the matches list so the game-detail page renders
+      // its history offline. Same key shape used by `$slug.tsx`.
+      void queryClient.prefetchQuery({
+        queryKey: ["matches", { gameId: game.id }],
+        queryFn: () => api(`/api/matches?gameId=${game.id}`),
         staleTime: PREFETCH_THRESHOLD,
       });
     }

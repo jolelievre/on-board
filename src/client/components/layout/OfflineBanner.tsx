@@ -1,8 +1,24 @@
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../ui/Icon";
 
+const BANNER_DURATION_MS = 5000;
+
+/**
+ * Loud, one-shot offline notice. Auto-dismisses after 5s — afterwards the
+ * persistent indicator is the SyncPill in the global Header.
+ */
 export function OfflineBanner() {
   const { t } = useTranslation();
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setVisible(false), BANNER_DURATION_MS);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  if (!visible) return null;
+
   return (
     <div
       role="status"

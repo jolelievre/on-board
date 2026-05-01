@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../../lib/api";
+import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
 import {
   computeTotalsByPlayer,
   type SevenWondersVictoryType,
@@ -50,6 +51,7 @@ type MatchListItem = {
 function GameDetailPage() {
   const { slug } = Route.useParams();
   const { t, i18n } = useTranslation();
+  const { isOnline } = useOnlineStatus();
 
   const { data: game, isPending } = useQuery<Game>({
     queryKey: ["games", slug],
@@ -63,13 +65,17 @@ function GameDetailPage() {
   });
 
   if (isPending) {
+    // Offline + no cached entry → don't sit on a permanent spinner. With
+    // networkMode 'online' the query is paused indefinitely while offline,
+    // so surface that state explicitly.
+    const message = isOnline ? t("common.loading") : t("common.offlineNoCache");
     return (
       <>
         <Header
           back={{ to: "/games", label: t("nav.games") }}
         />
         <div className="px-5">
-          <p style={{ color: "var(--color-ink-faint)" }}>{t("common.loading")}</p>
+          <p style={{ color: "var(--color-ink-faint)" }}>{message}</p>
         </div>
       </>
     );

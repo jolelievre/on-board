@@ -12,6 +12,10 @@ import "./lib/i18n";
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
   key: "onboard_query_cache",
+  // Default throttle is 1s, which can swallow prefetched data when the
+  // user goes offline immediately after a fresh login. 200ms keeps writes
+  // cheap while ensuring prefetch results land before the next refresh.
+  throttleTime: 200,
 });
 
 // Self-hosted fonts. Imported via JS so Vite bundles the woff2 assets
