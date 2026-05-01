@@ -1,3 +1,4 @@
+import { onlineManager } from "@tanstack/react-query";
 import { db, type SyncQueueEntry } from "./db";
 import { queryClient } from "./query-client";
 
@@ -34,7 +35,7 @@ export const syncEngine = {
    * optimistic data is replaced with fresh server state.
    */
   async flush(): Promise<void> {
-    if (!navigator.onLine) return;
+    if (!onlineManager.isOnline()) return;
 
     const entries = await db.syncQueue
       .filter((e) => !e.error)

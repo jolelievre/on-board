@@ -83,9 +83,9 @@ When the `offline` window event fires (or `navigator.onLine` becomes false):
 ```mermaid
 flowchart TD
     A["window 'offline' event"] --> B["useOnlineStatus: isOnline = false"]
-    B --> C["OfflineBanner renders"]
-    B --> D["TanStack Query pauses background refetches\n(networkMode: 'online' default)"]
-    B --> E["Existing cache untouched"]
+    B --> C["OfflineBanner renders (auto-dismisses after 5s)\nHeader SyncPill stays as the persistent indicator"]
+    B --> D["TanStack Query attempts background refetches\nbut they fail fast (networkMode: 'offlineFirst')"]
+    B --> E["Existing cache untouched\n(failed refetches never evict)"]
 
     F["User scores a round / completes match"] --> G{"navigator.onLine?"}
     G -- online --> H["fetch() to server"]
@@ -143,6 +143,8 @@ These two settings are independent and easy to confuse:
 | `staleTime` (prefetchQuery) | 1 h | Optimization: don't re-prefetch game details if already fetched within the last hour |
 | `gcTime` | 90 days | When a query has no active subscribers, how long before its data is removed from cache |
 | `maxAge` (persistQueryClient) | 90 days | How long the entire localStorage snapshot is valid; if older, it is discarded on startup |
+| `networkMode` | `offlineFirst` | Cached queries always serve their data first; refetches happen but failed offline refetches never evict the cache and never leave the query stuck in a permanent pending state |
+| persister `throttleTime` | `0` | Persist writes happen immediately so prefetched data survives a refresh that comes seconds after login |
 
 **Rule of thumb:** `staleTime` governs online freshness. `gcTime` / `maxAge` govern offline resilience. They are completely independent.
 

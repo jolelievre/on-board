@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../../lib/api";
+import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
 import {
   computeTotalsByPlayer,
   type SevenWondersVictoryType,
@@ -50,8 +51,9 @@ type MatchListItem = {
 function GameDetailPage() {
   const { slug } = Route.useParams();
   const { t, i18n } = useTranslation();
+  const { isOnline } = useOnlineStatus();
 
-  const { data: game, isPending } = useQuery<Game>({
+  const { data: game, isPending, isError } = useQuery<Game>({
     queryKey: ["games", slug],
     queryFn: () => api<Game>(`/api/games/${slug}`),
   });
@@ -76,13 +78,25 @@ function GameDetailPage() {
   }
 
   if (!game) {
+    // No cached data + fetch failed. If we're offline, that almost certainly
+    // means this game wasn't prefetched yet — show the offline-no-cache
+    // message rather than a misleading "not found".
+    const isOfflineMiss = isError && !isOnline;
     return (
       <>
         <Header
           back={{ to: "/games", label: t("nav.games") }}
         />
         <div className="px-5">
-          <p style={{ color: "var(--color-danger)" }}>{t("games.notFound")}</p>
+          <p
+            style={{
+              color: isOfflineMiss
+                ? "var(--color-ink-faint)"
+                : "var(--color-danger)",
+            }}
+          >
+            {isOfflineMiss ? t("common.offlineNoCache") : t("games.notFound")}
+          </p>
         </div>
       </>
     );
