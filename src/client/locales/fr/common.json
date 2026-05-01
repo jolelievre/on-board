@@ -225,6 +225,7 @@
   "common": {
     "loading": "Chargement…",
     "offlineBanner": "Hors ligne — les modifications seront synchronisées à la reconnexion",
+    "offlineUnavailable": "Indisponible hors ligne",
     "syncPending_one": "1 modification en attente de sync",
     "syncPending_other": "{{count}} modifications en attente de sync"
   }

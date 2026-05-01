@@ -225,6 +225,7 @@
   "common": {
     "loading": "Loading…",
     "offlineBanner": "Offline — changes will sync when you reconnect",
+    "offlineUnavailable": "Unavailable offline",
     "syncPending_one": "1 change pending sync",
     "syncPending_other": "{{count}} changes pending sync"
   }

@@ -51,7 +51,7 @@ function GameDetailPage() {
   const { slug } = Route.useParams();
   const { t, i18n } = useTranslation();
 
-  const { data: game, isPending } = useQuery<Game>({
+  const { data: game, isPending, fetchStatus } = useQuery<Game>({
     queryKey: ["games", slug],
     queryFn: () => api<Game>(`/api/games/${slug}`),
   });
@@ -65,11 +65,20 @@ function GameDetailPage() {
   if (isPending) {
     return (
       <>
-        <Header
-          back={{ to: "/games", label: t("nav.games") }}
-        />
+        <Header back={{ to: "/games", label: t("nav.games") }} />
         <div className="px-5">
-          <p style={{ color: "var(--color-ink-faint)" }}>{t("common.loading")}</p>
+          <p
+            style={{
+              color:
+                fetchStatus === "paused"
+                  ? "var(--color-warning)"
+                  : "var(--color-ink-faint)",
+            }}
+          >
+            {fetchStatus === "paused"
+              ? t("common.offlineUnavailable")
+              : t("common.loading")}
+          </p>
         </div>
       </>
     );

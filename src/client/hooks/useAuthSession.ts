@@ -47,7 +47,7 @@ export function clearSessionCache() {
  * triggers a redirect.
  */
 export function useAuthSession() {
-  const { data: session, isPending } = authClient.useSession();
+  const { data: session, isPending, error } = authClient.useSession();
   const cached = useRef<CachedSession | null>(readCache());
 
   useEffect(() => {
@@ -75,9 +75,10 @@ export function useAuthSession() {
     return { session, isPending: false, cachedSession: cached.current, isOfflineFallback: false };
   }
 
-  // Request completed with no session. If we're offline, fall back to cache
-  // so the user stays on their current screen.
-  if (!navigator.onLine && cached.current) {
+  // Request completed with no session. Fall back to cache when offline or
+  // when the request itself errored (e.g. Chrome DevTools "offline" mode,
+  // which blocks network but leaves navigator.onLine = true).
+  if ((error || !navigator.onLine) && cached.current) {
     return {
       session: cached.current as unknown as typeof session,
       isPending: false,
