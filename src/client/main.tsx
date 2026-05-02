@@ -61,9 +61,21 @@ try {
 
 // Subscribe for ongoing persistence (writes only — restore was handled
 // synchronously above).
+//
+// shouldDehydrateQuery also includes errored queries that still carry their
+// last-known data. Without this, a background refetch that fails while
+// offline (status transitions from 'success' → 'error') would cause the
+// persister to write a dehydrated snapshot that excludes those queries,
+// silently evicting valid cache data from localStorage even though the
+// in-memory cache still holds it.
 persistQueryClientSubscribe({
   queryClient,
   persister,
+  dehydrateOptions: {
+    shouldDehydrateQuery: (query) =>
+      query.state.status === "success" ||
+      (query.state.status === "error" && query.state.data !== undefined),
+  },
 });
 
 // Self-hosted fonts. Imported via JS so Vite bundles the woff2 assets

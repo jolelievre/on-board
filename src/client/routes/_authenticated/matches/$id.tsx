@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../../lib/api";
+import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
 import { SevenWondersDuelScorer } from "../../../components/scoring/SevenWondersDuelScorer";
 import { SkullKingScorer } from "../../../components/scoring/skull-king/SkullKingScorer";
 import { Header } from "../../../components/layout/Header";
@@ -22,20 +23,41 @@ export const Route = createFileRoute("/_authenticated/matches/$id")({
 function MatchPage() {
   const { id } = Route.useParams();
   const { t } = useTranslation();
+  const { isOnline } = useOnlineStatus();
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
 
-  const { data: match, isPending } = useQuery<Match>({
+  const { data: match, isPending, isError } = useQuery<Match>({
     queryKey: ["matches", id],
     queryFn: () => api<Match>(`/api/matches/${id}`),
   });
 
-  if (isPending || !match) {
+  if (isPending) {
     return (
       <>
         <Header back={{ to: "/games", label: t("nav.games") }} />
         <div className="px-5">
           <p style={{ color: "var(--color-ink-faint)" }}>{t("common.loading")}</p>
+        </div>
+      </>
+    );
+  }
+
+  if (!match) {
+    const isOfflineMiss = isError && !isOnline;
+    return (
+      <>
+        <Header back={{ to: "/games", label: t("nav.games") }} />
+        <div className="px-5">
+          <p
+            style={{
+              color: isOfflineMiss
+                ? "var(--color-ink-faint)"
+                : "var(--color-danger)",
+            }}
+          >
+            {isOfflineMiss ? t("common.offlineNoCache") : t("matches.notFound")}
+          </p>
         </div>
       </>
     );
