@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function SettingsPage() {
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
-  const { canInstall, install } = useInstallPrompt();
+  const { canInstall, install, showIOSHint } = useInstallPrompt();
   const displayName =
     (session?.user as { alias?: string | null } | undefined)?.alias?.trim() ||
     session?.user.name ||
@@ -89,6 +89,17 @@ function SettingsPage() {
               >
                 {t("settings.install.cta", { defaultValue: "Add to home screen" })}
               </Button>
+            </Group>
+          )}
+
+          {showIOSHint && (
+            <Group title={t("settings.install.title", { defaultValue: "Install app" })}>
+              <p className={styles.hint} data-testid="install-ios-hint">
+                {t("settings.install.iosHint", {
+                  defaultValue:
+                    "On iOS, tap the Share button in Safari, then \"Add to Home Screen\".",
+                })}
+              </p>
             </Group>
           )}
 

@@ -35,7 +35,8 @@
     "install": {
       "title": "Install app",
       "hint": "Add OnBoard to your home screen for quick access",
-      "cta": "Add to home screen"
+      "cta": "Add to home screen",
+      "iosHint": "On iOS, tap the Share button in Safari, then \"Add to Home Screen\"."
     }
   },
   "games": {

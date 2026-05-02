@@ -35,7 +35,8 @@
     "install": {
       "title": "Installer l'appli",
       "hint": "Ajoutez OnBoard à votre écran d'accueil pour un accès rapide",
-      "cta": "Ajouter à l'écran d'accueil"
+      "cta": "Ajouter à l'écran d'accueil",
+      "iosHint": "Sur iOS, appuyez sur le bouton Partager dans Safari, puis « Sur l'écran d'accueil »."
     }
   },
   "games": {
