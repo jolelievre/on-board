@@ -1,4 +1,3 @@
-import { onlineManager } from "@tanstack/react-query";
 import { db, type SyncQueueEntry } from "./db";
 import { queryClient } from "./query-client";
 
@@ -35,7 +34,7 @@ export const syncEngine = {
    * optimistic data is replaced with fresh server state.
    */
   async flush(): Promise<void> {
-    if (!onlineManager.isOnline()) return;
+    if (!navigator.onLine) return;
 
     const entries = await db.syncQueue
       .filter((e) => !e.error)
@@ -55,7 +54,6 @@ export const syncEngine = {
           await db.syncQueue.delete(entry.id!);
           anySuccess = true;
         } else if (res.status === 401 || res.status === 403) {
-          // Auth error — no point retrying, mark as permanent error.
           await db.syncQueue.update(entry.id!, { error: `HTTP ${res.status}` });
         } else {
           await incrementRetry(entry);
@@ -67,7 +65,6 @@ export const syncEngine = {
     }
 
     if (anySuccess) {
-      // Invalidate all queries so fresh data replaces any optimistic state.
       await queryClient.invalidateQueries();
     }
   },

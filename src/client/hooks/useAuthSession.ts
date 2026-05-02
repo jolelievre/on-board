@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { onlineManager } from "@tanstack/react-query";
 import { authClient } from "../lib/auth-client";
 
 const CACHE_KEY = "onboard_session_cache";
@@ -40,18 +39,15 @@ export function clearSessionCache() {
  * Offline-safe wrapper around authClient.useSession().
  *
  * When online the real session is used and persisted to localStorage.
- * When the network request fails, the cached session is returned so route
- * guards don't redirect authenticated users to the login page.
+ * When the network request fails (navigator.onLine is false), the cached
+ * session is returned so route guards don't redirect authenticated users
+ * to the login page just because they're offline.
  *
- * Detection relies on the `error` field returned by useSession() rather than
- * navigator.onLine — Chrome DevTools "Offline" doesn't reliably flip
- * navigator.onLine on a refresh, but the fetch still throws, so the error
- * signal is the source of truth. A definitive "online with no session"
- * (data null + error null + not pending) is the only state that triggers
- * a redirect.
+ * Only a definitive online failure (session = null while online + not pending)
+ * triggers a redirect.
  */
 export function useAuthSession() {
-  const { data: session, isPending, error } = authClient.useSession();
+  const { data: session, isPending } = authClient.useSession();
   const cached = useRef<CachedSession | null>(readCache());
 
   useEffect(() => {
@@ -69,24 +65,15 @@ export function useAuthSession() {
     }
   }, [session]);
 
-  // While the request is in-flight, don't decide yet.
   if (isPending) {
     return { session: null, isPending: true, cachedSession: cached.current, isOfflineFallback: false };
   }
 
-  // Session confirmed by server — use it.
   if (session) {
     return { session, isPending: false, cachedSession: cached.current, isOfflineFallback: false };
   }
 
-  // Request errored or navigator reports offline → treat as offline and fall
-  // back to the cached session if we have one. A 401/403 from the session
-  // endpoint is treated like a real "no session" (skip the fallback) so a
-  // user whose session was revoked server-side is still redirected to /.
-  const status = (error as { status?: number } | null)?.status;
-  const isAuthError = status === 401 || status === 403;
-  const networkUnreachable = !!error && !isAuthError;
-  if ((networkUnreachable || !onlineManager.isOnline()) && cached.current) {
+  if (!navigator.onLine && cached.current) {
     return {
       session: cached.current as unknown as typeof session,
       isPending: false,
@@ -95,6 +82,5 @@ export function useAuthSession() {
     };
   }
 
-  // Online with no session — genuinely unauthenticated.
   return { session: null, isPending: false, cachedSession: cached.current, isOfflineFallback: false };
 }

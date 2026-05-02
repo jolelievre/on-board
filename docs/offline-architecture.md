@@ -144,7 +144,8 @@ These two settings are independent and easy to confuse:
 | `gcTime` | 90 days | When a query has no active subscribers, how long before its data is removed from cache |
 | `maxAge` (persistQueryClient) | 90 days | How long the entire localStorage snapshot is valid; if older, it is discarded on startup |
 | `networkMode` | `offlineFirst` | Cached queries always serve their data first; refetches happen but failed offline refetches never evict the cache and never leave the query stuck in a permanent pending state |
-| persister `throttleTime` | `0` | Persist writes happen immediately so prefetched data survives a refresh that comes seconds after login |
+
+> Online detection uses the browser's native `navigator.onLine` and the `online`/`offline` window events. This is reliable for actual network changes (WiFi off/on, airplane mode); Chrome DevTools' "Offline" throttle is less consistent at firing those events on a hard refresh, so the in-app offline UI may lag in that mode. The real use case (lost connectivity in the field) is what the system is built for.
 
 **Rule of thumb:** `staleTime` governs online freshness. `gcTime` / `maxAge` govern offline resilience. They are completely independent.
 

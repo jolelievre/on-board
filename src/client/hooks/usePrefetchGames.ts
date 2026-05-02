@@ -30,8 +30,6 @@ export function usePrefetchGames() {
         queryFn: () => api(`/api/games/${game.slug}`),
         staleTime: PREFETCH_THRESHOLD,
       });
-      // Also prefetch the matches list so the game-detail page renders
-      // its history offline. Same key shape used by `$slug.tsx`.
       void queryClient.prefetchQuery({
         queryKey: ["matches", { gameId: game.id }],
         queryFn: () => api(`/api/matches?gameId=${game.id}`),
