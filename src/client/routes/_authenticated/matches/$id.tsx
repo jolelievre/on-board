@@ -27,12 +27,12 @@ function MatchPage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
 
-  const { data: match, isPending, isError } = useQuery<Match>({
+  const { data: match, isPending, isPaused } = useQuery<Match>({
     queryKey: ["matches", id],
     queryFn: () => api<Match>(`/api/matches/${id}`),
   });
 
-  if (isPending) {
+  if (isPending && !isPaused) {
     return (
       <>
         <Header back={{ to: "/games", label: t("nav.games") }} />
@@ -44,7 +44,7 @@ function MatchPage() {
   }
 
   if (!match) {
-    const isOfflineMiss = isError && !isOnline;
+    const isOfflineMiss = !isOnline;
     return (
       <>
         <Header back={{ to: "/games", label: t("nav.games") }} />

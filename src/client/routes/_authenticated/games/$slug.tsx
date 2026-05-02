@@ -53,7 +53,7 @@ function GameDetailPage() {
   const { t, i18n } = useTranslation();
   const { isOnline } = useOnlineStatus();
 
-  const { data: game, isPending, isError } = useQuery<Game>({
+  const { data: game, isPending, isPaused } = useQuery<Game>({
     queryKey: ["games", slug],
     queryFn: () => api<Game>(`/api/games/${slug}`),
   });
@@ -64,7 +64,10 @@ function GameDetailPage() {
     enabled: !!game?.id,
   });
 
-  if (isPending) {
+  // isPaused: offlineFirst fired the queryFn once, it failed, and the retry
+  // is now paused waiting for network. Treat the same as an error with no
+  // cache — show the offline-no-cache message instead of spinning forever.
+  if (isPending && !isPaused) {
     return (
       <>
         <Header
@@ -78,10 +81,7 @@ function GameDetailPage() {
   }
 
   if (!game) {
-    // No cached data + fetch failed. If we're offline, that almost certainly
-    // means this game wasn't prefetched yet — show the offline-no-cache
-    // message rather than a misleading "not found".
-    const isOfflineMiss = isError && !isOnline;
+    const isOfflineMiss = !isOnline;
     return (
       <>
         <Header

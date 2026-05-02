@@ -9,11 +9,12 @@ export const queryClient = new QueryClient({
       // Keep cached data for 90 days so offline reads survive multi-week gaps.
       gcTime: NINETY_DAYS,
       retry: 1,
-      // 'offlineFirst' avoids the default 'online' mode's "paused forever"
-      // trap: with no cached data while offline, default mode keeps a
-      // query in pending state with no resolution. offlineFirst serves
-      // cached data instantly and lets uncached fetches settle to error,
-      // so the UI can render its offline-no-cache fallback.
+      // 'offlineFirst': queryFn fires once regardless of network, then
+      // retries are paused (fetchStatus: 'paused', isPaused: true) until
+      // connectivity returns. Queries with cached data stay 'success' and
+      // render immediately; uncached queries land in pending+paused, which
+      // the UI detects via isPaused to show the offline-no-cache message
+      // instead of a permanent loading spinner.
       networkMode: "offlineFirst",
     },
   },
