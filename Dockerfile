@@ -8,6 +8,13 @@ RUN npm ci --include=dev
 ### Stage 2: Build client + server
 FROM node:20-alpine AS builder
 WORKDIR /app
+# DEPLOY_ENV controls per-environment PWA branding (icon badge + manifest
+# name + theme color). Coolify passes this as a build arg per environment:
+#   production → no badge, name "OnBoard"
+#   integration → teal gear badge, name "OnBoard Dev"
+#   preview → red bug badge, name "OnBoard Test"
+ARG DEPLOY_ENV=production
+ENV DEPLOY_ENV=${DEPLOY_ENV}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate

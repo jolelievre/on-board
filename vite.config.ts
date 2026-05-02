@@ -69,6 +69,46 @@ function honoDevServer(): Plugin {
   };
 }
 
+type DeployEnv = "production" | "integration" | "preview";
+
+const DEPLOY_ENV: DeployEnv =
+  (process.env.DEPLOY_ENV as DeployEnv | undefined) ?? "production";
+
+// Per-env PWA branding — lets a user install all three environments
+// side-by-side (production / integration / preview) and tell them apart
+// at a glance on the home screen and OS app switcher.
+const ENV_MANIFEST: Record<
+  DeployEnv,
+  { name: string; shortName: string; theme: string; background: string }
+> = {
+  production: {
+    name: "OnBoard",
+    shortName: "OnBoard",
+    theme: "#9f2d1a",
+    background: "#f4ecdc",
+  },
+  integration: {
+    name: "OnBoard Dev",
+    shortName: "OnBoard Dev",
+    theme: "#0e7c66",
+    background: "#f4ecdc",
+  },
+  preview: {
+    name: "OnBoard Test",
+    shortName: "OnBoard Test",
+    theme: "#b91c1c",
+    background: "#f4ecdc",
+  },
+};
+
+const envManifest = ENV_MANIFEST[DEPLOY_ENV];
+
+// Expose the app name + theme color to index.html via Vite's %VITE_*%
+// replacement so the browser tab title and the meta theme-color also
+// reflect the environment.
+process.env.VITE_APP_NAME = envManifest.name;
+process.env.VITE_APP_THEME_COLOR = envManifest.theme;
+
 export default defineConfig({
   plugins: [
     TanStackRouterVite({
@@ -94,14 +134,14 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//],
       },
       manifest: {
-        name: "OnBoard",
-        short_name: "OnBoard",
+        name: envManifest.name,
+        short_name: envManifest.shortName,
         description: "Board game score tracker",
         start_url: "/",
         display: "standalone",
         orientation: "portrait",
-        background_color: "#f4ecdc",
-        theme_color: "#9f2d1a",
+        background_color: envManifest.background,
+        theme_color: envManifest.theme,
         icons: [
           {
             src: "/pwa-icon-192.png",

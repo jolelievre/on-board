@@ -7,6 +7,12 @@
  *   - pwa-icon-192.png     — manifest icon, also apple-touch-icon
  *   - pwa-icon-512.png     — manifest icon (also used as maskable)
  *
+ * The icon picks up an environment badge from `DEPLOY_ENV`:
+ *   - `production` (default) — no badge
+ *   - `integration`         — teal corner gear glyph (the build everyone is
+ *                             currently iterating on)
+ *   - `preview`             — red corner bug glyph (per-PR test deploy)
+ *
  * Run on demand: `npx tsx scripts/generate-pwa-icons.ts`.
  * Runs automatically before each `npm run build` via the `prebuild` script.
  */
@@ -23,33 +29,106 @@ const PRIMARY = "#9F2D1A"; // pawn / wax-seal red
 const ACCENT = "#1B5E5A"; // forest teal board
 const RADIUS = 96; // rounded corner on the icon, scaled per output
 
+type DeployEnv = "production" | "integration" | "preview";
+
+const DEPLOY_ENV: DeployEnv =
+  (process.env.DEPLOY_ENV as DeployEnv | undefined) ?? "production";
+
+if (
+  DEPLOY_ENV !== "production" &&
+  DEPLOY_ENV !== "integration" &&
+  DEPLOY_ENV !== "preview"
+) {
+  throw new Error(
+    `DEPLOY_ENV must be one of production|integration|preview (got: ${String(DEPLOY_ENV)})`,
+  );
+}
+
+/** Bug glyph for preview environments — drawn in white on a red disc in the
+ * lower-right corner. All shapes only (no text), so the script works in
+ * Docker / Alpine builds where no system fonts are guaranteed. */
+function previewBadge(size: number): string {
+  const cx = size * 0.78;
+  const cy = size * 0.78;
+  const r = size * 0.19;
+  const stroke = size * 0.018;
+  const leg = size * 0.012;
+  return `
+  <circle cx="${cx}" cy="${cy}" r="${r}" fill="#B91C1C" stroke="${BG}" stroke-width="${size * 0.018}"/>
+  <g fill="#FFFFFF" stroke="#FFFFFF" stroke-linecap="round">
+    <ellipse cx="${cx}" cy="${cy + r * 0.06}" rx="${r * 0.42}" ry="${r * 0.55}"/>
+    <circle cx="${cx}" cy="${cy - r * 0.42}" r="${r * 0.22}"/>
+    <line x1="${cx - r * 0.15}" y1="${cy - r * 0.55}" x2="${cx - r * 0.32}" y2="${cy - r * 0.78}" stroke-width="${stroke}"/>
+    <line x1="${cx + r * 0.15}" y1="${cy - r * 0.55}" x2="${cx + r * 0.32}" y2="${cy - r * 0.78}" stroke-width="${stroke}"/>
+    <line x1="${cx - r * 0.42}" y1="${cy - r * 0.05}" x2="${cx - r * 0.78}" y2="${cy - r * 0.18}" stroke-width="${leg}"/>
+    <line x1="${cx - r * 0.42}" y1="${cy + r * 0.18}" x2="${cx - r * 0.78}" y2="${cy + r * 0.32}" stroke-width="${leg}"/>
+    <line x1="${cx + r * 0.42}" y1="${cy - r * 0.05}" x2="${cx + r * 0.78}" y2="${cy - r * 0.18}" stroke-width="${leg}"/>
+    <line x1="${cx + r * 0.42}" y1="${cy + r * 0.18}" x2="${cx + r * 0.78}" y2="${cy + r * 0.32}" stroke-width="${leg}"/>
+  </g>`;
+}
+
+/** Gear glyph for integration environments — drawn in white on a teal disc
+ * in the lower-right corner. Eight rectangular notches around a central
+ * disc with a hub cutout. */
+function integrationBadge(size: number): string {
+  const cx = size * 0.78;
+  const cy = size * 0.78;
+  const r = size * 0.19;
+  const teeth = [0, 45, 90, 135, 180, 225, 270, 315]
+    .map(
+      (deg) =>
+        `<rect x="${-r * 0.09}" y="${-r * 0.82}" width="${r * 0.18}" height="${r * 0.32}" rx="${r * 0.04}" transform="rotate(${deg})"/>`,
+    )
+    .join("");
+  return `
+  <circle cx="${cx}" cy="${cy}" r="${r}" fill="#0E7C66" stroke="${BG}" stroke-width="${size * 0.018}"/>
+  <g fill="#FFFFFF" transform="translate(${cx} ${cy})">
+    ${teeth}
+    <circle cx="0" cy="0" r="${r * 0.55}"/>
+  </g>
+  <circle cx="${cx}" cy="${cy}" r="${r * 0.22}" fill="#0E7C66"/>`;
+}
+
+function envBadge(size: number): string {
+  if (DEPLOY_ENV === "preview") return previewBadge(size);
+  if (DEPLOY_ENV === "integration") return integrationBadge(size);
+  return "";
+}
+
 function svg(size: number): string {
-  // The viewBox matches LogoR5's hex glyph extents (0 -16 44 52).
-  // We add a parchment background and a generous padding so the glyph
-  // occupies ~70% of the icon — common PWA icon convention.
+  // The visible pawn-on-board occupies x: 11..33 (width 22), y: 12.1..32
+  // (height 19.9 — pawn head top to board bottom). The shadow ellipse just
+  // below is faint (opacity 0.18) and is allowed to bleed slightly outside
+  // those bounds. We map the visible glyph to exactly 70% of the icon
+  // height, vertically centered with 15% padding top and bottom:
+  //   scale s such that 19.9 * s = 0.70 * size  → s ≈ 0.0352 * size
+  //   offsetY = 0.15 * size − 12.1 * s          → ≈ −0.2757 * size
+  //   offsetX = size/2 − 22 * s                 → ≈ −0.2740 * size
+  const s = size * 0.0352;
+  const tx = -size * 0.274;
+  const ty = -size * 0.2757;
   return `
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
   <rect width="${size}" height="${size}" rx="${(RADIUS * size) / 512}" fill="${BG}"/>
-  <g transform="translate(${size * 0.18} ${size * 0.18}) scale(${(size * 0.64) / 44})">
-    <g transform="translate(0 16)">
-      <ellipse cx="22" cy="32" rx="13" ry="1.3" fill="${INK}" opacity="0.18"/>
-      <path d="M11 28 L16 24 L28 24 L33 28 L28 32 L16 32 Z" fill="${ACCENT}"/>
-      <g stroke="${BG}" stroke-width="0.6" opacity="0.45" stroke-linecap="round">
-        <line x1="16" y1="24" x2="22" y2="28"/>
-        <line x1="28" y1="24" x2="22" y2="28"/>
-        <line x1="33" y1="28" x2="22" y2="28"/>
-        <line x1="28" y1="32" x2="22" y2="28"/>
-        <line x1="16" y1="32" x2="22" y2="28"/>
-        <line x1="11" y1="28" x2="22" y2="28"/>
-      </g>
-      <g>
-        <circle cx="22" cy="15.5" r="3.4" fill="${PRIMARY}"/>
-        <rect x="19" y="18.5" width="6" height="1.3" rx="0.5" fill="${PRIMARY}"/>
-        <path d="M18.6 20 Q22 17.5 25.4 20 L26 28 L18 28 Z" fill="${PRIMARY}"/>
-        <rect x="17" y="28" width="10" height="2.2" rx="0.4" fill="${PRIMARY}"/>
-      </g>
+  <g transform="translate(${tx} ${ty}) scale(${s})">
+    <ellipse cx="22" cy="32" rx="13" ry="1.3" fill="${INK}" opacity="0.18"/>
+    <path d="M11 28 L16 24 L28 24 L33 28 L28 32 L16 32 Z" fill="${ACCENT}"/>
+    <g stroke="${BG}" stroke-width="0.6" opacity="0.45" stroke-linecap="round">
+      <line x1="16" y1="24" x2="22" y2="28"/>
+      <line x1="28" y1="24" x2="22" y2="28"/>
+      <line x1="33" y1="28" x2="22" y2="28"/>
+      <line x1="28" y1="32" x2="22" y2="28"/>
+      <line x1="16" y1="32" x2="22" y2="28"/>
+      <line x1="11" y1="28" x2="22" y2="28"/>
+    </g>
+    <g>
+      <circle cx="22" cy="15.5" r="3.4" fill="${PRIMARY}"/>
+      <rect x="19" y="18.5" width="6" height="1.3" rx="0.5" fill="${PRIMARY}"/>
+      <path d="M18.6 20 Q22 17.5 25.4 20 L26 28 L18 28 Z" fill="${PRIMARY}"/>
+      <rect x="17" y="28" width="10" height="2.2" rx="0.4" fill="${PRIMARY}"/>
     </g>
   </g>
+  ${envBadge(size)}
 </svg>`.trim();
 }
 
@@ -67,7 +146,7 @@ async function generateSvg(name: string) {
 
 async function main() {
   await fs.mkdir(OUT, { recursive: true });
-  console.log("Generating icons →", OUT);
+  console.log(`Generating icons (DEPLOY_ENV=${DEPLOY_ENV}) →`, OUT);
   await generateSvg("favicon.svg");
   await generatePng(32, "favicon-32.png");
   await generatePng(192, "pwa-icon-192.png");
