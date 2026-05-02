@@ -19,6 +19,11 @@ const PERSIST_KEY = "onboard_query_cache";
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
   key: PERSIST_KEY,
+  // Default throttle is 1s, which can swallow prefetched data when the
+  // user goes offline within ~1s of a successful fetch (typical on a
+  // preview environment where the click-through is faster than on local
+  // dev). Write immediately so prefetched data is durable.
+  throttleTime: 0,
 });
 
 // SYNCHRONOUS hydration before React renders.
