@@ -28,6 +28,10 @@ The offline system is built from three independent layers stacked on top of each
 
 Session caching sits alongside these layers — the user's auth session is written to `localStorage` on every successful login and used as a fallback when the session API is unreachable.
 
+### Layer 2 hydration timing
+
+`localStorage` is read **synchronously** in `main.tsx` (via `hydrate(queryClient, …)`) before `createRoot().render()` runs. We deliberately don't use `PersistQueryClientProvider`, whose hydration happens inside a `useEffect` and would cause the very first render of every route to observe an empty cache. With `networkMode: 'offlineFirst'`, that empty observer would fire its `queryFn`, fail offline, and leave the page stuck on its loading state — even though the data was sitting in `localStorage`. Synchronous hydration closes that race so any `useQuery` finds its cached data on the first render. Ongoing writes are subscribed via `persistQueryClientSubscribe`.
+
 ---
 
 ## Storage locations
@@ -49,8 +53,8 @@ Session caching sits alongside these layers — the user's auth session is writt
 | App shell loads | ✅ Always | Workbox precache |
 | Stay authenticated | ✅ If previously logged in | `useAuthSession` localStorage fallback |
 | View game list | ✅ After first online session | TanStack Query persistence |
-| View any game's detail page | ✅ After first online session | `usePrefetchGames` prefetches all games on login |
-| View match history | ✅ If visited at least once | TanStack Query persistence |
+| View any game's detail page | ✅ After first online session | `usePrefetchGames` prefetches each game's detail and matches list on login |
+| View match history | ✅ After first online session | `usePrefetchGames` prefetches per-game `["matches", { gameId }]` |
 | View a match page | ✅ If visited at least once | TanStack Query persistence |
 | Score a round | ✅ Queued + shown as "offline" | `syncEngine.enqueue`, replayed on reconnect |
 | Complete a match | ✅ Queued + optimistic | Queue + immediate `setQueryData` |
@@ -71,7 +75,7 @@ Session caching sits alongside these layers — the user's auth session is writt
 | `src/client/lib/db.ts` | Dexie schema (`localProfiles`, `syncQueue`, `matchDrafts`) |
 | `src/client/lib/sync.ts` | `syncEngine.enqueue()` and `syncEngine.flush()` |
 | `src/client/lib/query-client.ts` | TanStack Query with 90-day `gcTime` |
-| `src/client/main.tsx` | `PersistQueryClientProvider` wiring |
+| `src/client/main.tsx` | Synchronous cache hydration at boot + `persistQueryClientSubscribe` for ongoing writes |
 | `src/client/components/layout/OfflineBanner.tsx` | UI indicator for offline state |
 
 ---
@@ -162,3 +166,11 @@ The cache is **never** evicted due to a failed network request. The only ways it
 5. **Explicit sign-out** → session cache cleared; query cache is NOT cleared (data remains for the next login)
 
 **Key invariant:** a brief online blip (1-second connection, failed refetch) cannot empty the cache.
+
+---
+
+## Offline UX
+
+- `OfflineBanner` (`src/client/components/layout/OfflineBanner.tsx`) renders an amber strip across the top of every authenticated page when `useOnlineStatus()` reports offline. It auto-dismisses after 5 seconds so it doesn't permanently steal vertical space.
+- After dismissal, the persistent indicator is the small `SyncPill` that the global `Header` auto-renders whenever offline (the match page keeps its own SyncPill via the existing `right` slot).
+- Game-detail (`/games/$slug`) distinguishes a real 404 from an offline cache miss and shows `common.offlineNoCache` ("This page wasn't saved for offline use…") instead of "Game not found", so an unprefetched game gives an honest message rather than an indefinite spinner.
