@@ -30,7 +30,7 @@ Session caching sits alongside these layers — the user's auth session is writt
 
 ### Layer 2 hydration timing
 
-`localStorage` is read **synchronously** in `main.tsx` (via `hydrate(queryClient, …)`) before `createRoot().render()` runs. We deliberately don't use `PersistQueryClientProvider`, whose hydration happens inside a `useEffect` and would cause the very first render of every route to observe an empty cache. With `networkMode: 'offlineFirst'`, that empty observer would fire its `queryFn`, fail offline, and leave the page stuck on its loading state — even though the data was sitting in `localStorage`. Synchronous hydration closes that race so any `useQuery` finds its cached data on the first render. Ongoing writes are subscribed via `persistQueryClientSubscribe`.
+Cache restoration is handled by `PersistQueryClientProvider` (from `@tanstack/react-query-persist-client`). While restoration is in progress it sets `isRestoring: true`, which tells TanStack Query to suppress all query fetches until the localStorage snapshot has been loaded into the cache. Once restoration completes, every `useQuery` subscriber finds its data already in cache and renders immediately without firing a network request. Writes are handled by the same provider via `persistOptions`.
 
 ---
 
@@ -75,7 +75,7 @@ Session caching sits alongside these layers — the user's auth session is writt
 | `src/client/lib/db.ts` | Dexie schema (`localProfiles`, `syncQueue`, `matchDrafts`) |
 | `src/client/lib/sync.ts` | `syncEngine.enqueue()` and `syncEngine.flush()` |
 | `src/client/lib/query-client.ts` | TanStack Query with 90-day `gcTime` |
-| `src/client/main.tsx` | Synchronous cache hydration at boot + `persistQueryClientSubscribe` for ongoing writes |
+| `src/client/main.tsx` | `PersistQueryClientProvider` setup — cache restoration + ongoing persistence |
 | `src/client/components/layout/OfflineBanner.tsx` | UI indicator for offline state |
 
 ---
@@ -88,8 +88,8 @@ When the `offline` window event fires (or `navigator.onLine` becomes false):
 flowchart TD
     A["window 'offline' event"] --> B["useOnlineStatus: isOnline = false"]
     B --> C["OfflineBanner renders (auto-dismisses after 5s)\nHeader SyncPill stays as the persistent indicator"]
-    B --> D["TanStack Query attempts background refetches\nbut they fail fast (networkMode: 'offlineFirst')"]
-    B --> E["Existing cache untouched\n(failed refetches never evict)"]
+    B --> D["TanStack Query fires background refetches once\n(networkMode: 'offlineFirst'), then pauses retries"]
+    B --> E["Cached queries stay 'success' — data still visible\nUncached queries land in pending+paused (UI shows offlineNoCache)"]
 
     F["User scores a round / completes match"] --> G{"navigator.onLine?"}
     G -- online --> H["fetch() to server"]
@@ -147,7 +147,7 @@ These two settings are independent and easy to confuse:
 | `staleTime` (prefetchQuery) | 1 h | Optimization: don't re-prefetch game details if already fetched within the last hour |
 | `gcTime` | 90 days | When a query has no active subscribers, how long before its data is removed from cache |
 | `maxAge` (persistQueryClient) | 90 days | How long the entire localStorage snapshot is valid; if older, it is discarded on startup |
-| `networkMode` | `offlineFirst` | Cached queries always serve their data first; refetches happen but failed offline refetches never evict the cache and never leave the query stuck in a permanent pending state |
+| `networkMode` | `offlineFirst` | The queryFn always fires once (even offline); retries are then paused (`isPaused: true`) until connectivity returns. Queries with cached data stay `'success'` and render normally. Queries with no cached data land in `pending+paused`; the UI detects this via `isPaused` and shows the offline-no-cache message instead of an infinite spinner. |
 
 > Online detection uses the browser's native `navigator.onLine` and the `online`/`offline` window events. This is reliable for actual network changes (WiFi off/on, airplane mode); Chrome DevTools' "Offline" throttle is less consistent at firing those events on a hard refresh, so the in-app offline UI may lag in that mode. The real use case (lost connectivity in the field) is what the system is built for.
 
@@ -173,4 +173,4 @@ The cache is **never** evicted due to a failed network request. The only ways it
 
 - `OfflineBanner` (`src/client/components/layout/OfflineBanner.tsx`) renders an amber strip across the top of every authenticated page when `useOnlineStatus()` reports offline. It auto-dismisses after 5 seconds so it doesn't permanently steal vertical space.
 - After dismissal, the persistent indicator is the small `SyncPill` that the global `Header` auto-renders whenever offline (the match page keeps its own SyncPill via the existing `right` slot).
-- Game-detail (`/games/$slug`) distinguishes a real 404 from an offline cache miss and shows `common.offlineNoCache` ("This page wasn't saved for offline use…") instead of "Game not found", so an unprefetched game gives an honest message rather than an indefinite spinner.
+- Game-detail (`/games/$slug`) and match (`/matches/$id`) pages both distinguish a real 404 from an offline cache miss. When offline with no cached data (`isPaused: true`), they show `common.offlineNoCache` ("This page wasn't saved for offline use…") instead of an indefinite spinner.
