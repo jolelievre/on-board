@@ -62,7 +62,7 @@ function GameDetailPage() {
   });
   const { data: game, isPending, isPaused } = gameQuery;
 
-  console.debug(`[route /games/${slug}] render`, {
+  console.info(`[route /games/${slug}] render`, {
     status: gameQuery.status,
     fetchStatus: gameQuery.fetchStatus,
     isPaused: gameQuery.isPaused,

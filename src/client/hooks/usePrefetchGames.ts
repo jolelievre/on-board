@@ -31,14 +31,14 @@ export function usePrefetchGames() {
     for (const game of games) {
       const detailKey = ["games", game.slug];
       const matchesKey = ["matches", { gameId: game.id }];
-      console.debug("[prefetch] schedule", detailKey, matchesKey);
+      console.info("[prefetch] schedule", detailKey, matchesKey);
       void queryClient
         .prefetchQuery({
           queryKey: detailKey,
           queryFn: () => api(`/api/games/${game.slug}`),
           staleTime: PREFETCH_THRESHOLD,
         })
-        .then(() => console.debug("[prefetch] done", detailKey))
+        .then(() => console.info("[prefetch] done", detailKey))
         .catch((err) => console.warn("[prefetch] fail", detailKey, err));
       void queryClient
         .prefetchQuery({
@@ -46,7 +46,7 @@ export function usePrefetchGames() {
           queryFn: () => api(`/api/matches?gameId=${game.id}`),
           staleTime: PREFETCH_THRESHOLD,
         })
-        .then(() => console.debug("[prefetch] done", matchesKey))
+        .then(() => console.info("[prefetch] done", matchesKey))
         .catch((err) => console.warn("[prefetch] fail", matchesKey, err));
     }
   }, [games, queryClient]);

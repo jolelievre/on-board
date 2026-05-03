@@ -26,17 +26,36 @@ const PERSIST_KEY = "onboard_query_cache";
 // below closes that race.
 const persister = {
   persistClient(client: PersistedClient): void {
+    let json: string;
     try {
-      window.localStorage.setItem(PERSIST_KEY, JSON.stringify(client));
-    } catch {
-      // localStorage quota exceeded — degrade gracefully
+      json = JSON.stringify(client);
+    } catch (err) {
+      console.error(
+        "[persist] persistClient: JSON.stringify FAILED",
+        err,
+        {
+          queryCount: client.clientState.queries.length,
+          hashes: client.clientState.queries.map((q) => q.queryHash),
+        },
+      );
+      return;
+    }
+    try {
+      window.localStorage.setItem(PERSIST_KEY, json);
+      console.info(
+        `[persist] persistClient: wrote ${client.clientState.queries.length} queries (${json.length} bytes)`,
+        client.clientState.queries.map((q) => q.queryHash),
+      );
+    } catch (err) {
+      console.error("[persist] persistClient: localStorage.setItem FAILED", err);
     }
   },
   restoreClient(): PersistedClient | undefined {
     try {
       const raw = window.localStorage.getItem(PERSIST_KEY);
       return raw ? (JSON.parse(raw) as PersistedClient) : undefined;
-    } catch {
+    } catch (err) {
+      console.error("[persist] restoreClient FAILED", err);
       return undefined;
     }
   },
@@ -77,37 +96,22 @@ if (stored) {
 
 // Subscribe for ongoing writes. Every cache "added"/"removed"/"updated"
 // event writes the full dehydrated state to localStorage synchronously.
+//
+// Using the LIBRARY DEFAULT shouldDehydrateQuery (status === "success") to
+// rule out our custom predicate as a cause of missed persistence. We were
+// previously also persisting `status === "error" && hasData`, which in
+// theory shouldn't drop successful queries — testing that hypothesis.
 persistQueryClientSubscribe({
   queryClient,
   persister,
-  dehydrateOptions: {
-    shouldDehydrateQuery: (query) => {
-      const ok =
-        query.state.status === "success" ||
-        (query.state.status === "error" && query.state.data !== undefined);
-      console.debug(
-        `[persist] shouldDehydrate ${query.queryHash} → ${ok}`,
-        {
-          status: query.state.status,
-          fetchStatus: query.state.fetchStatus,
-          hasData: query.state.data !== undefined,
-          dataUpdatedAt: query.state.dataUpdatedAt,
-          errorUpdatedAt: query.state.errorUpdatedAt,
-          error: query.state.error
-            ? String((query.state.error as Error).message ?? query.state.error)
-            : null,
-        },
-      );
-      return ok;
-    },
-  },
 });
 
 // Debug: log every cache event so we can see what's being persisted (or not).
+// Promoted to console.info so DevTools default filter doesn't hide them.
 queryClient.getQueryCache().subscribe((event) => {
   if (event.type === "added" || event.type === "removed" || event.type === "updated") {
     const q = event.query;
-    console.debug(
+    console.info(
       `[cache] ${event.type} ${q.queryHash}`,
       {
         status: q.state.status,
