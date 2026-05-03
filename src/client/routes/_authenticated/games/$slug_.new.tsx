@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../../../lib/api";
@@ -42,6 +42,7 @@ function NewMatchPage() {
   const { slug } = Route.useParams();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { data: game, isPending } = useQuery<Game>({
     queryKey: ["games", slug],
@@ -93,6 +94,10 @@ function NewMatchPage() {
         input.players.map((p) => p.name),
         selfSuggestion?.name,
       );
+      // The cached `["matches", { gameId }]` lists need to refetch so the
+      // new match shows up in the game-detail history list (and stays in
+      // sync with the cache that gcTime: Infinity now keeps long-lived).
+      void queryClient.invalidateQueries({ queryKey: ["matches"] });
       navigate({ to: "/matches/$id", params: { id: match.id } });
     },
     onError: (err: unknown) => {

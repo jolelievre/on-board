@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { authClient, updateProfile } from "../../lib/auth-client";
 import { useInstallPrompt } from "../../hooks/useInstallPrompt";
@@ -122,6 +123,7 @@ function SettingsPage() {
 
 function AliasInput({ initialValue }: { initialValue: string }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [value, setValue] = useState(initialValue);
   const [persisted, setPersisted] = useState(initialValue);
   const [showSaved, setShowSaved] = useState(false);
@@ -139,6 +141,15 @@ function AliasInput({ initialValue }: { initialValue: string }) {
     setValue(trimmed);
     void updateProfile({ alias: trimmed })
       .then(() => {
+        // The new alias changes how the current user is rendered in player
+        // suggestions and in any cached match history (linked players show
+        // the alias). Invalidate so the next mount of those queries refetches
+        // — without this, gcTime: Infinity keeps the pre-update entries
+        // until staleTime expires.
+        void queryClient.invalidateQueries({
+          queryKey: ["players", "suggestions"],
+        });
+        void queryClient.invalidateQueries({ queryKey: ["matches"] });
         setShowSaved(true);
         window.setTimeout(() => setShowSaved(false), 1500);
       })

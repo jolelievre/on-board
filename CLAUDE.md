@@ -110,6 +110,22 @@ Google OAuth login is automated — requires `GOOGLE_TEST_EMAIL` and `GOOGLE_TES
 - TypeScript strict mode, no `any` unless absolutely necessary
 - Prefer named exports over default exports
 
+## TanStack Query — invalidation is mandatory after mutations
+
+`gcTime: Infinity` is non-negotiable for offline-first (see `docs/offline-architecture.md`), which means **the in-memory cache is permanent**. A successful mutation that doesn't invalidate the queries it affects will leave stale data on screen until `staleTime` (60 s) expires — and a real user will see it.
+
+Whenever you write a `useMutation` (or any direct `api()` call that changes server state), inside `onSuccess` invalidate every query whose result the mutation just made obsolete. Examples already in the codebase:
+
+| Mutation | Affected query keys to invalidate |
+|---|---|
+| Create match (`/games/$slug_/new`) | `["matches"]` |
+| Update alias (`/settings`) | `["players", "suggestions"]`, `["matches"]` |
+| Score / complete a match (`SkullKingScorer`, `SevenWondersDuelScorer`) | `["matches", match.id]`, `["matches"]` |
+
+Rule of thumb: if the mutation creates/edits/deletes a row, invalidate every query key that reads any list or detail derived from that table. When in doubt, invalidate broader (`["matches"]` matches both list and detail keys via TanStack's prefix matching).
+
+E2E tests should drive mutations through the **UI**, not via `page.request.post(...)`. API-bypass setup makes the test faster but it skips `onSuccess` invalidation, so it can pass while the real user-facing flow is broken.
+
 ## Deployment
 
 - Docker multi-stage build (see `Dockerfile`)

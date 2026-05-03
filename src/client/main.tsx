@@ -22,6 +22,11 @@ const PERSIST_KEY = "onboard_query_cache";
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
   key: PERSIST_KEY,
+  // Default is 1000ms — would batch writes and let `page.reload()` (or any
+  // post-mutation reload) race the throttle window. We want every cache event
+  // flushed to localStorage before control returns, so offline reads always
+  // see the latest state.
+  throttleTime: 0,
 });
 
 // Hydrate synchronously before createRoot().render() so every useQuery
