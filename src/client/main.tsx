@@ -1,8 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
-import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
+import {
+  PersistQueryClientProvider,
+  type Persister,
+  type PersistedClient,
+} from "@tanstack/react-query-persist-client";
 import { queryClient, NINETY_DAYS } from "./lib/query-client";
 import { routeTree } from "./routeTree.gen";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -11,12 +14,34 @@ import "./lib/i18n";
 
 const PERSIST_KEY = "onboard_query_cache";
 
-const persister = createSyncStoragePersister({
-  storage: window.localStorage,
-  key: PERSIST_KEY,
-  // Write immediately so prefetched data is durable the moment it arrives.
-  throttleTime: 0,
-});
+// Custom persister that writes synchronously to localStorage on every cache
+// change. createSyncStoragePersister throttles writes via setTimeout even
+// when throttleTime is 0, which means the write is deferred to the next
+// macrotask. In a service-worker environment a navigation can reload the JS
+// context before that task fires, silently dropping the write. Writing
+// synchronously (inside the async subscribe callback, before any await)
+// guarantees the data lands in localStorage in the same tick as the cache
+// event.
+const persister: Persister = {
+  persistClient(client: PersistedClient): void {
+    try {
+      window.localStorage.setItem(PERSIST_KEY, JSON.stringify(client));
+    } catch {
+      // localStorage full — non-fatal, app degrades gracefully offline
+    }
+  },
+  restoreClient(): PersistedClient | undefined {
+    try {
+      const raw = window.localStorage.getItem(PERSIST_KEY);
+      return raw ? (JSON.parse(raw) as PersistedClient) : undefined;
+    } catch {
+      return undefined;
+    }
+  },
+  removeClient(): void {
+    window.localStorage.removeItem(PERSIST_KEY);
+  },
+};
 
 // Self-hosted fonts. Imported via JS so Vite bundles the woff2 assets
 // into dist/ — CSS @import from @fontsource doesn't resolve the asset URLs.
