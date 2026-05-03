@@ -6,8 +6,17 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60 * 1000,
-      // Keep cached data for 90 days so offline reads survive multi-week gaps.
-      gcTime: NINETY_DAYS,
+      // Disable framework GC entirely. Offline retention is handled by
+      // persistQueryClient's `maxAge` (NINETY_DAYS) on disk; we don't want
+      // in-memory eviction at all.
+      //
+      // Why not gcTime: NINETY_DAYS? `setTimeout` is capped at ~24.8 days
+      // (2^31-1 ms); larger values overflow and fire IMMEDIATELY in many
+      // browsers, which causes unobserved queries (anything created via
+      // `prefetchQuery`) to be removed microseconds after they succeed —
+      // *before* the user navigates to the page that would consume them.
+      // `Infinity` is TanStack Query v5's explicit "never GC" sentinel.
+      gcTime: Infinity,
       retry: 1,
       // 'offlineFirst': queryFn fires once regardless of network, then
       // retries are paused (fetchStatus: 'paused', isPaused: true) until
