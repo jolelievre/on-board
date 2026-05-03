@@ -2,8 +2,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import {
-  PersistQueryClientProvider,
-  type Persister,
+  QueryClientProvider,
+  hydrate,
+  type DehydratedState,
+} from "@tanstack/react-query";
+import {
+  persistQueryClientSubscribe,
   type PersistedClient,
 } from "@tanstack/react-query-persist-client";
 import { queryClient, NINETY_DAYS } from "./lib/query-client";
@@ -14,20 +18,17 @@ import "./lib/i18n";
 
 const PERSIST_KEY = "onboard_query_cache";
 
-// Custom persister that writes synchronously to localStorage on every cache
-// change. createSyncStoragePersister throttles writes via setTimeout even
-// when throttleTime is 0, which means the write is deferred to the next
-// macrotask. In a service-worker environment a navigation can reload the JS
-// context before that task fires, silently dropping the write. Writing
-// synchronously (inside the async subscribe callback, before any await)
-// guarantees the data lands in localStorage in the same tick as the cache
-// event.
-const persister: Persister = {
+// Synchronous persister — localStorage.setItem runs in the same microtask
+// as the cache event, before any async defer. PersistQueryClientProvider
+// restores via useEffect (one async tick after first render), which leaves
+// a window where queries fire against an empty cache. Synchronous hydration
+// below closes that race.
+const persister = {
   persistClient(client: PersistedClient): void {
     try {
       window.localStorage.setItem(PERSIST_KEY, JSON.stringify(client));
     } catch {
-      // localStorage full — non-fatal, app degrades gracefully offline
+      // localStorage quota exceeded — degrade gracefully
     }
   },
   restoreClient(): PersistedClient | undefined {
@@ -42,6 +43,32 @@ const persister: Persister = {
     window.localStorage.removeItem(PERSIST_KEY);
   },
 };
+
+// Hydrate the QueryClient synchronously — before createRoot().render() runs.
+// This means every useQuery subscriber finds cached data on the very first
+// render, so no query fires an empty-cache fetch that could fail offline and
+// get stuck in pending+paused.
+const stored = persister.restoreClient();
+if (stored) {
+  const expired = Date.now() - (stored.timestamp ?? 0) > NINETY_DAYS;
+  if (expired || stored.buster !== "") {
+    persister.removeClient();
+  } else {
+    hydrate(queryClient, stored.clientState as DehydratedState);
+  }
+}
+
+// Subscribe for ongoing writes. Every cache "added"/"removed"/"updated"
+// event writes the full dehydrated state to localStorage synchronously.
+persistQueryClientSubscribe({
+  queryClient,
+  persister,
+  dehydrateOptions: {
+    shouldDehydrateQuery: (query) =>
+      query.state.status === "success" ||
+      (query.state.status === "error" && query.state.data !== undefined),
+  },
+});
 
 // Self-hosted fonts. Imported via JS so Vite bundles the woff2 assets
 // into dist/ — CSS @import from @fontsource doesn't resolve the asset URLs.
@@ -69,23 +96,10 @@ declare module "@tanstack/react-router" {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <PersistQueryClientProvider
-      client={queryClient}
-      persistOptions={{
-        persister,
-        maxAge: NINETY_DAYS,
-        // Also persist errored queries that still carry their last-known data,
-        // so a failed background refetch while offline doesn't evict good cache.
-        dehydrateOptions: {
-          shouldDehydrateQuery: (query) =>
-            query.state.status === "success" ||
-            (query.state.status === "error" && query.state.data !== undefined),
-        },
-      }}
-    >
+    <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <RouterProvider router={router} />
       </ThemeProvider>
-    </PersistQueryClientProvider>
+    </QueryClientProvider>
   </StrictMode>,
 );
