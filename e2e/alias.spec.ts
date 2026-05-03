@@ -75,8 +75,32 @@ test.describe("Alias — settings + propagation", () => {
     await page.waitForLoadState("domcontentloaded");
     await page.locator("[data-testid='settings-alias-input']").fill("");
     await page.locator("[data-testid='settings-alias-input']").blur();
+    // Wait for the PATCH to round-trip before navigating. The settings page
+    // invalidates ['players','suggestions'] on success; without this wait we
+    // race past the .then() that runs the invalidation.
+    await expect(
+      page.locator("[data-testid='settings-alias-saved']"),
+    ).toBeVisible();
 
-    // Self chip falls back to the full name
+    // Wait for the server to actually report the cleared alias before
+    // navigating. The savedBadge means the PATCH 200 came back, but
+    // better-auth's per-process session cache can still serve the old user
+    // payload to the next /api/players/suggestions request for a brief
+    // window — observed flake when parallel workers contend for the dev
+    // server. Poll the API directly so the UI assertion below has stable
+    // state to render against.
+    await expect
+      .poll(
+        async () => {
+          const res = await page.request.get("/api/players/suggestions");
+          const list = (await res.json()) as { name: string; isSelf: boolean }[];
+          return list.find((s) => s.isSelf)?.name;
+        },
+        { timeout: 10000 },
+      )
+      .toBe(user.name);
+
+    // Self chip falls back to the full name.
     await page.goto("/games/7-wonders-duel/new");
     await page.waitForLoadState("domcontentloaded");
     await page.click("[data-testid='new-match-player-0']");
@@ -95,20 +119,23 @@ test.describe("Alias — settings + propagation", () => {
   }) => {
     const user = await signUpFresh(page);
 
-    // Create a past match with the current user as a linked player.
-    // We send userId === user.id so the Player gets attached to the User.
-    const gamesRes = await page.request.get("/api/games/7-wonders-duel");
-    const game = await gamesRes.json();
-    const matchRes = await page.request.post("/api/matches", {
-      data: {
-        gameId: game.id,
-        players: [
-          { name: user.name, position: 0, userId: user.id },
-          { name: "Friend", position: 1 },
-        ],
-      },
-    });
-    expect(matchRes.ok()).toBeTruthy();
+    // Create the match through the in-app UI flow rather than POSTing to
+    // /api/matches directly. This way the test exercises the same code path
+    // a real user takes — including the `createMatch.onSuccess` invalidation
+    // that keeps the matches-list cache fresh — instead of bypassing it.
+    // Clicking the self-suggestion chip is what attaches the player to the
+    // User row (sends userId), so the alias propagation logic has something
+    // to link to.
+    await page.goto("/games/7-wonders-duel/new");
+    await page.waitForLoadState("domcontentloaded");
+
+    await page.click("[data-testid='new-match-player-0']");
+    await page.click(
+      `[data-testid='new-match-suggestion-0-${user.name}']`,
+    );
+    await page.fill("[data-testid='new-match-player-1']", "Friend");
+    await page.click("[data-testid='new-match-submit']");
+    await page.waitForURL(/\/matches\/[^/?#]+$/);
 
     // Now change the alias AFTER the match was created.
     await page.goto("/settings");
