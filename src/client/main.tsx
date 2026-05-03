@@ -6,6 +6,7 @@ import {
   hydrate,
   type DehydratedState,
 } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import {
   persistQueryClientSubscribe,
   type PersistedClient,
@@ -52,10 +53,26 @@ const stored = persister.restoreClient();
 if (stored) {
   const expired = Date.now() - (stored.timestamp ?? 0) > NINETY_DAYS;
   if (expired || stored.buster !== "") {
+    console.warn(
+      "[persist] restore: discarding stored cache",
+      { expired, buster: stored.buster, timestamp: stored.timestamp },
+    );
     persister.removeClient();
   } else {
+    const queries = (stored.clientState as DehydratedState).queries ?? [];
+    console.info(
+      `[persist] restore: hydrating ${queries.length} queries`,
+      queries.map((q) => ({
+        hash: q.queryHash,
+        status: q.state.status,
+        hasData: q.state.data !== undefined,
+        dataUpdatedAt: q.state.dataUpdatedAt,
+      })),
+    );
     hydrate(queryClient, stored.clientState as DehydratedState);
   }
+} else {
+  console.info("[persist] restore: no stored cache found");
 }
 
 // Subscribe for ongoing writes. Every cache "added"/"removed"/"updated"
@@ -64,10 +81,42 @@ persistQueryClientSubscribe({
   queryClient,
   persister,
   dehydrateOptions: {
-    shouldDehydrateQuery: (query) =>
-      query.state.status === "success" ||
-      (query.state.status === "error" && query.state.data !== undefined),
+    shouldDehydrateQuery: (query) => {
+      const ok =
+        query.state.status === "success" ||
+        (query.state.status === "error" && query.state.data !== undefined);
+      console.debug(
+        `[persist] shouldDehydrate ${query.queryHash} → ${ok}`,
+        {
+          status: query.state.status,
+          fetchStatus: query.state.fetchStatus,
+          hasData: query.state.data !== undefined,
+          dataUpdatedAt: query.state.dataUpdatedAt,
+          errorUpdatedAt: query.state.errorUpdatedAt,
+          error: query.state.error
+            ? String((query.state.error as Error).message ?? query.state.error)
+            : null,
+        },
+      );
+      return ok;
+    },
   },
+});
+
+// Debug: log every cache event so we can see what's being persisted (or not).
+queryClient.getQueryCache().subscribe((event) => {
+  if (event.type === "added" || event.type === "removed" || event.type === "updated") {
+    const q = event.query;
+    console.debug(
+      `[cache] ${event.type} ${q.queryHash}`,
+      {
+        status: q.state.status,
+        fetchStatus: q.state.fetchStatus,
+        hasData: q.state.data !== undefined,
+        dataUpdatedAt: q.state.dataUpdatedAt,
+      },
+    );
+  }
 });
 
 // Self-hosted fonts. Imported via JS so Vite bundles the woff2 assets
@@ -100,6 +149,9 @@ createRoot(document.getElementById("root")!).render(
       <ThemeProvider>
         <RouterProvider router={router} />
       </ThemeProvider>
+      {/* Always-on (incl. preview) while we debug offline behavior. Move
+       * back behind import.meta.env.DEV once root cause is identified. */}
+      <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
     </QueryClientProvider>
   </StrictMode>,
 );
