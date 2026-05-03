@@ -30,7 +30,13 @@ Session caching sits alongside these layers — the user's auth session is writt
 
 ### Layer 2 hydration timing
 
-Cache restoration is handled by `PersistQueryClientProvider` (from `@tanstack/react-query-persist-client`). While restoration is in progress it sets `isRestoring: true`, which tells TanStack Query to suppress all query fetches until the localStorage snapshot has been loaded into the cache. Once restoration completes, every `useQuery` subscriber finds its data already in cache and renders immediately without firing a network request. Writes are handled by the same provider via `persistOptions`.
+Cache restoration runs **synchronously at module load** in `main.tsx`, before `createRoot().render()`. We deliberately don't use `PersistQueryClientProvider`: it restores via a `useEffect`, one async tick after the first render, which leaves a window where queries fire against an empty cache and — offline — get stuck `pending+paused`. The synchronous path means every `useQuery` subscriber finds its data on the very first render. Ongoing writes are handled by `persistQueryClientSubscribe`, which writes the dehydrated cache to `localStorage` on every cache event.
+
+### `gcTime: Infinity` (don't change without reading this)
+
+The QueryClient uses `gcTime: Infinity`. This is **not optional** for offline-first behavior. `setTimeout` is capped at ~24.8 days (`2^31-1` ms); any larger value overflows and fires immediately in most browsers, which causes any query without a permanent observer — in particular every entry created via `prefetchQuery` — to be garbage-collected microseconds after it succeeds. That breaks `usePrefetchGames` entirely: detail/matches queries are evicted before the user clicks into them.
+
+`Infinity` is TanStack Query v5's explicit "never GC" sentinel. Disk-side retention is bounded by `persistQueryClient`'s `NINETY_DAYS` `maxAge` check (which uses `Date.now()` arithmetic and is unaffected by the `setTimeout` cap).
 
 ---
 
@@ -74,8 +80,8 @@ Cache restoration is handled by `PersistQueryClientProvider` (from `@tanstack/re
 | `src/client/hooks/usePlayerSuggestions.ts` | Syncs player suggestions to Dexie |
 | `src/client/lib/db.ts` | Dexie schema (`localProfiles`, `syncQueue`, `matchDrafts`) |
 | `src/client/lib/sync.ts` | `syncEngine.enqueue()` and `syncEngine.flush()` |
-| `src/client/lib/query-client.ts` | TanStack Query with 90-day `gcTime` |
-| `src/client/main.tsx` | `PersistQueryClientProvider` setup — cache restoration + ongoing persistence |
+| `src/client/lib/query-client.ts` | TanStack Query with `gcTime: Infinity` (see hydration-timing section) |
+| `src/client/main.tsx` | Synchronous hydrate + `persistQueryClientSubscribe` for ongoing writes |
 | `src/client/components/layout/OfflineBanner.tsx` | UI indicator for offline state |
 
 ---
@@ -145,13 +151,13 @@ These two settings are independent and easy to confuse:
 |---|---|---|
 | `staleTime` (global) | 60 s | When online: after 60 s, a query is considered stale and will refetch in the background on next mount/focus |
 | `staleTime` (prefetchQuery) | 1 h | Optimization: don't re-prefetch game details if already fetched within the last hour |
-| `gcTime` | 90 days | When a query has no active subscribers, how long before its data is removed from cache |
+| `gcTime` | `Infinity` | In-memory eviction is fully disabled — see the "`gcTime: Infinity`" section above for why this is mandatory, not a tuning choice |
 | `maxAge` (persistQueryClient) | 90 days | How long the entire localStorage snapshot is valid; if older, it is discarded on startup |
 | `networkMode` | `offlineFirst` | The queryFn always fires once (even offline); retries are then paused (`isPaused: true`) until connectivity returns. Queries with cached data stay `'success'` and render normally. Queries with no cached data land in `pending+paused`; the UI detects this via `isPaused` and shows the offline-no-cache message instead of an infinite spinner. |
 
 > Online detection uses the browser's native `navigator.onLine` and the `online`/`offline` window events. This is reliable for actual network changes (WiFi off/on, airplane mode); Chrome DevTools' "Offline" throttle is less consistent at firing those events on a hard refresh, so the in-app offline UI may lag in that mode. The real use case (lost connectivity in the field) is what the system is built for.
 
-**Rule of thumb:** `staleTime` governs online freshness. `gcTime` / `maxAge` govern offline resilience. They are completely independent.
+**Rule of thumb:** `staleTime` governs online freshness. `maxAge` governs offline resilience. They are completely independent (and `gcTime` is out of the picture entirely — see above).
 
 ---
 
@@ -161,9 +167,8 @@ The cache is **never** evicted due to a failed network request. The only ways it
 
 1. **Background refetch succeeds** → fresh data replaces old data (normal online operation)
 2. **`syncEngine.flush()` has at least one success** → `queryClient.invalidateQueries()` is called, triggering refetches of active queries (only after confirmed server writes)
-3. **`gcTime` expires for an inactive query** → entry removed from cache (90 days of inactivity)
-4. **`maxAge` exceeded on startup** → entire localStorage snapshot discarded (90 days since last session)
-5. **Explicit sign-out** → session cache cleared; query cache is NOT cleared (data remains for the next login)
+3. **`maxAge` exceeded on startup** → entire localStorage snapshot discarded (90 days since last session)
+4. **Explicit sign-out** → session cache cleared; query cache is NOT cleared (data remains for the next login)
 
 **Key invariant:** a brief online blip (1-second connection, failed refetch) cannot empty the cache.
 

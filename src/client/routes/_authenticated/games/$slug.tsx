@@ -53,30 +53,14 @@ function GameDetailPage() {
   const { t, i18n } = useTranslation();
   const { isOnline } = useOnlineStatus();
 
-  const gameQuery = useQuery<Game>({
+  const { data: game, isPending, isPaused } = useQuery<Game>({
     queryKey: ["games", slug],
-    queryFn: () => {
-      console.info(`[query] fn-fire ['games', '${slug}']`);
-      return api<Game>(`/api/games/${slug}`);
-    },
-  });
-  const { data: game, isPending, isPaused } = gameQuery;
-
-  console.info(`[route /games/${slug}] render`, {
-    status: gameQuery.status,
-    fetchStatus: gameQuery.fetchStatus,
-    isPaused: gameQuery.isPaused,
-    hasData: gameQuery.data !== undefined,
-    dataUpdatedAt: gameQuery.dataUpdatedAt,
-    errorUpdatedAt: gameQuery.errorUpdatedAt,
+    queryFn: () => api<Game>(`/api/games/${slug}`),
   });
 
   const { data: matches } = useQuery<MatchListItem[]>({
     queryKey: ["matches", { gameId: game?.id }],
-    queryFn: () => {
-      console.info(`[query] fn-fire ['matches', { gameId: '${game!.id}' }]`);
-      return api<MatchListItem[]>(`/api/matches?gameId=${game!.id}`);
-    },
+    queryFn: () => api<MatchListItem[]>(`/api/matches?gameId=${game!.id}`),
     enabled: !!game?.id,
   });
 

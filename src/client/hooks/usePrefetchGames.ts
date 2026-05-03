@@ -24,30 +24,17 @@ export function usePrefetchGames() {
 
   useEffect(() => {
     if (!games) return;
-    console.info(
-      `[prefetch] games list ready (${games.length} games), starting prefetch`,
-      games.map((g) => g.slug),
-    );
     for (const game of games) {
-      const detailKey = ["games", game.slug];
-      const matchesKey = ["matches", { gameId: game.id }];
-      console.info("[prefetch] schedule", detailKey, matchesKey);
-      void queryClient
-        .prefetchQuery({
-          queryKey: detailKey,
-          queryFn: () => api(`/api/games/${game.slug}`),
-          staleTime: PREFETCH_THRESHOLD,
-        })
-        .then(() => console.info("[prefetch] done", detailKey))
-        .catch((err) => console.warn("[prefetch] fail", detailKey, err));
-      void queryClient
-        .prefetchQuery({
-          queryKey: matchesKey,
-          queryFn: () => api(`/api/matches?gameId=${game.id}`),
-          staleTime: PREFETCH_THRESHOLD,
-        })
-        .then(() => console.info("[prefetch] done", matchesKey))
-        .catch((err) => console.warn("[prefetch] fail", matchesKey, err));
+      void queryClient.prefetchQuery({
+        queryKey: ["games", game.slug],
+        queryFn: () => api(`/api/games/${game.slug}`),
+        staleTime: PREFETCH_THRESHOLD,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: ["matches", { gameId: game.id }],
+        queryFn: () => api(`/api/matches?gameId=${game.id}`),
+        staleTime: PREFETCH_THRESHOLD,
+      });
     }
   }, [games, queryClient]);
 }

@@ -6,7 +6,7 @@ import {
   hydrate,
   type DehydratedState,
 } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import {
   persistQueryClientSubscribe,
   type PersistedClient,
@@ -19,109 +19,34 @@ import "./lib/i18n";
 
 const PERSIST_KEY = "onboard_query_cache";
 
-// Synchronous persister — localStorage.setItem runs in the same microtask
-// as the cache event, before any async defer. PersistQueryClientProvider
-// restores via useEffect (one async tick after first render), which leaves
-// a window where queries fire against an empty cache. Synchronous hydration
-// below closes that race.
-const persister = {
-  persistClient(client: PersistedClient): void {
-    let json: string;
-    try {
-      json = JSON.stringify(client);
-    } catch (err) {
-      console.error(
-        "[persist] persistClient: JSON.stringify FAILED",
-        err,
-        {
-          queryCount: client.clientState.queries.length,
-          hashes: client.clientState.queries.map((q) => q.queryHash),
-        },
-      );
-      return;
-    }
-    try {
-      window.localStorage.setItem(PERSIST_KEY, json);
-      console.info(
-        `[persist] persistClient: wrote ${client.clientState.queries.length} queries (${json.length} bytes)`,
-        client.clientState.queries.map((q) => q.queryHash),
-      );
-    } catch (err) {
-      console.error("[persist] persistClient: localStorage.setItem FAILED", err);
-    }
-  },
-  restoreClient(): PersistedClient | undefined {
-    try {
-      const raw = window.localStorage.getItem(PERSIST_KEY);
-      return raw ? (JSON.parse(raw) as PersistedClient) : undefined;
-    } catch (err) {
-      console.error("[persist] restoreClient FAILED", err);
-      return undefined;
-    }
-  },
-  removeClient(): void {
-    window.localStorage.removeItem(PERSIST_KEY);
-  },
-};
+const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+  key: PERSIST_KEY,
+});
 
-// Hydrate the QueryClient synchronously — before createRoot().render() runs.
-// This means every useQuery subscriber finds cached data on the very first
-// render, so no query fires an empty-cache fetch that could fail offline and
-// get stuck in pending+paused.
-const stored = persister.restoreClient();
+// Hydrate synchronously before createRoot().render() so every useQuery
+// subscriber sees cached data on the first render. PersistQueryClientProvider
+// would restore via useEffect (one async tick later), leaving a window where
+// queries fire against an empty cache and — offline — get stuck pending+paused.
+//
+// `restoreClient` is typed as `PersistedClient | Promise<...>` to support
+// async storage; for the sync localStorage persister it returns synchronously,
+// so the cast is safe.
+const stored = persister.restoreClient() as PersistedClient | undefined;
 if (stored) {
   const expired = Date.now() - (stored.timestamp ?? 0) > NINETY_DAYS;
   if (expired || stored.buster !== "") {
-    console.warn(
-      "[persist] restore: discarding stored cache",
-      { expired, buster: stored.buster, timestamp: stored.timestamp },
-    );
-    persister.removeClient();
+    void persister.removeClient();
   } else {
-    const queries = (stored.clientState as DehydratedState).queries ?? [];
-    console.info(
-      `[persist] restore: hydrating ${queries.length} queries`,
-      queries.map((q) => ({
-        hash: q.queryHash,
-        status: q.state.status,
-        hasData: q.state.data !== undefined,
-        dataUpdatedAt: q.state.dataUpdatedAt,
-      })),
-    );
     hydrate(queryClient, stored.clientState as DehydratedState);
   }
-} else {
-  console.info("[persist] restore: no stored cache found");
 }
 
-// Subscribe for ongoing writes. Every cache "added"/"removed"/"updated"
-// event writes the full dehydrated state to localStorage synchronously.
-//
-// Using the LIBRARY DEFAULT shouldDehydrateQuery (status === "success") to
-// rule out our custom predicate as a cause of missed persistence. We were
-// previously also persisting `status === "error" && hasData`, which in
-// theory shouldn't drop successful queries — testing that hypothesis.
-persistQueryClientSubscribe({
-  queryClient,
-  persister,
-});
-
-// Debug: log every cache event so we can see what's being persisted (or not).
-// Promoted to console.info so DevTools default filter doesn't hide them.
-queryClient.getQueryCache().subscribe((event) => {
-  if (event.type === "added" || event.type === "removed" || event.type === "updated") {
-    const q = event.query;
-    console.info(
-      `[cache] ${event.type} ${q.queryHash}`,
-      {
-        status: q.state.status,
-        fetchStatus: q.state.fetchStatus,
-        hasData: q.state.data !== undefined,
-        dataUpdatedAt: q.state.dataUpdatedAt,
-      },
-    );
-  }
-});
+// Subscribe for ongoing writes. Library default `shouldDehydrateQuery`
+// (status === "success") is sufficient — our offline path can't reach
+// status "error" with cached data: networkMode "offlineFirst" + retry pause
+// keeps refetch failures in `success` + `fetchStatus: paused`, not `error`.
+persistQueryClientSubscribe({ queryClient, persister });
 
 // Self-hosted fonts. Imported via JS so Vite bundles the woff2 assets
 // into dist/ — CSS @import from @fontsource doesn't resolve the asset URLs.
@@ -153,9 +78,6 @@ createRoot(document.getElementById("root")!).render(
       <ThemeProvider>
         <RouterProvider router={router} />
       </ThemeProvider>
-      {/* Always-on (incl. preview) while we debug offline behavior. Move
-       * back behind import.meta.env.DEV once root cause is identified. */}
-      <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
     </QueryClientProvider>
   </StrictMode>,
 );
