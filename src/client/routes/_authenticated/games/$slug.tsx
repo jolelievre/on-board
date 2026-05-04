@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../../lib/api";
+import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
 import {
   computeTotalsByPlayer,
   type SevenWondersVictoryType,
@@ -50,8 +51,9 @@ type MatchListItem = {
 function GameDetailPage() {
   const { slug } = Route.useParams();
   const { t, i18n } = useTranslation();
+  const { isOnline } = useOnlineStatus();
 
-  const { data: game, isPending } = useQuery<Game>({
+  const { data: game, isPending, isPaused } = useQuery<Game>({
     queryKey: ["games", slug],
     queryFn: () => api<Game>(`/api/games/${slug}`),
   });
@@ -62,7 +64,10 @@ function GameDetailPage() {
     enabled: !!game?.id,
   });
 
-  if (isPending) {
+  // isPaused: offlineFirst fired the queryFn once, it failed, and the retry
+  // is now paused waiting for network. Treat the same as an error with no
+  // cache — show the offline-no-cache message instead of spinning forever.
+  if (isPending && !isPaused) {
     return (
       <>
         <Header
@@ -76,13 +81,22 @@ function GameDetailPage() {
   }
 
   if (!game) {
+    const isOfflineMiss = !isOnline;
     return (
       <>
         <Header
           back={{ to: "/games", label: t("nav.games") }}
         />
         <div className="px-5">
-          <p style={{ color: "var(--color-danger)" }}>{t("games.notFound")}</p>
+          <p
+            style={{
+              color: isOfflineMiss
+                ? "var(--color-ink-faint)"
+                : "var(--color-danger)",
+            }}
+          >
+            {isOfflineMiss ? t("common.offlineNoCache") : t("games.notFound")}
+          </p>
         </div>
       </>
     );

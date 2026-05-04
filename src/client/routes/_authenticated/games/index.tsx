@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { api } from "../../../lib/api";
 import { Header } from "../../../components/layout/Header";
 import { Logo } from "../../../components/ui/Logo";
 import { Pill } from "../../../components/ui/Pill";
@@ -24,11 +25,7 @@ function GamesPage() {
   const { t } = useTranslation();
   const { data: games, isPending } = useQuery<Game[]>({
     queryKey: ["games"],
-    queryFn: async () => {
-      const res = await fetch("/api/games");
-      if (!res.ok) throw new Error("Failed to fetch games");
-      return res.json();
-    },
+    queryFn: () => api<Game[]>("/api/games"),
   });
 
   return (

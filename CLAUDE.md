@@ -5,6 +5,7 @@
 Board game score tracker PWA. SPA architecture (React + Vite) with Hono API server.
 
 See [PLAN.md](PLAN.md) for the full development plan (tech stack rationale, phases, data model).
+See [docs/offline-architecture.md](docs/offline-architecture.md) for the offline/online workflow, cache layers, and sync engine logic.
 
 ## Development
 
@@ -30,18 +31,22 @@ npm run dev          # Vite dev server + Hono API (port 5173)
 |---------|-------------|
 | `npm run dev` | Start dev server (frontend + API on port 5173) |
 | `npm run dev:kill` | Kill any process on port 5173 (stale dev servers) |
-| `npm run build` | Build client (Vite) + server (tsc) |
+| `npm run build` | Build client (Vite) + server (tsc). Auto-runs `prebuild` first. |
+| `npm run prebuild` | Regenerate PWA icons + favicons from `scripts/generate-pwa-icons.ts`. Auto-runs before `build`; invoke manually only when iterating on the icon design. Honors `DEPLOY_ENV` (see _Per-env PWA branding_ below). |
 | `npm run start` | Run production server |
 | `npm run lint` | ESLint (must pass, zero warnings) |
 | `npm run type-check` | TypeScript strict check |
 | `npm test` | Reset test DB + run all E2E tests (both browsers) |
 | `npm run test:chrome` | Reset test DB + E2E on Mobile Chrome only |
 | `npm run test:safari` | Reset test DB + E2E on Mobile Safari only |
+| `npm run test:headed` | Run Playwright with the browser window visible (debugging UI flow) |
+| `npm run test:ui` | Open Playwright's interactive UI runner (timeline, retries, traces) |
 | `npm run db:migrate` | Create + apply Prisma migrations (dev) |
 | `npm run db:seed` | Seed game templates |
 | `npm run db:reset` | Reset dev DB + re-apply migrations + seed |
 | `npm run db:studio` | Open Prisma Studio |
 | `npm run db:push` | Apply Prisma schema directly (no migration file) |
+| `npm run db:test:reset` | Force-reset the **test** database (`onboard_test`) — destructive, used by E2E setup |
 | `npm run screenshots` | Capture mobile-viewport PNGs of every screen into `plan-assets/screenshots/` (standalone — boots its own dev server in test mode, not part of the E2E test campaign) |
 
 ### Architecture
@@ -105,12 +110,40 @@ Google OAuth login is automated — requires `GOOGLE_TEST_EMAIL` and `GOOGLE_TES
 - TypeScript strict mode, no `any` unless absolutely necessary
 - Prefer named exports over default exports
 
+## TanStack Query — invalidation is mandatory after mutations
+
+`gcTime: Infinity` is non-negotiable for offline-first (see `docs/offline-architecture.md`), which means **the in-memory cache is permanent**. A successful mutation that doesn't invalidate the queries it affects will leave stale data on screen until `staleTime` (60 s) expires — and a real user will see it.
+
+Whenever you write a `useMutation` (or any direct `api()` call that changes server state), inside `onSuccess` invalidate every query whose result the mutation just made obsolete. Examples already in the codebase:
+
+| Mutation | Affected query keys to invalidate |
+|---|---|
+| Create match (`/games/$slug_/new`) | `["matches"]` |
+| Update alias (`/settings`) | `["players", "suggestions"]`, `["matches"]` |
+| Score / complete a match (`SkullKingScorer`, `SevenWondersDuelScorer`) | `["matches", match.id]`, `["matches"]` |
+
+Rule of thumb: if the mutation creates/edits/deletes a row, invalidate every query key that reads any list or detail derived from that table. When in doubt, invalidate broader (`["matches"]` matches both list and detail keys via TanStack's prefix matching).
+
+E2E tests should drive mutations through the **UI**, not via `page.request.post(...)`. API-bypass setup makes the test faster but it skips `onSuccess` invalidation, so it can pass while the real user-facing flow is broken.
+
 ## Deployment
 
 - Docker multi-stage build (see `Dockerfile`)
 - Coolify: auto-deploy on push to main (integration), manual deploy on release (production)
 - Preview environment on PRs (fixed URL)
 - `entrypoint.sh`: runs `prisma migrate deploy` then seeds + starts server (preserves data across deploys)
+
+### Per-env PWA branding
+
+The PWA manifest (`name`, `short_name`, `theme_color`) and the icon set vary by environment so the three deploys can be installed and recognized side-by-side on the home screen. The `DEPLOY_ENV` build arg drives this:
+
+| `DEPLOY_ENV` | App name | Icon badge | Theme color |
+|---|---|---|---|
+| `production` (default) | OnBoard | none | `#9F2D1A` (red) |
+| `integration` | OnBoard Dev | teal gear in lower-right | `#0E7C66` (teal) |
+| `preview` | OnBoard Test | red bug in lower-right | `#B91C1C` (red) |
+
+Coolify must set `DEPLOY_ENV` per environment (build arg). `prebuild` re-renders `pwa-icon-{192,512}.png` + `favicon.svg` with the right badge, and `vite.config.ts` reads the same variable to pick the manifest values.
 
 ## Git Workflow
 

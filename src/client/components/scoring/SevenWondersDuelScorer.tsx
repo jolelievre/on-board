@@ -2,7 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api } from "../../lib/api";
+import { api, ApiError } from "../../lib/api";
+import { syncEngine } from "../../lib/sync";
 import { HandMatchGrid } from "../match/HandMatchGrid";
 import type {
   ScoreGridValues,
@@ -112,9 +113,15 @@ export function SevenWondersDuelScorer({ match, onSaveStatusChange }: Props) {
         savedRevertTimer.current = null;
       }, SAVED_INDICATOR_MS);
     },
-    onError: () => {
+    onError: (err: unknown, scores: ScorePayload[]) => {
       clearSavedRevertTimer();
-      setSaveStatus("error");
+      // Network failure (not a server error) — queue for sync on reconnect.
+      if (!(err instanceof ApiError)) {
+        void syncEngine.enqueue("PATCH", `/api/matches/${matchId}/scores`, { scores });
+        setSaveStatus("offline");
+      } else {
+        setSaveStatus("error");
+      }
     },
   });
 
@@ -192,6 +199,29 @@ export function SevenWondersDuelScorer({ match, onSaveStatusChange }: Props) {
         prev ? { ...prev, ...updated } : updated,
       );
       queryClient.invalidateQueries({ queryKey: ["matches"] });
+    },
+    onError: (
+      err: unknown,
+      input: { victoryType: CompletedVictoryType; winnerId: string | null },
+    ) => {
+      if (!(err instanceof ApiError)) {
+        // Offline — queue the completion and apply it optimistically.
+        void syncEngine.enqueue("PUT", `/api/matches/${matchId}`, {
+          status: "COMPLETED",
+          victoryType: input.victoryType,
+          winnerId: input.winnerId,
+        });
+        queryClient.setQueryData<Match>(["matches", matchId], (prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "COMPLETED",
+                victoryType: input.victoryType,
+                winnerId: input.winnerId,
+              }
+            : prev,
+        );
+      }
     },
   });
 

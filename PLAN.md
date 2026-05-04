@@ -347,6 +347,44 @@ Both are implemented together — caching the shell without offline data would s
 
 ---
 
+## Phase 5b: Complete offline-first
+
+**Goal**: Close the gaps left by Phase 5 — most importantly, let users start *and* play a match end-to-end with no network.
+
+### Critical: full offline match flow
+
+Right now `POST /api/matches` is required before navigation, so the new-match form blocks when offline. Building this out:
+
+- **`matchDrafts` flow** — the Dexie table already exists in `src/client/lib/db.ts`. When offline, persist a draft (gameId, players, startedAt) and route to a synthetic `/matches/draft-<localId>` page that the SkullKingScorer / SevenWondersDuelScorer can drive against the local draft.
+- **Round writes against the draft** — score writes already use `syncEngine.enqueue`; the same path needs to work when the parent match is itself a draft (i.e. has no server id yet).
+- **Reconciliation on reconnect** — `syncEngine.flush` replays the draft creation first, swaps the synthetic id for the server id everywhere it was used, then flushes the queued score writes. Every queued URL needs a way to express "use the id the previous request returned" (templating, or two-pass flush).
+- **UI**: show a "draft" badge while the match has no server id; hide the share/export options until reconciled.
+
+### SW update flow (eliminate the stale-precache window)
+
+We hit this during PR #8 testing — fonts loaded via @font-face from the *new* CSS bundle while the old service worker still controlled the page, leading to `ERR_INTERNET_DISCONNECTED` for font subsets after going offline. (Even unregister + double hard-reload didn't reliably populate the new precache before the page went interactive.)
+
+- Switch `vite-plugin-pwa` from `registerType: "autoUpdate"` to `prompt`
+- Use `useRegisterSW` from `virtual:pwa-register/react` to surface a "New version available — Reload" banner
+- The banner only dismisses on user action, so the new SW + new precache are both fully ready before the user can navigate or go offline
+- Side benefit: explicit "you've been updated" affordance for the user
+
+### Investigate the font precache miss observed during PR #8
+
+Even after unregister + double hard-reload, the latin-400 / latin-600 subsets of caveat / jetbrains-mono / patrick-hand were still failing offline on a freshly-visited screen (e.g. `/games/$slug/new`). The SW manifest *did* contain those exact filenames. Worth verifying whether:
+- The browser is requesting the font under a path the SW isn't matching (e.g. trailing query strings).
+- A `Cache-Control: no-store` or other header on the asset is making Workbox skip it at install time.
+- The Workbox precache is being installed but not actually populated before the controlled fetch fires.
+
+Most likely the SW update flow above hides this entirely; if it doesn't, dig in here.
+
+### Validation
+
+- Create + score a match end-to-end with WiFi off the entire time, reconnect, see it sync correctly.
+- Deploy a new build while a tab is open; the user is prompted, accepts, and the new version is fully available offline immediately.
+
+---
+
 ## Phase 6: Polish + Distribution
 
 **Goal**: Smooth experience, ready to share with friends.

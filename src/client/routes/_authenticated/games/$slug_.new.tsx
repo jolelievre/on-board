@@ -1,16 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../../../lib/api";
 import { authClient } from "../../../lib/auth-client";
+import { usePlayerSuggestions, persistPlayersToLocalProfiles } from "../../../hooks/usePlayerSuggestions";
 import { Header } from "../../../components/layout/Header";
 import { Pill } from "../../../components/ui/Pill";
 import { Button } from "../../../components/ui/Button";
 import { Icon } from "../../../components/ui/Icon";
 import styles from "./$slug_.new.module.css";
-
-type PlayerSuggestion = { name: string; isSelf: boolean };
 
 export const Route = createFileRoute("/_authenticated/games/$slug_/new")({
   component: NewMatchPage,
@@ -43,16 +42,14 @@ function NewMatchPage() {
   const { slug } = Route.useParams();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { data: game, isPending } = useQuery<Game>({
     queryKey: ["games", slug],
     queryFn: () => api<Game>(`/api/games/${slug}`),
   });
 
-  const { data: suggestions = [] } = useQuery<PlayerSuggestion[]>({
-    queryKey: ["players", "suggestions"],
-    queryFn: () => api<PlayerSuggestion[]>("/api/players/suggestions"),
-  });
+  const { data: suggestions = [] } = usePlayerSuggestions();
 
   const { data: session } = authClient.useSession();
   const myUserId = session?.user.id;
@@ -91,7 +88,16 @@ function NewMatchPage() {
           })),
         }),
       }),
-    onSuccess: (match) => {
+    onSuccess: (match, input) => {
+      const selfSuggestion = suggestions.find((s) => s.isSelf);
+      void persistPlayersToLocalProfiles(
+        input.players.map((p) => p.name),
+        selfSuggestion?.name,
+      );
+      // The cached `["matches", { gameId }]` lists need to refetch so the
+      // new match shows up in the game-detail history list (and stays in
+      // sync with the cache that gcTime: Infinity now keeps long-lived).
+      void queryClient.invalidateQueries({ queryKey: ["matches"] });
       navigate({ to: "/matches/$id", params: { id: match.id } });
     },
     onError: (err: unknown) => {

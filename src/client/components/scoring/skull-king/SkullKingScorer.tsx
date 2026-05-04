@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../../lib/api";
+import { api, ApiError } from "../../../lib/api";
+import { syncEngine } from "../../../lib/sync";
 import {
   EMPTY_SK_ROUND,
   SKULL_KING_TOTAL_ROUNDS,
@@ -275,7 +276,17 @@ export function SkullKingScorer({
       );
       flashSaved();
     },
-    onError: () => setSaveStatus("error"),
+    onError: (
+      err: unknown,
+      input: { metadata?: Record<string, unknown>; playerOrder?: { playerId: string; position: number }[] },
+    ) => {
+      if (!(err instanceof ApiError)) {
+        void syncEngine.enqueue("PATCH", `/api/matches/${match.id}`, input);
+        setSaveStatus("offline");
+      } else {
+        setSaveStatus("error");
+      }
+    },
   });
 
   const saveScores = useMutation({
@@ -296,7 +307,17 @@ export function SkullKingScorer({
       queryClient.invalidateQueries({ queryKey: ["matches", match.id] });
       flashSaved();
     },
-    onError: () => setSaveStatus("error"),
+    onError: (
+      err: unknown,
+      scores: { playerId: string; category: string; value: number; metadata: Record<string, unknown> }[],
+    ) => {
+      if (!(err instanceof ApiError)) {
+        void syncEngine.enqueue("PATCH", `/api/matches/${match.id}/scores`, { scores });
+        setSaveStatus("offline");
+      } else {
+        setSaveStatus("error");
+      }
+    },
   });
 
   const completeMatch = useMutation({
@@ -317,6 +338,28 @@ export function SkullKingScorer({
         prev ? { ...prev, ...updated } : updated,
       );
       queryClient.invalidateQueries({ queryKey: ["matches"] });
+    },
+    onError: (
+      err: unknown,
+      input: { victoryType: "score" | "draw"; winnerId: string | null },
+    ) => {
+      if (!(err instanceof ApiError)) {
+        void syncEngine.enqueue("PUT", `/api/matches/${match.id}`, {
+          status: "COMPLETED",
+          victoryType: input.victoryType,
+          winnerId: input.winnerId,
+        });
+        queryClient.setQueryData<Match>(["matches", match.id], (prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "COMPLETED",
+                victoryType: input.victoryType,
+                winnerId: input.winnerId,
+              }
+            : prev,
+        );
+      }
     },
   });
 
