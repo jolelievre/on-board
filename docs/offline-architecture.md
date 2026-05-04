@@ -50,6 +50,26 @@ The QueryClient uses `gcTime: Infinity`. This is **not optional** for offline-fi
 | Offline mutation queue | IndexedDB (Dexie `syncQueue`) | — | Until flushed |
 | Player name suggestions | IndexedDB (Dexie `localProfiles`) | — | Permanent |
 
+### Why two storage systems?
+
+The split between `localStorage` (TanStack persister) and IndexedDB (Dexie) is not arbitrary — each has a property the other can't match.
+
+**`localStorage` — synchronous, single-blob, ~5 MB cap.** The query persister lives here because it's the *only* synchronous storage API in the browser. We read the dehydrated snapshot at module load in `main.tsx` *before* `createRoot().render()`, so the first render of every `useQuery` already has data. If we used IndexedDB instead, hydration would slip into a `useEffect` and we'd be back to the empty-cache flash that gets stuck `pending+paused` offline (see *Layer 2 hydration timing* above). The auth session lives here for the same reason — `useAuthSession` needs it on first render.
+
+**IndexedDB / Dexie — async, structured tables with indexes, transactions, large capacity.** Used for everything client-authoritative: the mutation queue (`syncQueue`) needs ordered iteration, per-record updates, and atomicity (a partially-written queue entry would be a bug); player suggestions (`localProfiles`) and future match drafts (`matchDrafts`) can grow beyond what fits in a single localStorage blob. None of these consumers are on the first-paint path — the queue is processed on reconnect, suggestions feed a typeahead — so async access is fine.
+
+**Selection criteria** when adding new persisted state:
+
+| Question | If yes → |
+|---|---|
+| Must be readable **synchronously** before first render? | localStorage |
+| Is it a **read snapshot of server state** the query layer owns? | localStorage (let TanStack persister handle it) |
+| Does it need **indexes, ordering, or atomic per-record writes**? | IndexedDB (Dexie) |
+| Is it **client-authoritative** (pending mutations, local-only data)? | IndexedDB (Dexie) |
+| Could it grow beyond a few MB over time? | IndexedDB (Dexie) |
+
+Rule of thumb: **server-sourced + needed on cold boot → query persister. Client-owned, queue-shaped, or growing → Dexie.**
+
 ---
 
 ## What works offline
