@@ -36,7 +36,7 @@ Cache restoration runs **synchronously at module load** in `main.tsx`, before `c
 
 The QueryClient uses `gcTime: Infinity`. This is **not optional** for offline-first behavior. `setTimeout` is capped at ~24.8 days (`2^31-1` ms); any larger value overflows and fires immediately in most browsers, which causes any query without a permanent observer — in particular every entry created via `prefetchQuery` — to be garbage-collected microseconds after it succeeds. That breaks `usePrefetchGames` entirely: detail/matches queries are evicted before the user clicks into them.
 
-`Infinity` is TanStack Query v5's explicit "never GC" sentinel. Disk-side retention is bounded by `persistQueryClient`'s `NINETY_DAYS` `maxAge` check (which uses `Date.now()` arithmetic and is unaffected by the `setTimeout` cap).
+`Infinity` is TanStack Query v5's explicit "never GC" sentinel. Disk-side retention is bounded by a manual `NINETY_DAYS` timestamp check in `main.tsx` on startup (`Date.now() - stored.timestamp > NINETY_DAYS`), unaffected by the `setTimeout` cap.
 
 ---
 
@@ -59,14 +59,14 @@ The QueryClient uses `gcTime: Infinity`. This is **not optional** for offline-fi
 | App shell loads | ✅ Always | Workbox precache |
 | Stay authenticated | ✅ If previously logged in | `useAuthSession` localStorage fallback |
 | View game list | ✅ After first online session | TanStack Query persistence |
-| View any game's detail page | ✅ After first online session | `usePrefetchGames` prefetches each game's detail and matches list on login |
-| View match history | ✅ After first online session | `usePrefetchGames` prefetches per-game `["matches", { gameId }]` |
+| View any game's detail page | ✅ After first online session | `usePrefetchGames` prefetches each game's detail and matches list on every authenticated session |
+| View match history | ✅ After first online session | `usePrefetchGames` prefetches per-game `["matches", { gameId }]` on every authenticated session |
 | View a match page | ✅ If visited at least once | TanStack Query persistence |
 | Score a round | ✅ Queued + shown as "offline" | `syncEngine.enqueue`, replayed on reconnect |
 | Complete a match | ✅ Queued + optimistic | Queue + immediate `setQueryData` |
 | Player name autocomplete | ✅ From Dexie `localProfiles` | Populated from server on each online fetch |
 | Create a brand-new match | ❌ Not yet implemented | Needs `matchDrafts` flow (planned Phase 6) |
-| First-ever app open offline | ❌ Impossible in practice | Google OAuth requires network; prefetch runs on login |
+| First-ever app open offline | ❌ Impossible in practice | Google OAuth requires network; prefetch runs on first authenticated session |
 
 ---
 
@@ -125,11 +125,12 @@ flowchart TD
     F -- no --> H["Replay entries in order\nfetch(method, url, body)"]
 
     H --> I{"Request result?"}
-    I -- "200 OK" --> J["Delete entry from queue"]
-    I -- "network error" --> K["Stop flush\npreserve remaining queue\nwait for next reconnect"]
-    I -- "4xx / 5xx" --> L{"retries < 3?"}
-    L -- yes --> M["Increment retries\nretry later"]
-    L -- no --> N["Mark entry as permanent error"]
+    I -- "2xx" --> J["Delete entry from queue"]
+    I -- "network error (catch)" --> K["Stop flush\npreserve remaining queue\nwait for next reconnect"]
+    I -- "401 / 403" --> N["Mark entry as permanent error\n(no retry — auth won't fix itself)"]
+    I -- "other non-OK" --> L{"retries < 3?"}
+    L -- yes --> M["Increment retries\nretry on next reconnect"]
+    L -- no --> N
 
     J --> O{"Any success?"}
     O -- yes --> P["queryClient.invalidateQueries()\nrefetch active queries"]
@@ -152,12 +153,12 @@ These two settings are independent and easy to confuse:
 | `staleTime` (global) | 60 s | When online: after 60 s, a query is considered stale and will refetch in the background on next mount/focus |
 | `staleTime` (prefetchQuery) | 1 h | Optimization: don't re-prefetch game details if already fetched within the last hour |
 | `gcTime` | `Infinity` | In-memory eviction is fully disabled — see the "`gcTime: Infinity`" section above for why this is mandatory, not a tuning choice |
-| `maxAge` (persistQueryClient) | 90 days | How long the entire localStorage snapshot is valid; if older, it is discarded on startup |
+| `NINETY_DAYS` (manual check in `main.tsx`) | 90 days | How long the entire localStorage snapshot is valid; if older, it is discarded on startup |
 | `networkMode` | `offlineFirst` | The queryFn always fires once (even offline); retries are then paused (`isPaused: true`) until connectivity returns. Queries with cached data stay `'success'` and render normally. Queries with no cached data land in `pending+paused`; the UI detects this via `isPaused` and shows the offline-no-cache message instead of an infinite spinner. |
 
 > Online detection uses the browser's native `navigator.onLine` and the `online`/`offline` window events. This works reliably under both real network changes (WiFi off/on, airplane mode) and Chrome DevTools' "Offline" Network throttle (which is also what Playwright's `BrowserContext.setOffline(true)` uses under the hood, so the E2E suite exercises the same code path).
 
-**Rule of thumb:** `staleTime` governs online freshness. `maxAge` governs offline resilience. They are completely independent (and `gcTime` is out of the picture entirely — see above).
+**Rule of thumb:** `staleTime` governs online freshness. The startup `NINETY_DAYS` check governs offline resilience. They are completely independent (and `gcTime` is out of the picture entirely — see above).
 
 ---
 
@@ -167,7 +168,7 @@ The cache is **never** evicted due to a failed network request. The only ways it
 
 1. **Background refetch succeeds** → fresh data replaces old data (normal online operation)
 2. **`syncEngine.flush()` has at least one success** → `queryClient.invalidateQueries()` is called, triggering refetches of active queries (only after confirmed server writes)
-3. **`maxAge` exceeded on startup** → entire localStorage snapshot discarded (90 days since last session)
+3. **`NINETY_DAYS` check fails on startup** → entire localStorage snapshot discarded (90 days since last session)
 4. **Explicit sign-out** → session cache cleared; query cache is NOT cleared (data remains for the next login)
 
 **Key invariant:** a brief online blip (1-second connection, failed refetch) cannot empty the cache.
