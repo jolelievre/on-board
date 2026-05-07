@@ -9,14 +9,21 @@ type PlayerSuggestion = { name: string; isSelf: boolean };
 /**
  * Suggestions are resolved from three sources, in priority order:
  *
- *   1. Synthesized self entry from the auth session — always present, even
- *      before any server response and on a fresh offline-first install.
- *   2. Server response (cached or live).
+ *   1. Server response (`/api/players/suggestions`) — authoritative when
+ *      available; its self entry already reflects the current alias.
+ *   2. Synthesized self entry from the auth session — used only when no
+ *      server response has landed (offline first install / first paint).
  *   3. Dexie localProfiles fallback for offline / network-error states.
  *
- * Names are deduplicated case-insensitively; the self entry always wins on
- * collisions. Server results are mirrored into Dexie on success so the
- * fallback stays warm for future offline reads.
+ * The client never synthesizes the self chip when the server has answered:
+ * `authClient.useSession()` can lag behind a recent `updateUser` call by a
+ * tick or two, and its stale `alias` would otherwise resurrect the previous
+ * value as a phantom self suggestion.
+ *
+ * Server results are mirrored into Dexie on success so the fallback stays
+ * warm for future offline reads — but the self row is deliberately *not*
+ * mirrored, since persisting `{name: previousAlias, isSelf: true}` would
+ * leave a stale suggestion in Dexie after the alias changes.
  */
 export function usePlayerSuggestions() {
   const { data: session } = authClient.useSession();
@@ -33,31 +40,23 @@ export function usePlayerSuggestions() {
     retry: 0,
   });
 
-  // Mirror server data into Dexie on every successful fetch.
+  // Mirror non-self server entries into Dexie on every successful fetch.
+  // The self entry is intentionally skipped: see header comment.
   useEffect(() => {
     if (!query.data) return;
     const now = new Date().toISOString();
     void Promise.all(
-      query.data.map((s) =>
-        db.localProfiles.put({
-          name: s.name,
-          isSelf: s.isSelf,
-          usedAt: now,
-        }),
-      ),
+      query.data
+        .filter((s) => !s.isSelf)
+        .map((s) =>
+          db.localProfiles.put({
+            name: s.name,
+            isSelf: false,
+            usedAt: now,
+          }),
+        ),
     );
   }, [query.data]);
-
-  // Persist the synthesized self entry so it survives reloads even when the
-  // server never responded.
-  useEffect(() => {
-    if (!selfName) return;
-    void db.localProfiles.put({
-      name: selfName,
-      isSelf: true,
-      usedAt: new Date().toISOString(),
-    });
-  }, [selfName]);
 
   // Read local profiles for the offline / no-server fallback. Re-runs when
   // the server data refreshes so the mirror stays in sync after flush.
@@ -80,23 +79,23 @@ export function usePlayerSuggestions() {
     const seen = new Set<string>();
     const out: PlayerSuggestion[] = [];
 
-    if (selfName) {
+    if (query.data) {
+      for (const s of query.data) {
+        const key = s.name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(s);
+      }
+    } else if (selfName) {
       seen.add(selfName.toLowerCase());
       out.push({ name: selfName, isSelf: true });
     }
 
-    const sources: PlayerSuggestion[][] = [
-      query.data ?? [],
-      localProfiles ?? [],
-    ];
-
-    for (const list of sources) {
-      for (const s of list) {
-        const key = s.name.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push({ name: s.name, isSelf: false });
-      }
+    for (const s of localProfiles ?? []) {
+      const key = s.name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ name: s.name, isSelf: false });
     }
 
     return out;
