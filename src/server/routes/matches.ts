@@ -90,7 +90,9 @@ export const matchesRoutes = new Hono<AuthEnv>()
         ...(gameId ? { gameId } : {}),
       },
       include: {
-        game: { select: { name: true, slug: true } },
+        // id needed so the client can hydrate `["matches", id]` cache keys
+        // from the list response without an extra detail fetch.
+        game: { select: { id: true, name: true, slug: true } },
         players: {
           orderBy: { position: "asc" },
           include: {

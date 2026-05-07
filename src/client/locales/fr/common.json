@@ -80,6 +80,7 @@
       "draw": "Égalité"
     },
     "back": "Retour au jeu",
+    "draftBadge": "Brouillon",
     "notFound": "Partie introuvable.",
     "scoringNotSupported": "Le suivi de score pour {{game}} n'est pas encore disponible.",
     "newMatch": {
@@ -228,6 +229,8 @@
     "offlineBanner": "Hors ligne — les modifications seront synchronisées à la reconnexion",
     "offlineNoCache": "Cette page n'a pas été enregistrée pour le mode hors ligne. Reconnectez-vous pour la charger.",
     "syncPending_one": "1 modification en attente de sync",
-    "syncPending_other": "{{count}} modifications en attente de sync"
+    "syncPending_other": "{{count}} modifications en attente de sync",
+    "updateAvailable": "Nouvelle version disponible",
+    "updateReload": "Recharger"
   }
 }

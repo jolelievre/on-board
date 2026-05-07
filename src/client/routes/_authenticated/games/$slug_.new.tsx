@@ -5,10 +5,13 @@ import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../../../lib/api";
 import { authClient } from "../../../lib/auth-client";
 import { usePlayerSuggestions, persistPlayersToLocalProfiles } from "../../../hooks/usePlayerSuggestions";
+import { db } from "../../../lib/db";
+import { syncEngine } from "../../../lib/sync";
 import { Header } from "../../../components/layout/Header";
 import { Pill } from "../../../components/ui/Pill";
 import { Button } from "../../../components/ui/Button";
 import { Icon } from "../../../components/ui/Icon";
+import type { Match } from "../../../types/match";
 import styles from "./$slug_.new.module.css";
 
 export const Route = createFileRoute("/_authenticated/games/$slug_/new")({
@@ -21,10 +24,6 @@ type Game = {
   name: string;
   minPlayers: number;
   maxPlayers: number;
-};
-
-type Match = {
-  id: string;
 };
 
 const AVATAR_CLASSES = [
@@ -72,6 +71,79 @@ function NewMatchPage() {
     }
   }, [game, names.length]);
 
+  // Build the synthetic match + queued POST that lets a brand-new match be
+  // created without network. The TanStack cache for `["matches", draftId]` is
+  // seeded so the user lands on a populated detail page; the matches list
+  // for this game is updated optimistically so the draft shows up in
+  // history. The actual server creation happens on reconnect via
+  // syncEngine.flush, which also remaps the draft id → the real one.
+  const createDraftMatch = async (
+    gameRecord: Game,
+    inputs: { name: string; userId: string | null }[],
+  ) => {
+    const draftId = `draft_${crypto.randomUUID()}`;
+    const startedAt = new Date().toISOString();
+    const draftPlayers = inputs.map((p, i) => ({
+      id: `draftp_${crypto.randomUUID()}`,
+      name: p.name,
+      position: i,
+      userId: p.userId,
+    }));
+
+    const synthetic: Match = {
+      id: draftId,
+      status: "IN_PROGRESS",
+      victoryType: null,
+      winnerId: null,
+      game: {
+        id: gameRecord.id,
+        slug: gameRecord.slug,
+        name: gameRecord.name,
+      },
+      players: draftPlayers.map((p) => ({
+        id: p.id,
+        name: p.name,
+        position: p.position,
+        user: null,
+      })),
+      scores: [],
+      metadata: {},
+    };
+
+    await db.matchDrafts.put({
+      id: draftId,
+      gameId: gameRecord.id,
+      gameSlug: gameRecord.slug,
+      gameName: gameRecord.name,
+      players: draftPlayers,
+      startedAt,
+    });
+
+    queryClient.setQueryData<Match>(["matches", draftId], synthetic);
+    queryClient.setQueriesData<Match[] | undefined>(
+      { queryKey: ["matches", { gameId: gameRecord.id }] },
+      (prev) => (prev ? [synthetic, ...prev] : [synthetic]),
+    );
+
+    await syncEngine.enqueue("POST", "/api/matches", {
+      draftId,
+      gameId: gameRecord.id,
+      players: draftPlayers.map((p) => ({
+        name: p.name,
+        position: p.position,
+        draftPlayerId: p.id,
+        ...(p.userId ? { userId: p.userId } : {}),
+      })),
+    });
+
+    void persistPlayersToLocalProfiles(
+      inputs.map((p) => ({ name: p.name, userId: p.userId })),
+      myUserId ?? null,
+    );
+
+    navigate({ to: "/matches/$id", params: { id: draftId } });
+  };
+
   const createMatch = useMutation({
     mutationFn: (input: {
       gameId: string;
@@ -89,18 +161,20 @@ function NewMatchPage() {
         }),
       }),
     onSuccess: (match, input) => {
-      const selfSuggestion = suggestions.find((s) => s.isSelf);
-      void persistPlayersToLocalProfiles(
-        input.players.map((p) => p.name),
-        selfSuggestion?.name,
-      );
+      void persistPlayersToLocalProfiles(input.players, myUserId ?? null);
       // The cached `["matches", { gameId }]` lists need to refetch so the
       // new match shows up in the game-detail history list (and stays in
       // sync with the cache that gcTime: Infinity now keeps long-lived).
       void queryClient.invalidateQueries({ queryKey: ["matches"] });
       navigate({ to: "/matches/$id", params: { id: match.id } });
     },
-    onError: (err: unknown) => {
+    onError: (err: unknown, input) => {
+      // Network failure (not a server-side ApiError) — fall back to the
+      // draft path so the user can score now and reconcile on reconnect.
+      if (!(err instanceof ApiError) && game) {
+        void createDraftMatch(game, input.players);
+        return;
+      }
       setError(err instanceof ApiError ? err.message : "Unknown error");
     },
   });
@@ -147,10 +221,19 @@ function NewMatchPage() {
       return;
     }
 
-    createMatch.mutate({
-      gameId: game.id,
-      players: trimmed.map((name, i) => ({ name, userId: userIds[i] ?? null })),
-    });
+    const players = trimmed.map((name, i) => ({
+      name,
+      userId: userIds[i] ?? null,
+    }));
+
+    if (!navigator.onLine) {
+      // Skip the doomed POST; go straight to the draft path so the user
+      // moves to scoring without seeing a transient error.
+      void createDraftMatch(game, players);
+      return;
+    }
+
+    createMatch.mutate({ gameId: game.id, players });
   };
 
   return (

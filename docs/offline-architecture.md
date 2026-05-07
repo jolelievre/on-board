@@ -77,15 +77,15 @@ Rule of thumb: **server-sourced + needed on cold boot → query persister. Clien
 | Feature | Offline? | Why |
 |---|---|---|
 | App shell loads | ✅ Always | Workbox precache |
-| Stay authenticated | ✅ If previously logged in | `useAuthSession` localStorage fallback |
+| Re-open after previous login | ✅ If previously logged in | `useAuthSession` localStorage fallback; the login route auto-redirects to `/games` even when the session is the offline-fallback copy |
 | View game list | ✅ After first online session | TanStack Query persistence |
 | View any game's detail page | ✅ After first online session | `usePrefetchGames` prefetches each game's detail and matches list on every authenticated session |
 | View match history | ✅ After first online session | `usePrefetchGames` prefetches per-game `["matches", { gameId }]` on every authenticated session |
-| View a match page | ✅ If visited at least once | TanStack Query persistence |
-| Score a round | ✅ Queued + shown as "offline" | `syncEngine.enqueue`, replayed on reconnect |
+| View a match page | ✅ Cold-start ready for any match in history | The list response already carries `players` + `scores`; `usePrefetchGames` hydrates `["matches", id]` from each list entry via `setQueryData`, so a tap on any past match is an instant cache hit even if the user has never opened it before |
+| Score a round | ✅ Queued + shown as "offline" | `syncEngine.enqueue`, replayed on reconnect; cache also patched optimistically so navigation away preserves the values |
 | Complete a match | ✅ Queued + optimistic | Queue + immediate `setQueryData` |
-| Player name autocomplete | ✅ From Dexie `localProfiles` | Populated from server on each online fetch |
-| Create a brand-new match | ❌ Not yet implemented | Needs `matchDrafts` flow (planned Phase 6) |
+| Player name autocomplete | ✅ Always | Three-tier resolution: server response (authoritative), synthesized self entry from the auth session (fallback), Dexie `localProfiles` (offline). Self is always the first chip even on a brand-new install with no match history |
+| Create a brand-new match | ✅ Via `matchDrafts` | Synthetic match seeded into the cache + queued POST; reconciliation on reconnect rewrites draft ids to real ids |
 | First-ever app open offline | ❌ Impossible in practice | Google OAuth requires network; prefetch runs on first authenticated session |
 
 ---
@@ -103,6 +103,69 @@ Rule of thumb: **server-sourced + needed on cold boot → query persister. Clien
 | `src/client/lib/query-client.ts` | TanStack Query with `gcTime: Infinity` (see hydration-timing section) |
 | `src/client/main.tsx` | Synchronous hydrate + `persistQueryClientSubscribe` for ongoing writes |
 | `src/client/components/layout/OfflineBanner.tsx` | UI indicator for offline state |
+| `src/client/components/layout/UpdateBanner.tsx` | Surfaces "New version available" when a new SW finishes installing |
+
+---
+
+## Login when offline
+
+A previously-authenticated user who opens the app offline lands in `/games`, not on the login screen. The chain:
+
+1. `useAuthSession` returns the cached session (`isOfflineFallback: true`) when `navigator.onLine` is false and a session exists in `localStorage`.
+2. The login route (`/`) redirects on **any** non-pending session — including the offline-fallback copy. The `_authenticated` layout owns the offline UX (OfflineBanner, SyncPill, `offlineNoCache` per page).
+3. If no session is cached, the login route stays put. Sign-in requires Google OAuth, which needs network — there's nothing useful to do offline without a session.
+
+Earlier the redirect explicitly skipped offline-fallback sessions to avoid "silently entering with stale credentials." That guard is gone: a cached session can't do anything dangerous offline (no writes hit the server), and stranding the user on a useless login screen prevents them from reaching their own cached data.
+
+---
+
+## Player suggestions — three-tier resolution
+
+`usePlayerSuggestions` resolves suggestions from three sources, in priority order, and merges them case-insensitively:
+
+1. **Server response** — `GET /api/players/suggestions` (cached + persisted via TanStack Query). Authoritative when available: its `isSelf` row already reflects the current alias.
+2. **Synthesized self entry** — `{ name: session.user.alias || session.user.name, isSelf: true }`, computed from the auth session. Used **only** when no server response has landed (offline-first install / first paint).
+3. **Dexie `localProfiles`** — fallback when the server query is paused/errored. Populated by every successful server fetch (non-self rows only) and by `persistPlayersToLocalProfiles` after a match is created.
+
+The self entry is **not** persisted to Dexie. Two reasons: the auth session is itself cached (`onboard_session_cache` in localStorage + better-auth's reactive cache), so the synthesized self survives reloads without a Dexie copy; and persisting `{ name: previousAlias, isSelf: true }` would resurrect the old alias as a phantom suggestion after the user changes it. The server's `isSelf` row is filtered out of the Dexie mirror for the same reason.
+
+The session payload from `authClient.useSession()` can lag behind a recent `updateUser` call by a tick or two — that's why the server response wins over the synth when both are available, instead of the synth being unconditionally pushed first. The new-match form uses the existing `suggestions.find(s => s.isSelf)?.name` path to attribute the user's `userId` on submit.
+
+---
+
+## Match drafts (offline match creation)
+
+Creating a brand-new match works without a network. The flow:
+
+1. **Submit while offline** — `$slug_.new.tsx` detects `!navigator.onLine` (or catches a network error from the POST attempt) and synthesizes a `Match` shape with id `draft_<uuid>` and per-player ids `draftp_<uuid>`. The match is seeded into the TanStack cache (`["matches", draftId]`) and into the cached match-list (`["matches", { gameId }]`) so it shows up in history immediately.
+2. **Persist intent** — a `matchDrafts` row records the gameId, players, and a queue entry is pushed to `syncQueue`: `POST /api/matches { draftId, players: [{ ..., draftPlayerId, position }] }`.
+3. **Score the draft** — `SkullKingScorer` and `SevenWondersDuelScorer` detect `match.id.startsWith("draft_")` inside their `mutationFn` and short-circuit to `applyOptimistically(...)` + `syncEngine.enqueue(...)` instead of calling the server. The mutation resolves successfully (no rejection), so flows that `await mutateAsync` (e.g. SK's end-of-round flush) keep working. The match page shows a "Draft" badge in the header.
+4. **Reconciliation on reconnect** — `syncEngine.flush()` walks the queue in order. When a `POST /api/matches` succeeds, the response (real `match.id` + per-position `players[].id`) is used to build a `matchIdMap` (draft id → real id) and `playerIdMap` (draft player id → real player id). Subsequent queue entries get their URL and JSON body string-substituted via these maps before the fetch fires.
+5. **URL fixup** — once a draft is mapped to a real id, the match route detects the `matchDrafts.realId` field (or receives a `SYNC_DRAFTS_RESOLVED_EVENT` for live sessions) and `navigate(..., { replace: true })`s to `/matches/<realId>`, deleting the draft row.
+
+The string-level substitution is safe because draft ids are formatted with a `draft_` / `draftp_` prefix + a UUID — they cannot collide with anything else on the wire.
+
+---
+
+## Service-worker update flow
+
+`vite-plugin-pwa` is configured with `registerType: "prompt"`. The new SW finishes its `install` event (precache populated) before the user can act, and only then does the `UpdateBanner` (mounted from `__root.tsx`) render "New version available — Reload". This eliminates the stale-precache window observed during PR #8 testing, where fonts loaded from the new CSS bundle while the old SW still controlled the page.
+
+`useRegisterSW` from `virtual:pwa-register/react` is called inside `UpdateBanner` and is the only registration site — `main.tsx` no longer calls `registerSW({ immediate: true })`.
+
+---
+
+## Where offline runs
+
+The offline machinery is **not exclusive to installed PWAs**. IndexedDB (Dexie) and Service Worker precache work in every modern browser — desktop Chrome/Firefox/Safari/Edge, mobile Chrome/Safari, whether the user has installed the PWA or just visited the site. After one online visit, the next visit works offline regardless of how the app is launched.
+
+What "installed PWA" adds:
+
+- **Standalone window** (no browser chrome) and a home-screen icon
+- **Background Sync API** on Chromium-based browsers — lets the queue replay even if the app/tab is closed (iOS Safari does not support this yet)
+- iOS Safari supports installable PWAs since 16.4 but limits Background Sync and push notifications
+
+Practical implication: nothing in this architecture is mobile-only or PWA-only. The same offline UX runs on a desktop Chrome tab.
 
 ---
 
