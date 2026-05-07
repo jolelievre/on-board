@@ -84,7 +84,7 @@ Rule of thumb: **server-sourced + needed on cold boot → query persister. Clien
 | View a match page | ✅ Cold-start ready for any match in history | The list response already carries `players` + `scores`; `usePrefetchGames` hydrates `["matches", id]` from each list entry via `setQueryData`, so a tap on any past match is an instant cache hit even if the user has never opened it before |
 | Score a round | ✅ Queued + shown as "offline" | `syncEngine.enqueue`, replayed on reconnect; cache also patched optimistically so navigation away preserves the values |
 | Complete a match | ✅ Queued + optimistic | Queue + immediate `setQueryData` |
-| Player name autocomplete | ✅ Always | Three-tier resolution: synthesized self entry from the auth session, server response, Dexie `localProfiles`. Self is always the first chip even on a brand-new install with no match history |
+| Player name autocomplete | ✅ Always | Three-tier resolution: server response (authoritative), synthesized self entry from the auth session (fallback), Dexie `localProfiles` (offline). Self is always the first chip even on a brand-new install with no match history |
 | Create a brand-new match | ✅ Via `matchDrafts` | Synthetic match seeded into the cache + queued POST; reconciliation on reconnect rewrites draft ids to real ids |
 | First-ever app open offline | ❌ Impossible in practice | Google OAuth requires network; prefetch runs on first authenticated session |
 
@@ -123,11 +123,13 @@ Earlier the redirect explicitly skipped offline-fallback sessions to avoid "sile
 
 `usePlayerSuggestions` resolves suggestions from three sources, in priority order, and merges them case-insensitively:
 
-1. **Synthesized self entry** — `{ name: session.user.alias || session.user.name, isSelf: true }`, computed on every render from the auth session. Always present, including on a brand-new install with no match history and no server reachability.
-2. **Server response** — `GET /api/players/suggestions` (cached + persisted via TanStack Query).
-3. **Dexie `localProfiles`** — fallback when the server query is paused/errored. Populated by every successful server fetch and seeded with the synthesized self entry.
+1. **Server response** — `GET /api/players/suggestions` (cached + persisted via TanStack Query). Authoritative when available: its `isSelf` row already reflects the current alias.
+2. **Synthesized self entry** — `{ name: session.user.alias || session.user.name, isSelf: true }`, computed from the auth session. Used **only** when no server response has landed (offline-first install / first paint).
+3. **Dexie `localProfiles`** — fallback when the server query is paused/errored. Populated by every successful server fetch (non-self rows only) and by `persistPlayersToLocalProfiles` after a match is created.
 
-The self entry is also persisted to Dexie so it survives reloads even when the server has never responded. The new-match form uses the existing `suggestions.find(s => s.isSelf)?.name` path to attribute the user's `userId` on submit.
+The self entry is **not** persisted to Dexie. Two reasons: the auth session is itself cached (`onboard_session_cache` in localStorage + better-auth's reactive cache), so the synthesized self survives reloads without a Dexie copy; and persisting `{ name: previousAlias, isSelf: true }` would resurrect the old alias as a phantom suggestion after the user changes it. The server's `isSelf` row is filtered out of the Dexie mirror for the same reason.
+
+The session payload from `authClient.useSession()` can lag behind a recent `updateUser` call by a tick or two — that's why the server response wins over the synth when both are available, instead of the synth being unconditionally pushed first. The new-match form uses the existing `suggestions.find(s => s.isSelf)?.name` path to attribute the user's `userId` on submit.
 
 ---
 
