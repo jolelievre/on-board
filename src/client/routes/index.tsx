@@ -16,16 +16,17 @@ export const Route = createFileRoute("/")({
 function LoginPage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  // Use isOfflineFallback to avoid auto-redirecting when offline — if the user
-  // intentionally navigated here while offline we should show the login screen,
-  // not silently push them to /games with stale cached credentials.
-  const { session, isPending, isOfflineFallback } = useAuthSession();
+  // A cached session is sufficient to enter the app — even offline. The
+  // protected routes own the offline UX (OfflineBanner, SyncPill, the
+  // offlineNoCache fallback for queries with no cached data), so there's
+  // nothing harmful about redirecting an offline-fallback user to /games.
+  const { session, isPending } = useAuthSession();
 
   useEffect(() => {
-    if (session && !isOfflineFallback) {
+    if (session) {
       navigate({ to: "/games" });
     }
-  }, [session, isOfflineFallback, navigate]);
+  }, [session, navigate]);
 
   if (isPending) {
     return (
@@ -35,7 +36,7 @@ function LoginPage() {
     );
   }
 
-  if (session && !isOfflineFallback) {
+  if (session) {
     return null;
   }
 
