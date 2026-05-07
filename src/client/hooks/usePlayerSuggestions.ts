@@ -106,19 +106,23 @@ export function usePlayerSuggestions() {
 }
 
 /**
- * Saves a list of player names to Dexie LocalProfiles after a match is created.
- * Call this in the mutation's `onSuccess` handler.
+ * Saves a list of players to Dexie LocalProfiles after a match is created.
+ *
+ * `isSelf` is determined by `userId === selfUserId` — never by name equality.
+ * Two friends sharing a first name (or a friend sharing the user's name) must
+ * not stamp `isSelf: true` on the wrong row, which would pollute the
+ * suggestion list and the userId attribution path on the next new-match form.
  */
 export async function persistPlayersToLocalProfiles(
-  names: string[],
-  selfName?: string | null,
+  players: { name: string; userId: string | null }[],
+  selfUserId: string | null,
 ): Promise<void> {
   const now = new Date().toISOString();
   await Promise.all(
-    names.map((name) =>
+    players.map((p) =>
       db.localProfiles.put({
-        name,
-        isSelf: selfName ? name === selfName : false,
+        name: p.name,
+        isSelf: !!selfUserId && p.userId === selfUserId,
         usedAt: now,
       }),
     ),
