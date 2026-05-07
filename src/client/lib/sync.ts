@@ -182,16 +182,21 @@ async function maybeRecordDraftMapping(
 }
 
 /**
- * After a flush pass, drop any matchDrafts row whose draft id no longer
- * appears in the live queue — its POST + all subsequent rewrites have
- * succeeded. The row is kept so the route can redirect a stale
- * `/matches/draft_xxx` URL to `/matches/<realId>` until the user has
- * navigated away.
+ * After a flush pass, drop any matchDrafts row that has been fully
+ * reconciled — both conditions must hold:
  *
- * The current rule is conservative: only delete a row if NO queue entry
- * still references its draft id, AND the row has a realId (i.e. has been
- * synced this pass or a prior one). The route's redirect is one-shot —
- * once it fires, the row can safely go.
+ *   1. The row has a `realId` (its POST replayed in this pass or a prior one)
+ *   2. No remaining queue entry's URL or body still references the draft id
+ *
+ * The row is the canonical source for the `draft_xxx → realId` mapping when
+ * a flush pre-loads from Dexie (`syncEngine.flush`'s opening read), so it
+ * must outlive every queue entry that depends on it. Deleting too early
+ * would strand any queued PATCH still carrying the draft id — they would
+ * fire post-reload with `/api/matches/draft_xxx/...` and 404.
+ *
+ * The match route reads this row on mount to redirect a stale
+ * `/matches/draft_xxx` URL to `/matches/<realId>`. The route does NOT
+ * delete the row — sync owns the lifecycle.
  */
 async function reconcileDrafts(matchIdMap: Map<string, string>): Promise<void> {
   if (matchIdMap.size === 0) return;
@@ -206,11 +211,13 @@ async function reconcileDrafts(matchIdMap: Map<string, string>): Promise<void> {
       }
     }
   }
-  // We intentionally don't delete the matchDrafts row here — the match
-  // route uses it to detect "your URL has been remapped" on next mount.
-  // The route deletes the row after it redirects, so it stays around for
-  // exactly as long as the user might still be sitting on the draft URL.
-  void stillReferenced; // keep for future logging hooks
+  for (const [draftId] of matchIdMap) {
+    if (stillReferenced.has(draftId)) continue;
+    const row = await db.matchDrafts.get(draftId);
+    if (row?.realId) {
+      await db.matchDrafts.delete(draftId);
+    }
+  }
 }
 
 async function incrementRetry(entry: SyncQueueEntry) {

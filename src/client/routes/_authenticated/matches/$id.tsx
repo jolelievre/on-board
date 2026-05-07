@@ -46,12 +46,17 @@ function MatchPage() {
   // Also re-checks when the sync engine flushes a draft mid-session — the
   // event carries the draft→real id mapping so we can redirect without
   // hitting Dexie again.
+  //
+  // The matchDrafts row itself is owned by `syncEngine` (see
+  // `reconcileDrafts` in `lib/sync.ts`): the route never deletes it. A
+  // mid-flush reload after a route-side delete would lose the
+  // `draft_xxx → realId` mapping that the engine pre-loads to handle queue
+  // entries replayed in subsequent passes.
   useEffect(() => {
     if (!isDraft) return;
     let cancelled = false;
     const redirectTo = (realId: string) => {
       if (cancelled) return;
-      void db.matchDrafts.delete(id);
       navigate({
         to: "/matches/$id",
         params: { id: realId },
