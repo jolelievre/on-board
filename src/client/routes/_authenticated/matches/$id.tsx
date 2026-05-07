@@ -1,20 +1,28 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../../lib/api";
+import { db } from "../../../lib/db";
+import {
+  SYNC_DRAFTS_RESOLVED_EVENT,
+  type SyncDraftsResolvedDetail,
+} from "../../../lib/sync";
 import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
 import { SevenWondersDuelScorer } from "../../../components/scoring/SevenWondersDuelScorer";
 import { SkullKingScorer } from "../../../components/scoring/skull-king/SkullKingScorer";
 import { Header } from "../../../components/layout/Header";
 import { Card } from "../../../components/ui/Card";
 import { Icon } from "../../../components/ui/Icon";
+import { Pill } from "../../../components/ui/Pill";
 import {
   SyncPill,
   saveStatusToSyncState,
   type SaveStatus,
 } from "../../../components/ui/SyncPill";
 import type { Match } from "../../../types/match";
+
+const DRAFT_PREFIX = "draft_";
 
 export const Route = createFileRoute("/_authenticated/matches/$id")({
   component: MatchPage,
@@ -23,13 +31,56 @@ export const Route = createFileRoute("/_authenticated/matches/$id")({
 function MatchPage() {
   const { id } = Route.useParams();
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { isOnline } = useOnlineStatus();
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
 
+  const isDraft = id.startsWith(DRAFT_PREFIX);
+
+  // If the user lands on a draft URL whose POST has already been replayed,
+  // jump them to the real match URL. Doing this on mount keeps the address
+  // bar in sync with the canonical id and lets `replace` swap history so a
+  // back-press doesn't strand them on the dead draft URL.
+  //
+  // Also re-checks when the sync engine flushes a draft mid-session — the
+  // event carries the draft→real id mapping so we can redirect without
+  // hitting Dexie again.
+  useEffect(() => {
+    if (!isDraft) return;
+    let cancelled = false;
+    const redirectTo = (realId: string) => {
+      if (cancelled) return;
+      void db.matchDrafts.delete(id);
+      navigate({
+        to: "/matches/$id",
+        params: { id: realId },
+        replace: true,
+      });
+    };
+    void db.matchDrafts.get(id).then((draft) => {
+      if (draft?.realId) redirectTo(draft.realId);
+    });
+    const onResolved = (e: Event) => {
+      const detail = (e as CustomEvent<SyncDraftsResolvedDetail>).detail;
+      const realId = detail?.mappings?.[id];
+      if (realId) redirectTo(realId);
+    };
+    window.addEventListener(SYNC_DRAFTS_RESOLVED_EVENT, onResolved);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(SYNC_DRAFTS_RESOLVED_EVENT, onResolved);
+    };
+  }, [id, isDraft, navigate]);
+
   const { data: match, isPending, isPaused } = useQuery<Match>({
     queryKey: ["matches", id],
-    queryFn: () => api<Match>(`/api/matches/${id}`),
+    // Drafts have no server resource yet — return the cache value (seeded
+    // by the new-match form) without ever hitting the network.
+    queryFn: isDraft
+      ? () => Promise.reject(new Error("draft-only"))
+      : () => api<Match>(`/api/matches/${id}`),
+    enabled: !isDraft,
   });
 
   if (isPending && !isPaused) {
@@ -121,6 +172,11 @@ function MatchPage() {
               >
                 <Icon name="cards" size={18} />
               </button>
+            )}
+            {isDraft && (
+              <Pill tone="muted" data-testid="match-draft-badge">
+                {t("matches.draftBadge", { defaultValue: "Draft" })}
+              </Pill>
             )}
             {showSyncPill && (
               <SyncPill

@@ -22,13 +22,28 @@ export type SyncQueueEntry = {
   error?: string;
 };
 
+export type DraftPlayer = {
+  /** Client-generated id (prefixed "draftp_"). Used wherever the scorer
+   * normally references a server player id; rewritten to the real id by
+   * the sync engine on flush. */
+  id: string;
+  name: string;
+  position: number;
+  userId?: string | null;
+};
+
 export type MatchDraft = {
   /** Temporary client-generated ID (prefixed "draft_"). */
   id: string;
   gameId: string;
   gameSlug: string;
-  players: { name: string; userId?: string | null }[];
+  gameName: string;
+  players: DraftPlayer[];
   startedAt: string;
+  /** Filled by the sync engine once the draft has been replayed against
+   * the server. The match route reads this to redirect a stale
+   * `/matches/draft_xxx` URL to `/matches/<realId>`. */
+  realId?: string;
 };
 
 class OnBoardDB extends Dexie {

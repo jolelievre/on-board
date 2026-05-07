@@ -260,17 +260,90 @@ export function SkullKingScorer({
     return () => window.clearTimeout(t);
   }, []);
 
-  const patchMatch = useMutation({
-    mutationFn: (input: {
+  const isDraft = match.id.startsWith("draft_");
+
+  const applyMatchPatchOptimistically = useCallback(
+    (input: {
       metadata?: Record<string, unknown>;
       playerOrder?: { playerId: string; position: number }[];
-    }) =>
-      api<Match>(`/api/matches/${match.id}`, {
+    }) => {
+      queryClient.setQueryData<Match>(["matches", match.id], (prev) => {
+        if (!prev) return prev;
+        let nextPlayers = prev.players;
+        if (input.playerOrder) {
+          const posById = new Map(
+            input.playerOrder.map((p) => [p.playerId, p.position]),
+          );
+          nextPlayers = [...prev.players]
+            .map((p) => ({ ...p, position: posById.get(p.id) ?? p.position }))
+            .sort((a, b) => a.position - b.position);
+        }
+        return {
+          ...prev,
+          metadata:
+            input.metadata !== undefined ? input.metadata : prev.metadata,
+          players: nextPlayers,
+        };
+      });
+    },
+    [match.id, queryClient],
+  );
+
+  const applyScoresOptimistically = useCallback(
+    (
+      scores: {
+        playerId: string;
+        category: string;
+        value: number;
+        metadata: Record<string, unknown>;
+      }[],
+    ) => {
+      queryClient.setQueryData<Match>(["matches", match.id], (prev) => {
+        if (!prev) return prev;
+        const remaining = prev.scores.filter(
+          (s) =>
+            !scores.some(
+              (n) => n.playerId === s.playerId && n.category === s.category,
+            ),
+        );
+        return {
+          ...prev,
+          scores: [
+            ...remaining,
+            ...scores.map((s) => ({
+              playerId: s.playerId,
+              category: s.category,
+              value: s.value,
+              metadata: s.metadata,
+            })),
+          ],
+        };
+      });
+    },
+    [match.id, queryClient],
+  );
+
+  const patchMatch = useMutation({
+    mutationFn: async (input: {
+      metadata?: Record<string, unknown>;
+      playerOrder?: { playerId: string; position: number }[];
+    }) => {
+      if (isDraft) {
+        applyMatchPatchOptimistically(input);
+        await syncEngine.enqueue("PATCH", `/api/matches/${match.id}`, input);
+        return null;
+      }
+      return api<Match>(`/api/matches/${match.id}`, {
         method: "PATCH",
         body: JSON.stringify(input),
-      }),
+      });
+    },
     onMutate: () => setSaveStatus("saving"),
     onSuccess: (updated) => {
+      if (!updated) {
+        setSaveStatus("offline");
+        return;
+      }
       queryClient.setQueryData<Match>(["matches", match.id], (prev) =>
         prev ? { ...prev, ...updated } : updated,
       );
@@ -281,6 +354,7 @@ export function SkullKingScorer({
       input: { metadata?: Record<string, unknown>; playerOrder?: { playerId: string; position: number }[] },
     ) => {
       if (!(err instanceof ApiError)) {
+        applyMatchPatchOptimistically(input);
         void syncEngine.enqueue("PATCH", `/api/matches/${match.id}`, input);
         setSaveStatus("offline");
       } else {
@@ -290,20 +364,32 @@ export function SkullKingScorer({
   });
 
   const saveScores = useMutation({
-    mutationFn: (
+    mutationFn: async (
       scores: {
         playerId: string;
         category: string;
         value: number;
         metadata: Record<string, unknown>;
       }[],
-    ) =>
-      api(`/api/matches/${match.id}/scores`, {
+    ) => {
+      if (isDraft) {
+        applyScoresOptimistically(scores);
+        await syncEngine.enqueue("PATCH", `/api/matches/${match.id}/scores`, {
+          scores,
+        });
+        return null;
+      }
+      return api(`/api/matches/${match.id}/scores`, {
         method: "PATCH",
         body: JSON.stringify({ scores }),
-      }),
+      });
+    },
     onMutate: () => setSaveStatus("saving"),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data === null) {
+        setSaveStatus("offline");
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["matches", match.id] });
       flashSaved();
     },
@@ -312,6 +398,7 @@ export function SkullKingScorer({
       scores: { playerId: string; category: string; value: number; metadata: Record<string, unknown> }[],
     ) => {
       if (!(err instanceof ApiError)) {
+        applyScoresOptimistically(scores);
         void syncEngine.enqueue("PATCH", `/api/matches/${match.id}/scores`, { scores });
         setSaveStatus("offline");
       } else {
@@ -321,19 +408,39 @@ export function SkullKingScorer({
   });
 
   const completeMatch = useMutation({
-    mutationFn: (input: {
+    mutationFn: async (input: {
       victoryType: "score" | "draw";
       winnerId: string | null;
-    }) =>
-      api<Match>(`/api/matches/${match.id}`, {
+    }) => {
+      if (isDraft) {
+        queryClient.setQueryData<Match>(["matches", match.id], (prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "COMPLETED",
+                victoryType: input.victoryType,
+                winnerId: input.winnerId,
+              }
+            : prev,
+        );
+        await syncEngine.enqueue("PUT", `/api/matches/${match.id}`, {
+          status: "COMPLETED",
+          victoryType: input.victoryType,
+          winnerId: input.winnerId,
+        });
+        return null;
+      }
+      return api<Match>(`/api/matches/${match.id}`, {
         method: "PUT",
         body: JSON.stringify({
           status: "COMPLETED",
           victoryType: input.victoryType,
           winnerId: input.winnerId,
         }),
-      }),
+      });
+    },
     onSuccess: (updated) => {
+      if (!updated) return;
       queryClient.setQueryData<Match>(["matches", match.id], (prev) =>
         prev ? { ...prev, ...updated } : updated,
       );

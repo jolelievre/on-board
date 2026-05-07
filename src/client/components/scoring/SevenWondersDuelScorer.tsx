@@ -93,19 +93,65 @@ export function SevenWondersDuelScorer({ match, onSaveStatusChange }: Props) {
     }
   };
 
+  const isDraft = matchId.startsWith("draft_");
+
+  const applyScoresOptimistically = useCallback(
+    (scores: ScorePayload[]) => {
+      queryClient.setQueryData<Match>(["matches", matchId], (prev) => {
+        if (!prev) return prev;
+        const remaining = prev.scores.filter(
+          (s) =>
+            !scores.some(
+              (n) => n.playerId === s.playerId && n.category === s.category,
+            ),
+        );
+        return {
+          ...prev,
+          scores: [
+            ...remaining,
+            ...scores.map((s) => ({
+              playerId: s.playerId,
+              category: s.category,
+              value: s.value,
+            })),
+          ],
+        };
+      });
+    },
+    [matchId, queryClient],
+  );
+
   const saveScores = useMutation({
-    mutationFn: (scores: ScorePayload[]) =>
-      api(`/api/matches/${matchId}/scores`, {
+    mutationFn: async (scores: ScorePayload[]) => {
+      // Drafts have no server resource yet. Apply optimistically + enqueue
+      // for sync; mutateAsync resolves so callers awaiting it (e.g. SK's
+      // end-of-round flush) can proceed without try/catch.
+      if (isDraft) {
+        applyScoresOptimistically(scores);
+        await syncEngine.enqueue(
+          "PATCH",
+          `/api/matches/${matchId}/scores`,
+          { scores },
+        );
+        return null;
+      }
+      return api(`/api/matches/${matchId}/scores`, {
         method: "PATCH",
         body: JSON.stringify({ scores }),
-      }),
+      });
+    },
     onMutate: () => {
       clearSavedRevertTimer();
       setSaveStatus("saving");
     },
     onSuccess: () => {
-      setSaveStatus("saved");
       clearSavedRevertTimer();
+      // Drafts reflect "queued" state until the sync engine replays them.
+      if (isDraft) {
+        setSaveStatus("offline");
+        return;
+      }
+      setSaveStatus("saved");
       // Briefly show "saved" then return to the idle (wifi-only) state
       // so the header stays calm.
       savedRevertTimer.current = setTimeout(() => {
@@ -115,8 +161,11 @@ export function SevenWondersDuelScorer({ match, onSaveStatusChange }: Props) {
     },
     onError: (err: unknown, scores: ScorePayload[]) => {
       clearSavedRevertTimer();
-      // Network failure (not a server error) — queue for sync on reconnect.
+      // Network failure on a real (non-draft) match — queue for sync on
+      // reconnect. Apply the values to the cache so navigation away
+      // doesn't lose them.
       if (!(err instanceof ApiError)) {
+        applyScoresOptimistically(scores);
         void syncEngine.enqueue("PATCH", `/api/matches/${matchId}/scores`, { scores });
         setSaveStatus("offline");
       } else {
@@ -182,19 +231,39 @@ export function SevenWondersDuelScorer({ match, onSaveStatusChange }: Props) {
   }, [saveStatus, onSaveStatusChange]);
 
   const completeMatch = useMutation({
-    mutationFn: (input: {
+    mutationFn: async (input: {
       victoryType: CompletedVictoryType;
       winnerId: string | null;
-    }) =>
-      api<Match>(`/api/matches/${matchId}`, {
+    }) => {
+      if (isDraft) {
+        queryClient.setQueryData<Match>(["matches", matchId], (prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "COMPLETED",
+                victoryType: input.victoryType,
+                winnerId: input.winnerId,
+              }
+            : prev,
+        );
+        await syncEngine.enqueue("PUT", `/api/matches/${matchId}`, {
+          status: "COMPLETED",
+          victoryType: input.victoryType,
+          winnerId: input.winnerId,
+        });
+        return null;
+      }
+      return api<Match>(`/api/matches/${matchId}`, {
         method: "PUT",
         body: JSON.stringify({
           status: "COMPLETED",
           victoryType: input.victoryType,
           winnerId: input.winnerId,
         }),
-      }),
+      });
+    },
     onSuccess: (updated) => {
+      if (!updated) return;
       queryClient.setQueryData<Match>(["matches", matchId], (prev) =>
         prev ? { ...prev, ...updated } : updated,
       );
