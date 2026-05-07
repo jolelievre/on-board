@@ -121,7 +121,13 @@ export default defineConfig({
     react(),
     honoDevServer(),
     VitePWA({
-      registerType: "autoUpdate",
+      // Prompt mode: the new SW finishes installing (precache populated)
+      // before the user is asked to activate it. Eliminates the stale-
+      // precache window observed during PR #8 testing where fonts loaded
+      // from the new CSS bundle while the old SW still controlled the
+      // page, leading to ERR_INTERNET_DISCONNECTED on subsequent
+      // offline visits.
+      registerType: "prompt",
       // Don't activate the SW in dev — keeps Vite HMR clean.
       devOptions: { enabled: false },
       workbox: {
