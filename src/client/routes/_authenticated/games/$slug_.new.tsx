@@ -136,10 +136,9 @@ function NewMatchPage() {
       })),
     });
 
-    const selfSuggestion = suggestions.find((s) => s.isSelf);
     void persistPlayersToLocalProfiles(
-      inputs.map((p) => p.name),
-      selfSuggestion?.name,
+      inputs.map((p) => ({ name: p.name, userId: p.userId })),
+      myUserId ?? null,
     );
 
     navigate({ to: "/matches/$id", params: { id: draftId } });
@@ -162,11 +161,7 @@ function NewMatchPage() {
         }),
       }),
     onSuccess: (match, input) => {
-      const selfSuggestion = suggestions.find((s) => s.isSelf);
-      void persistPlayersToLocalProfiles(
-        input.players.map((p) => p.name),
-        selfSuggestion?.name,
-      );
+      void persistPlayersToLocalProfiles(input.players, myUserId ?? null);
       // The cached `["matches", { gameId }]` lists need to refetch so the
       // new match shows up in the game-detail history list (and stays in
       // sync with the cache that gcTime: Infinity now keeps long-lived).
