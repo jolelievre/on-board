@@ -375,6 +375,111 @@ Both are implemented together — caching the shell without offline data would s
 ### Follow-up (not in 5b)
 
 - If the font precache miss observed during PR #8 reappears after the SW update flow ships: add the woff2 URLs to `runtimeCaching` with `CacheFirst` as a backstop.
+- The architectural feedback from PR #11 review was split into Phase 5c (data model) and Phase 5d (GameClient abstraction) — see below. Phase 5b remains scoped to offline-first; the refactors land in their own PRs.
+
+---
+
+## Phase 5c: Users as first-class entities
+
+**Goal**: Replace name-based unregistered-player references with proper `User` entities, owned by their creator until linked to an auth account.
+
+**Why before more games or features**:
+- Today's name-only matching is unstable (case/typo collisions, same-name friends — see PR #11 review comment #2)
+- The link-friend-account feature in Phase 6 needs a stable cross-match reference
+- The Phase 5d GameClient abstraction's surface is cleaner with unambiguous user ids — building it against today's nullable-userId model and rewriting after 5c would waste work
+- Phase 7 (Skull King Rascal) and any future game add complexity to the per-game data layer; better to lock the model first
+
+### Design intent (preserved from the 2026-05-07 conversation)
+
+- The `Player` table becomes an association of Match to Users; `userId` is no longer optional, all players are actual Users.
+- For local-only Users: created by the app owner, saved in the **local AND server DB** (so they can be refetched on other devices). They remain unidentified Users as long as no Account is connected to them.
+- As long as no actual Account is linked to them, they are only known by the User who created them.
+- They can now be used to find matches where one User was involved (more stable than name matching).
+- We will be able to list our own users and reuse them for future matches, avoiding name duplication that doesn't guarantee we're talking about the same person.
+- They will be the reference point for the future feature to match "My users" to "Existing user" (Phase 6 link-to-account).
+
+### Open design questions to resolve at implementation time
+
+1. **Schema shape**: extend the existing `User` table with `ownerId String?` + nullable `email` + a `claimed Boolean`, OR introduce a separate `Profile` / `UnclaimedUser` table that linked Users reference. Better-auth wants `email` unique + non-null on `User` — both options have implications for the auth flow and migrations.
+2. **Server visibility boundary**: an unclaimed user is visible only to its `ownerId`. When linked to a real auth account, ownership is dropped and they become globally addressable subject to the privacy model. The `/api/players/suggestions` endpoint becomes `/api/users` filtered by `ownerId = me OR user appears in any match I created`.
+3. **Offline creation of unclaimed users**: typing a brand-new name in the new-match form when offline becomes TWO writes — `POST /api/users` then `POST /api/matches`. The sync engine's id-substitution map (currently match id + per-position player ids) must extend to **user ids**: when a queued POST /api/users succeeds, map `draftu_<uuid>` → real `userId`; subsequent queued POST /api/matches bodies referencing `draftu_xxx` get rewritten before fetch.
+4. **Migration**: every existing Player without `userId` → create a User per `(creator, distinct case-insensitive name)` tuple, attribute `Player.userId`, retain the original name on Player as a migration audit trail (or move it to `User.alias`). Reversibility via the audit trail.
+5. **Auth integration / claiming**: how does an unclaimed User become claimed? Options: (a) on Google sign-in, if email matches an unclaimed User any creator owns, prompt the new auth user to claim it; (b) the creator explicitly invites via email link; (c) deferred to Phase 6.
+6. **First-launch UX**: a brand-new authenticated user has no owned-users pool. The "self" entry in suggestions is them; the next entries come from creating new owned users inline as they type names in the new-match form.
+7. **Offline reads of the user list**: like matches, the user's own list should be prefetched + persisted to TanStack cache, with a Dexie mirror for the offline write queue.
+
+### Files likely affected
+
+- `prisma/schema.prisma` — schema change + migration
+- `src/server/routes/users.ts` (new) — list/create/patch + suggestions filter
+- `src/server/routes/matches.ts` — Player creation now references existing User; reject names without matching User
+- `src/server/routes/players.ts` — collapsed into users or removed
+- `src/client/hooks/usePlayerSuggestions.ts` → `useUserSuggestions` or `useOwnedUsers`
+- `src/client/lib/sync.ts` — user id substitution
+- `src/client/routes/_authenticated/games/$slug_.new.tsx` — autocomplete from owned users; "create new user" inline
+- `src/client/routes/_authenticated/users/` (new section?) — manage owned users
+- `src/client/lib/db.ts` — likely a `users` Dexie mirror; revisit `localProfiles`
+
+### Validation
+
+- Existing match flows (create, score, complete) keep working with the new model
+- An offline-created brand-new user reconciles correctly on reconnect (POST /users replayed, then POST /matches with substituted id)
+- A friend with the same name as the logged-in user no longer collides on suggestions
+- Migration is reversible for at least one rollback window
+
+---
+
+## Phase 5d: GameClient abstraction
+
+**Goal**: Extract data-access logic from scorer components into per-game clients with a shared base. Components stay focused on UI + local state; data layer becomes independently testable.
+
+**Why after 5c**:
+- Score payloads and player references will reshape with first-class Users
+- A new "create user inline" action becomes a fourth client method
+- Building against today's model and rewriting wastes effort
+
+### Criteria (from the user)
+
+- Mutualize as much code as possible across games
+- Clear responsibility split: global action/layer logic in the generic client, per-game data shaping (UI state → payload) in the specific client
+- Per-game clients live in dedicated files
+- Each action in the client decides which of the three layers applies (server, cache, local DB) — configurable so a per-game client can declare it doesn't need a particular layer
+
+### Sketch (revisit at implementation time)
+
+```
+src/client/lib/match-client/
+  types.ts          # SaveScoresInput, PatchInput, CompleteInput contracts
+  match-client.ts   # createMatchClient({ match, queryClient, setSaveStatus })
+                    # → { saveScores, patchMatch, completeMatch, ... }
+                    # owns: draft detection, online vs offline routing,
+                    #       optimistic cache writes, saveStatus lifecycle,
+                    #       syncEngine.enqueue, matches list invalidation
+  use-match-client.ts  # React hook: useMatchClient(match) wraps the above
+                       # via useMutation so components get isPending etc.
+  seven-wonders.ts  # buildScorePayload(values) — pure data shaping
+  skull-king.ts     # buildScorePayload(round, entries),
+                    # buildPersistDraftPatch(...) — pure data shaping
+```
+
+### Generic client responsibilities
+
+- Online happy path: `api()` call
+- Draft (id starts with `draft_`): `applyOptimistically()` + `syncEngine.enqueue()` + return resolved
+- Offline error on a real match: same as draft
+- `saveStatus` lifecycle (saving → saved → idle, or → offline / error)
+- Cache invalidation rules (e.g. `["matches", id]`, `["matches"]` list)
+
+### Per-game responsibilities
+
+- Pure data builders: turn UI state into the payload shape the generic client consumes
+- Game-specific callbacks for cases the generic can't handle (variant-specific score rules, custom phase transitions, etc.)
+
+### Validation
+
+- All existing scorer behavior preserved (E2E suite passes unchanged)
+- New unit tests for the client run without React / UI
+- Phase 7 (Skull King Rascal) becomes the third client and validates the abstraction's generality
 
 ---
 
