@@ -60,6 +60,10 @@ export const matchesRoutes = new Hono<AuthEnv>()
       }
     }
 
+    // Mirror the include shape of GET /:id so the sync engine can seed
+    // `["matches", id]` with a complete record after a queued draft POST
+    // replays. A partial response (e.g. missing `game`) would crash the
+    // match-detail route on the redirect from /matches/draft_xxx → real id.
     const match = await prisma.match.create({
       data: {
         gameId,
@@ -75,7 +79,16 @@ export const matchesRoutes = new Hono<AuthEnv>()
           })),
         },
       },
-      include: { players: true },
+      include: {
+        game: true,
+        players: {
+          orderBy: { position: "asc" },
+          include: {
+            user: { select: { name: true, alias: true } },
+          },
+        },
+        scores: true,
+      },
     });
 
     return c.json(match, 201);
