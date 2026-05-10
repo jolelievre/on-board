@@ -334,3 +334,42 @@ test.describe("Offline", () => {
     await expect(history).toContainText(p2);
   });
 });
+
+/**
+ * Auth-session fallback regression — pins useAuthSession's error-driven
+ * branch. Distinct from the BrowserContext.setOffline tests above because the
+ * bug it covers shows up specifically when network requests fail while
+ * `navigator.onLine` stays true (Chrome DevTools Network "Offline" throttle,
+ * captive portals, VPN drops). We reproduce that condition by aborting only
+ * /api/auth/get-session — no setOffline, so this runs on Mobile Safari too.
+ */
+test.describe("Auth session error-driven fallback", () => {
+  test("aborted get-session keeps the user on /games when a cached session exists", async ({
+    page,
+    context,
+  }) => {
+    // Online load to populate `onboard_session_cache` from the live session.
+    await page.goto("/games");
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.locator("h1")).toContainText("Games");
+
+    const cached = await page.evaluate(() =>
+      localStorage.getItem("onboard_session_cache"),
+    );
+    expect(cached).not.toBeNull();
+
+    // Fail get-session without flipping navigator.onLine. Pre-fix this drove
+    // useAuthSession into the `session: null` branch — _authenticated then
+    // bounced to "/". Post-fix the better-auth `error` triggers the cached
+    // fallback regardless of `navigator.onLine`.
+    await context.route("**/api/auth/get-session*", (route) =>
+      route.abort("connectionfailed"),
+    );
+
+    await page.reload();
+    await page.waitForLoadState("domcontentloaded");
+
+    await expect(page).toHaveURL(/\/games$/);
+    await expect(page.locator("h1")).toContainText("Games");
+  });
+});
