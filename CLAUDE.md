@@ -133,6 +133,10 @@ E2E tests should drive mutations through the **UI**, not via `page.request.post(
 - Preview environment on PRs (fixed URL)
 - `entrypoint.sh`: runs `prisma migrate deploy` then seeds + starts server (preserves data across deploys)
 
+### Resetting the preview/integration database
+
+Set `RESET_DB=true` in Coolify's env vars for the target environment, then redeploy. The entrypoint runs `prisma migrate reset --force --skip-seed` before the normal migrate + seed steps. **Flip `RESET_DB` back to `false` (or delete the var) immediately after the reset deploy** — every subsequent deploy while `RESET_DB=true` will wipe data again. Hard-blocked on `DEPLOY_ENV=production` (the entrypoint exits 1).
+
 ### Per-env PWA branding
 
 The PWA manifest (`name`, `short_name`, `theme_color`) and the icon set vary by environment so the three deploys can be installed and recognized side-by-side on the home screen. The `DEPLOY_ENV` build arg drives this:
