@@ -111,7 +111,7 @@ Rule of thumb: **server-sourced + needed on cold boot → query persister. Clien
 
 A previously-authenticated user who opens the app offline lands in `/games`, not on the login screen. The chain:
 
-1. `useAuthSession` returns the cached session (`isOfflineFallback: true`) when `navigator.onLine` is false and a session exists in `localStorage`.
+1. `useAuthSession` returns the cached session (`isOfflineFallback: true`) when `authClient.useSession()` surfaces a fetch error and a session exists in `localStorage`. We key on the better-auth `error` rather than `navigator.onLine` because `navigator.onLine` is unreliable (Chrome DevTools Network "Offline" throttling, captive portals, VPN drops, and flaky mobile connections can all leave it `true` while requests fail). A clean server-side logout returns 200 with `data: null` and `error: null`, so it still drops to the login screen.
 2. The login route (`/`) redirects on **any** non-pending session — including the offline-fallback copy. The `_authenticated` layout owns the offline UX (OfflineBanner, SyncPill, `offlineNoCache` per page).
 3. If no session is cached, the login route stays put. Sign-in requires Google OAuth, which needs network — there's nothing useful to do offline without a session.
 
