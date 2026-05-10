@@ -12,7 +12,12 @@ if [ "$RESET_DB" = "true" ]; then
     exit 1
   fi
   echo "⚠️  RESET_DB=true (DEPLOY_ENV=${DEPLOY_ENV:-unset}) — wiping the database..."
-  npx prisma migrate reset --force --skip-seed
+  # --skip-generate: prisma migrate reset auto-runs `prisma generate` as a
+  # post-step, which tries to write to /app/node_modules/prisma. The runner
+  # container's filesystem is owned by root and the process runs as appuser,
+  # so that write fails. The Prisma client was already generated during the
+  # Docker build (see Dockerfile), so runtime regeneration is unnecessary.
+  npx prisma migrate reset --force --skip-seed --skip-generate
 fi
 
 echo "Running database migrations..."
