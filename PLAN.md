@@ -376,6 +376,7 @@ Both are implemented together — caching the shell without offline data would s
 
 - If the font precache miss observed during PR #8 reappears after the SW update flow ships: add the woff2 URLs to `runtimeCaching` with `CacheFirst` as a backstop.
 - The architectural feedback from PR #11 review was split into Phase 5c (data model) and Phase 5d (GameClient abstraction) — see below. Phase 5b remains scoped to offline-first; the refactors land in their own PRs.
+- **SW interception under Chrome DevTools "Offline" throttling** — during PR #11 validation, a tab whose `navigator.serviceWorker.controller` was set still fell through to Chrome's native offline page when the Network panel was switched to Offline, with no `(ServiceWorker)` annotations on any request in the Network panel. OS-level WiFi-off worked fine in the same session, and the Playwright suite (CDP `setOffline`) passes. Hypotheses to investigate: (a) Chrome state corruption from earlier hard-reloads in the same session — try a clean profile or a different device first; (b) a real config gap — most likely candidate is adding `clientsClaim: true` to the workbox config in `vite.config.ts` so the new SW takes definitive control on activate; (c) the existing offline E2E suite never exercises a cold-load offline document fetch (acknowledged in `e2e/offline.spec.ts`), so a regression there could ship undetected — worth adding a Playwright test that does `setOffline(true)` then `page.reload()` against a production build to pin `navigateFallback`.
 
 ---
 
