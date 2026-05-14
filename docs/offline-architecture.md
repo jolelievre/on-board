@@ -2,7 +2,7 @@
 
 How the app stays usable without a network connection and how it recovers when connectivity returns.
 
-> **Current architecture is transitional.** The app today runs a three-layer stack (SW shell + TanStack Query persisted cache + Dexie queue). The full local-first refactor described in `PLAN.md` Phase 5e replaces layers 2 + 3 with a single Dexie mirror of the server. This document reflects the current state on `main`; sections marked **🔜 Phase 5e** preview what changes.
+> **Current architecture is transitional.** The app today runs a three-layer stack (SW shell + TanStack Query persisted cache + Dexie queue). The full local-first refactor described in `PLAN.md` Phase 5c replaces layers 2 + 3 with a single Dexie mirror of the server. This document reflects the current state on `main`; sections marked **🔜 Phase 5c** preview what changes.
 
 ---
 
@@ -30,7 +30,7 @@ The offline system is built from three independent layers stacked on top of each
 
 Session caching sits alongside these layers — the user's auth session is written to `localStorage` on every successful login and used as a fallback when the session API fails.
 
-> **🔜 Phase 5e**: layers 2 + 3 collapse into a single Dexie mirror. UI reads via `useLiveQuery` directly from Dexie; writes go to Dexie first then a sync queue replays to the server. See `PLAN.md` Phase 5e.
+> **🔜 Phase 5c**: layers 2 + 3 collapse into a single Dexie mirror. UI reads via `useLiveQuery` directly from Dexie; writes go to Dexie first then a sync queue replays to the server. See `PLAN.md` Phase 5c.
 
 ### Layer 2 hydration timing
 
@@ -62,7 +62,7 @@ The split between `localStorage` (TanStack persister) and IndexedDB (Dexie) is n
 
 **IndexedDB / Dexie — async, structured tables with indexes, transactions, large capacity.** Used for everything client-authoritative: the mutation queue (`syncQueue`) needs ordered iteration, per-record updates, and atomicity (a partially-written queue entry would be a bug); player suggestions (`localProfiles`) can grow beyond what fits in a single localStorage blob. None of these consumers are on the first-paint path — the queue is processed on reconnect, suggestions feed a typeahead — so async access is fine.
 
-> **🔜 Phase 5e**: the "synchronous first-paint" property of localStorage stops mattering because UI reads come from Dexie via `useLiveQuery`. The first render shows a `"loading"` state until Dexie resolves; that's milliseconds and a one-time concern. localStorage is removed for app data (still used for the auth session because better-auth needs it synchronously).
+> **🔜 Phase 5c**: the "synchronous first-paint" property of localStorage stops mattering because UI reads come from Dexie via `useLiveQuery`. The first render shows a `"loading"` state until Dexie resolves; that's milliseconds and a one-time concern. localStorage is removed for app data (still used for the auth session because better-auth needs it synchronously).
 
 ---
 
@@ -79,7 +79,7 @@ The split between `localStorage` (TanStack persister) and IndexedDB (Dexie) is n
 | Score a round on an existing match | ✅ Queued + shown as "offline" | `syncEngine.enqueue`, replayed on reconnect; cache patched optimistically so navigation away preserves the values |
 | Complete an existing match | ✅ Queued + optimistic | Queue + immediate `setQueryData` |
 | Player name autocomplete | ✅ Always | Three-tier resolution: server response (authoritative), synthesized self entry from the auth session (fallback), Dexie `localProfiles` (offline). Self is always the first chip even on a brand-new install with no match history |
-| **Create a brand-new match while offline** | ❌ **Pending Phase 5e** | The first attempt (PR #11 `matchDrafts` flow) produced cascading bugs and was scrapped. The new design uses client-generated CUIDs end-to-end and is described in `PLAN.md` Phase 5e |
+| **Create a brand-new match while offline** | ❌ **Pending Phase 5c** | The first attempt (PR #11 `matchDrafts` flow) produced cascading bugs and was scrapped. The new design uses client-generated CUIDs end-to-end and is described in `PLAN.md` Phase 5c |
 | First-ever app open offline | ❌ Impossible in practice | Google OAuth requires network; prefetch runs on first authenticated session |
 
 ---
@@ -92,7 +92,7 @@ The split between `localStorage` (TanStack persister) and IndexedDB (Dexie) is n
 | `src/client/hooks/useOnlineStatus.ts` | Detects online/offline, triggers sync on reconnect |
 | `src/client/hooks/usePrefetchGames.ts` | Warms the game-detail cache on every authenticated session |
 | `src/client/hooks/usePlayerSuggestions.ts` | Three-tier suggestion resolution; syncs server suggestions to Dexie |
-| `src/client/lib/db.ts` | Dexie schema (`localProfiles`, `syncQueue`; `matchDrafts` is vestigial and removed in Phase 5e) |
+| `src/client/lib/db.ts` | Dexie schema (`localProfiles`, `syncQueue`; `matchDrafts` is vestigial and removed in Phase 5c) |
 | `src/client/lib/sync.ts` | `syncEngine.enqueue()` and `syncEngine.flush()` |
 | `src/client/lib/query-client.ts` | TanStack Query with `gcTime: Infinity` (see hydration-timing section) |
 | `src/client/main.tsx` | Synchronous hydrate + `persistQueryClientSubscribe` for ongoing writes |
@@ -125,7 +125,7 @@ The self entry is **not** persisted to Dexie. Two reasons: the auth session is i
 
 The session payload from `authClient.useSession()` can lag behind a recent `updateUser` call by a tick or two — that's why the server response wins over the synth when both are available, instead of the synth being unconditionally pushed first. `isSelf` is determined by `userId === selfUserId` — never by name equality — so two friends sharing a first name (or a friend sharing the user's name) cannot stamp `isSelf: true` on the wrong row.
 
-> **🔜 Phase 5e**: this three-tier pattern is the prototype of the local-first design — it already reads server-cached + Dexie + session-derived. Phase 5e generalizes it across matches/scores/players. Suggestions themselves remain three-tier (the auth session is still the source for the self chip; the Dexie mirror still backs the autocomplete).
+> **🔜 Phase 5c**: this three-tier pattern is the prototype of the local-first design — it already reads server-cached + Dexie + session-derived. Phase 5c generalizes it across matches/scores/players. Suggestions themselves remain three-tier (the auth session is still the source for the self chip; the Dexie mirror still backs the autocomplete).
 
 ---
 
@@ -240,7 +240,7 @@ The cache is **never** evicted due to a failed network request. The only ways it
 
 **Key invariant:** a brief online blip (1-second connection, failed refetch) cannot empty the cache.
 
-> **🔜 Phase 5e**: rules 1 + 2 collapse — every server response goes into Dexie, and `useLiveQuery` automatically re-renders any subscribed component. `invalidateQueries` is replaced by `pullSync` (selective server-state refresh into Dexie) and applied only to the rows that changed.
+> **🔜 Phase 5c**: rules 1 + 2 collapse — every server response goes into Dexie, and `useLiveQuery` automatically re-renders any subscribed component. `invalidateQueries` is replaced by `pullSync` (selective server-state refresh into Dexie) and applied only to the rows that changed.
 
 ---
 
@@ -250,4 +250,4 @@ The cache is **never** evicted due to a failed network request. The only ways it
 - After dismissal, the persistent indicator is the small `SyncPill` that the global `Header` auto-renders whenever offline (the match page keeps its own SyncPill via the existing `right` slot).
 - Game-detail (`/games/$slug`) and match (`/matches/$id`) pages both distinguish a real 404 from an offline cache miss. When offline with no cached data (`isPaused: true`), they show `common.offlineNoCache` ("This page wasn't saved for offline use…") instead of an indefinite spinner.
 
-> **🔜 Phase 5e**: the per-screen SyncPill is replaced by a global `SyncStatus` component mounted next to OfflineBanner / UpdateBanner. It subscribes to `syncEngine.useStatus()` and renders independently of any scorer screen — the indicator is bound to the sync client, not the UX flow.
+> **🔜 Phase 5c**: the per-screen SyncPill is replaced by a global `SyncStatus` component mounted next to OfflineBanner / UpdateBanner. It subscribes to `syncEngine.useStatus()` and renders independently of any scorer screen — the indicator is bound to the sync client, not the UX flow.
