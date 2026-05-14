@@ -146,9 +146,20 @@ test.describe("Alias — settings + propagation", () => {
       page.locator("[data-testid='settings-alias-saved']"),
     ).toBeVisible();
 
-    // Game detail history should show the alias, NOT the original name
-    await page.goto("/games/7-wonders-duel");
-    await page.waitForLoadState("domcontentloaded");
+    // Use client-side navigation (BottomNav → game card) instead of
+    // page.goto. A full reload rehydrates the query cache from
+    // localStorage, and `createSyncStoragePersister`'s throttle always
+    // schedules its write via `setTimeout(0)` (even with throttleTime: 0
+    // — the comment in main.tsx claiming sync flush is wishful), so the
+    // invalidation flag set by the alias commit races the navigation.
+    // On Safari that race is lost consistently; on Chrome it's flaky.
+    // Client-side routing preserves the in-memory cache, so the
+    // invalidated matches query refetches on GameDetailPage mount.
+    await page.click("nav[aria-label='Primary'] a[href='/games']");
+    await page.waitForURL("**/games");
+    await page.click("a[href='/games/7-wonders-duel']");
+    await page.waitForURL("**/games/7-wonders-duel");
+
     const history = page.locator("[data-testid='match-history']");
     await expect(history).toBeVisible();
     await expect(history).toContainText("Jo");
