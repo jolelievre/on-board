@@ -2,9 +2,11 @@
 
 How the app stays usable without a network connection and how it recovers when connectivity returns.
 
+> **Current architecture is transitional.** The app today runs a three-layer stack (SW shell + TanStack Query persisted cache + Dexie queue). The full local-first refactor described in `PLAN.md` Phase 5c replaces layers 2 + 3 with a single Dexie mirror of the server. This document reflects the current state on `main`; sections marked **🔜 Phase 5c** preview what changes.
+
 ---
 
-## The three layers
+## The three layers (today)
 
 The offline system is built from three independent layers stacked on top of each other. Each layer has a distinct responsibility.
 
@@ -26,7 +28,9 @@ The offline system is built from three independent layers stacked on top of each
 └─────────────────────────────────────────────────────────┘
 ```
 
-Session caching sits alongside these layers — the user's auth session is written to `localStorage` on every successful login and used as a fallback when the session API is unreachable.
+Session caching sits alongside these layers — the user's auth session is written to `localStorage` on every successful login and used as a fallback when the session API fails.
+
+> **🔜 Phase 5c**: layers 2 + 3 collapse into a single Dexie mirror. UI reads via `useLiveQuery` directly from Dexie; writes go to Dexie first then a sync queue replays to the server. See `PLAN.md` Phase 5c.
 
 ### Layer 2 hydration timing
 
@@ -56,19 +60,9 @@ The split between `localStorage` (TanStack persister) and IndexedDB (Dexie) is n
 
 **`localStorage` — synchronous, single-blob, ~5 MB cap.** The query persister lives here because it's the *only* synchronous storage API in the browser. We read the dehydrated snapshot at module load in `main.tsx` *before* `createRoot().render()`, so the first render of every `useQuery` already has data. If we used IndexedDB instead, hydration would slip into a `useEffect` and we'd be back to the empty-cache flash that gets stuck `pending+paused` offline (see *Layer 2 hydration timing* above). The auth session lives here for the same reason — `useAuthSession` needs it on first render.
 
-**IndexedDB / Dexie — async, structured tables with indexes, transactions, large capacity.** Used for everything client-authoritative: the mutation queue (`syncQueue`) needs ordered iteration, per-record updates, and atomicity (a partially-written queue entry would be a bug); player suggestions (`localProfiles`) and future match drafts (`matchDrafts`) can grow beyond what fits in a single localStorage blob. None of these consumers are on the first-paint path — the queue is processed on reconnect, suggestions feed a typeahead — so async access is fine.
+**IndexedDB / Dexie — async, structured tables with indexes, transactions, large capacity.** Used for everything client-authoritative: the mutation queue (`syncQueue`) needs ordered iteration, per-record updates, and atomicity (a partially-written queue entry would be a bug); player suggestions (`localProfiles`) can grow beyond what fits in a single localStorage blob. None of these consumers are on the first-paint path — the queue is processed on reconnect, suggestions feed a typeahead — so async access is fine.
 
-**Selection criteria** when adding new persisted state:
-
-| Question | If yes → |
-|---|---|
-| Must be readable **synchronously** before first render? | localStorage |
-| Is it a **read snapshot of server state** the query layer owns? | localStorage (let TanStack persister handle it) |
-| Does it need **indexes, ordering, or atomic per-record writes**? | IndexedDB (Dexie) |
-| Is it **client-authoritative** (pending mutations, local-only data)? | IndexedDB (Dexie) |
-| Could it grow beyond a few MB over time? | IndexedDB (Dexie) |
-
-Rule of thumb: **server-sourced + needed on cold boot → query persister. Client-owned, queue-shaped, or growing → Dexie.**
+> **🔜 Phase 5c**: the "synchronous first-paint" property of localStorage stops mattering because UI reads come from Dexie via `useLiveQuery`. The first render shows a `"loading"` state until Dexie resolves; that's milliseconds and a one-time concern. localStorage is removed for app data (still used for the auth session because better-auth needs it synchronously).
 
 ---
 
@@ -77,15 +71,15 @@ Rule of thumb: **server-sourced + needed on cold boot → query persister. Clien
 | Feature | Offline? | Why |
 |---|---|---|
 | App shell loads | ✅ Always | Workbox precache |
-| Stay authenticated | ✅ If previously logged in | `useAuthSession` localStorage fallback |
+| Re-open after previous login | ✅ If previously logged in | `useAuthSession` cached-session fallback, keyed on the better-auth fetch `error` (not `navigator.onLine` — that's unreliable under DevTools throttling, captive portals, and flaky mobile) |
 | View game list | ✅ After first online session | TanStack Query persistence |
 | View any game's detail page | ✅ After first online session | `usePrefetchGames` prefetches each game's detail and matches list on every authenticated session |
 | View match history | ✅ After first online session | `usePrefetchGames` prefetches per-game `["matches", { gameId }]` on every authenticated session |
 | View a match page | ✅ If visited at least once | TanStack Query persistence |
-| Score a round | ✅ Queued + shown as "offline" | `syncEngine.enqueue`, replayed on reconnect |
-| Complete a match | ✅ Queued + optimistic | Queue + immediate `setQueryData` |
-| Player name autocomplete | ✅ From Dexie `localProfiles` | Populated from server on each online fetch |
-| Create a brand-new match | ❌ Not yet implemented | Needs `matchDrafts` flow (planned Phase 6) |
+| Score a round on an existing match | ✅ Queued + shown as "offline" | `syncEngine.enqueue`, replayed on reconnect; cache patched optimistically so navigation away preserves the values |
+| Complete an existing match | ✅ Queued + optimistic | Queue + immediate `setQueryData` |
+| Player name autocomplete | ✅ Always | Three-tier resolution: server response (authoritative), synthesized self entry from the auth session (fallback), Dexie `localProfiles` (offline). Self is always the first chip even on a brand-new install with no match history |
+| **Create a brand-new match while offline** | ❌ **Pending Phase 5c** | The first attempt (PR #11 `matchDrafts` flow) produced cascading bugs and was scrapped. The new design uses client-generated CUIDs end-to-end and is described in `PLAN.md` Phase 5c |
 | First-ever app open offline | ❌ Impossible in practice | Google OAuth requires network; prefetch runs on first authenticated session |
 
 ---
@@ -97,12 +91,65 @@ Rule of thumb: **server-sourced + needed on cold boot → query persister. Clien
 | `src/client/hooks/useAuthSession.ts` | Offline-safe session wrapper |
 | `src/client/hooks/useOnlineStatus.ts` | Detects online/offline, triggers sync on reconnect |
 | `src/client/hooks/usePrefetchGames.ts` | Warms the game-detail cache on every authenticated session |
-| `src/client/hooks/usePlayerSuggestions.ts` | Syncs player suggestions to Dexie |
-| `src/client/lib/db.ts` | Dexie schema (`localProfiles`, `syncQueue`, `matchDrafts`) |
+| `src/client/hooks/usePlayerSuggestions.ts` | Three-tier suggestion resolution; syncs server suggestions to Dexie |
+| `src/client/lib/db.ts` | Dexie schema (`localProfiles`, `syncQueue`; `matchDrafts` is vestigial and removed in Phase 5c) |
 | `src/client/lib/sync.ts` | `syncEngine.enqueue()` and `syncEngine.flush()` |
 | `src/client/lib/query-client.ts` | TanStack Query with `gcTime: Infinity` (see hydration-timing section) |
 | `src/client/main.tsx` | Synchronous hydrate + `persistQueryClientSubscribe` for ongoing writes |
 | `src/client/components/layout/OfflineBanner.tsx` | UI indicator for offline state |
+| `src/client/components/layout/UpdateBanner.tsx` | Surfaces "New version available" when a new SW finishes installing |
+
+---
+
+## Login when offline
+
+A previously-authenticated user who opens the app offline lands in `/games`, not on the login screen. The chain:
+
+1. `useAuthSession` returns the cached session (`isOfflineFallback: true`) when `authClient.useSession()` surfaces a fetch error and a session exists in `localStorage`. We key on the better-auth `error` rather than `navigator.onLine` because `navigator.onLine` is unreliable (Chrome DevTools Network "Offline" throttling, captive portals, VPN drops, and flaky mobile connections can all leave it `true` while requests fail). A clean server-side logout returns 200 with `data: null` and `error: null`, so it still drops to the login screen.
+2. The login route (`/`) redirects on **any** non-pending session — including the offline-fallback copy. The `_authenticated` layout owns the offline UX (OfflineBanner, SyncPill, `offlineNoCache` per page).
+3. If no session is cached, the login route stays put. Sign-in requires Google OAuth, which needs network — there's nothing useful to do offline without a session.
+
+Earlier the redirect explicitly skipped offline-fallback sessions to avoid "silently entering with stale credentials." That guard is gone: a cached session can't do anything dangerous offline (no writes hit the server), and stranding the user on a useless login screen prevents them from reaching their own cached data.
+
+---
+
+## Player suggestions — three-tier resolution
+
+`usePlayerSuggestions` resolves suggestions from three sources, in priority order, and merges them case-insensitively:
+
+1. **Server response** — `GET /api/players/suggestions` (cached + persisted via TanStack Query). Authoritative when available: its `isSelf` row already reflects the current alias.
+2. **Synthesized self entry** — `{ name: session.user.alias || session.user.name, isSelf: true }`, computed from the auth session. Used **only** when no server response has landed (offline-first install / first paint).
+3. **Dexie `localProfiles`** — fallback when the server query is paused/errored. Populated by every successful server fetch (non-self rows only) and by `persistPlayersToLocalProfiles` after a match is created.
+
+The self entry is **not** persisted to Dexie. Two reasons: the auth session is itself cached (`onboard_session_cache` in localStorage + better-auth's reactive cache), so the synthesized self survives reloads without a Dexie copy; and persisting `{ name: previousAlias, isSelf: true }` would resurrect the old alias as a phantom suggestion after the user changes it. The server's `isSelf` row is filtered out of the Dexie mirror for the same reason.
+
+The session payload from `authClient.useSession()` can lag behind a recent `updateUser` call by a tick or two — that's why the server response wins over the synth when both are available, instead of the synth being unconditionally pushed first. `isSelf` is determined by `userId === selfUserId` — never by name equality — so two friends sharing a first name (or a friend sharing the user's name) cannot stamp `isSelf: true` on the wrong row.
+
+> **🔜 Phase 5c**: this three-tier pattern is the prototype of the local-first design — it already reads server-cached + Dexie + session-derived. Phase 5c generalizes it across matches/scores/players. Suggestions themselves remain three-tier (the auth session is still the source for the self chip; the Dexie mirror still backs the autocomplete).
+
+---
+
+## Service-worker update flow
+
+`vite-plugin-pwa` is configured with `registerType: "prompt"`. The new SW finishes its `install` event (precache populated) before the user can act, and only then does the `UpdateBanner` (mounted from `__root.tsx`) render "New version available — Reload". This eliminates the stale-precache window observed during PR #8 testing, where fonts loaded from the new CSS bundle while the old SW still controlled the page.
+
+`useRegisterSW` from `virtual:pwa-register/react` is called inside `UpdateBanner` and is the only registration site — `main.tsx` no longer calls `registerSW({ immediate: true })`.
+
+A known follow-up: under Chrome DevTools' "Offline" Network throttle, the SW occasionally stops intercepting fetches even though `navigator.serviceWorker.controller` is set. OS-level WiFi-off and the Playwright suite both work fine. Tracked in `PLAN.md` Phase 5b follow-ups; likely fix is `clientsClaim: true` in the workbox config.
+
+---
+
+## Where offline runs
+
+The offline machinery is **not exclusive to installed PWAs**. IndexedDB (Dexie) and Service Worker precache work in every modern browser — desktop Chrome/Firefox/Safari/Edge, mobile Chrome/Safari, whether the user has installed the PWA or just visited the site. After one online visit, the next visit works offline regardless of how the app is launched.
+
+What "installed PWA" adds:
+
+- **Standalone window** (no browser chrome) and a home-screen icon
+- **Background Sync API** on Chromium-based browsers — lets the queue replay even if the app/tab is closed (iOS Safari does not support this yet)
+- iOS Safari supports installable PWAs since 16.4 but limits Background Sync and push notifications
+
+Practical implication: nothing in this architecture is mobile-only or PWA-only. The same offline UX runs on a desktop Chrome tab.
 
 ---
 
@@ -193,6 +240,8 @@ The cache is **never** evicted due to a failed network request. The only ways it
 
 **Key invariant:** a brief online blip (1-second connection, failed refetch) cannot empty the cache.
 
+> **🔜 Phase 5c**: rules 1 + 2 collapse — every server response goes into Dexie, and `useLiveQuery` automatically re-renders any subscribed component. `invalidateQueries` is replaced by `pullSync` (selective server-state refresh into Dexie) and applied only to the rows that changed.
+
 ---
 
 ## Offline UX
@@ -200,3 +249,5 @@ The cache is **never** evicted due to a failed network request. The only ways it
 - `OfflineBanner` (`src/client/components/layout/OfflineBanner.tsx`) renders an amber strip across the top of every authenticated page when `useOnlineStatus()` reports offline. It auto-dismisses after 5 seconds so it doesn't permanently steal vertical space.
 - After dismissal, the persistent indicator is the small `SyncPill` that the global `Header` auto-renders whenever offline (the match page keeps its own SyncPill via the existing `right` slot).
 - Game-detail (`/games/$slug`) and match (`/matches/$id`) pages both distinguish a real 404 from an offline cache miss. When offline with no cached data (`isPaused: true`), they show `common.offlineNoCache` ("This page wasn't saved for offline use…") instead of an indefinite spinner.
+
+> **🔜 Phase 5c**: the per-screen SyncPill is replaced by a global `SyncStatus` component mounted next to OfflineBanner / UpdateBanner. It subscribes to `syncEngine.useStatus()` and renders independently of any scorer screen — the indicator is bound to the sync client, not the UX flow.

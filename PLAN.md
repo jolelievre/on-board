@@ -349,39 +349,211 @@ Both are implemented together — caching the shell without offline data would s
 
 ## Phase 5b: Complete offline-first
 
-**Goal**: Close the gaps left by Phase 5 — most importantly, let users start *and* play a match end-to-end with no network.
+**Status (2026-05-14)**: First attempt closed without merge (PR #11 abandoned). The original three-layer architecture (server + TanStack Query cache + partial Dexie tables) proved to keep producing cascading bugs. Orthogonal improvements that survive the new design were cherry-picked to `main` via the `stabilize/cherry-picks` PR (#12). The actual offline match flow is being rebuilt as **Phase 5c** below.
 
-### Critical: full offline match flow
+### Shipped via stabilize/cherry-picks (the parts that survived)
 
-Right now `POST /api/matches` is required before navigation, so the new-match form blocks when offline. Building this out:
+- **Offline auth fallback** — `useAuthSession` keys the cached-session fallback on better-auth's fetch `error`, not `navigator.onLine`. Captive portals, VPN drops, DevTools "Offline" throttling, and OS-level WiFi off all converge to the same behavior. (`src/client/hooks/useAuthSession.ts`, `e2e/offline.spec.ts` Auth section)
+- **Login redirect always uses cached session** — `routes/index.tsx` drops the `isOfflineFallback` guard; the protected layout owns the offline UX.
+- **Player suggestions three-tier resolution** — `usePlayerSuggestions` synthesizes the self entry from the auth session, merges with the server response (server's `isSelf` row wins on alias collisions), falls back to Dexie `localProfiles`. `persistPlayersToLocalProfiles` stamps `isSelf` based on `userId`, never on name equality. (`src/client/hooks/usePlayerSuggestions.ts`)
+- **SW prompt mode + UpdateBanner** — `vite-plugin-pwa` switched from `autoUpdate` to `prompt`; `UpdateBanner` (mounted in `__root.tsx`) surfaces "New version available — Reload". Eliminates the stale-precache window observed during PR #8 testing. (`vite.config.ts`, `src/client/components/layout/UpdateBanner.tsx`, `src/client/main.tsx`)
+- **Server returns full match shape from POST** — `/api/matches` create response now includes the full record so clients can mirror it without a follow-up GET. (`src/server/routes/matches.ts`)
+- **Server includes `game.id` in matches list response** — aligns the list shape with the detail shape; required by Phase 5c's pull-sync. (`src/server/routes/matches.ts`)
+- **`RESET_DB` deploy toggle** — set `RESET_DB=true` in Coolify env to wipe + reseed preview/integration on next deploy. Hard-blocked on production. `--skip-generate` flag prevents the post-reset Prisma client regeneration from failing on a root-owned filesystem. (`scripts/entrypoint.sh`, `CLAUDE.md` Deployment section)
 
-- **`matchDrafts` flow** — the Dexie table already exists in `src/client/lib/db.ts`. When offline, persist a draft (gameId, players, startedAt) and route to a synthetic `/matches/draft-<localId>` page that the SkullKingScorer / SevenWondersDuelScorer can drive against the local draft.
-- **Round writes against the draft** — score writes already use `syncEngine.enqueue`; the same path needs to work when the parent match is itself a draft (i.e. has no server id yet).
-- **Reconciliation on reconnect** — `syncEngine.flush` replays the draft creation first, swaps the synthetic id for the server id everywhere it was used, then flushes the queued score writes. Every queued URL needs a way to express "use the id the previous request returned" (templating, or two-pass flush).
-- **UI**: show a "draft" badge while the match has no server id; hide the share/export options until reconciled.
+### Scrapped from PR #11 (replaced by Phase 5c)
 
-### SW update flow (eliminate the stale-precache window)
+- **`matchDrafts` flow** (`createDraftMatch`, synthetic Match with `draft_<uuid>` ID, queued POST with `draftId`+`draftPlayerId`, post-flush id rewriting in `syncEngine`, `SYNC_DRAFTS_RESOLVED_EVENT`) — replaced by client-generated CUIDs that don't need reconciliation.
+- **Match-detail cache hydration via prefetch** (`usePrefetchGames` seeding `["matches", id]` from list responses) — replaced by Dexie + `useLiveQuery` reads in Phase 5c.
 
-We hit this during PR #8 testing — fonts loaded via @font-face from the *new* CSS bundle while the old service worker still controlled the page, leading to `ERR_INTERNET_DISCONNECTED` for font subsets after going offline. (Even unregister + double hard-reload didn't reliably populate the new precache before the page went interactive.)
+### Bugs that prompted the rebuild (PR #11 device testing)
 
-- Switch `vite-plugin-pwa` from `registerType: "autoUpdate"` to `prompt`
-- Use `useRegisterSW` from `virtual:pwa-register/react` to surface a "New version available — Reload" banner
-- The banner only dismisses on user action, so the new SW + new precache are both fully ready before the user can navigate or go offline
-- Side benefit: explicit "you've been updated" affordance for the user
+- Duplicate matches on reconnect (often 3 copies of the same match)
+- "Sauvegarde…" save-status indicator stuck visibly while offline
+- Optimistic scores disappearing on navigate-away-back
+- Blank match-detail page after `invalidateQueries`, requiring a manual scroll/refresh
+- Apparent cross-match data contamination after sync replay
 
-### Investigate the font precache miss observed during PR #8
+Each traces back to the three-layer architecture: TanStack Query's localStorage-persisted cache was the de facto source of truth while only *part* of the offline data lived in Dexie. Mutations had to write to both layers; `setQueryData` and `syncEngine.enqueue` could disagree; and the `draft_xxx → realId` substitution in `sync.ts` added another coordination point. Phase 5c collapses to two layers (server + full Dexie mirror) where Dexie is the single client-side source of truth.
 
-Even after unregister + double hard-reload, the latin-400 / latin-600 subsets of caveat / jetbrains-mono / patrick-hand were still failing offline on a freshly-visited screen (e.g. `/games/$slug/new`). The SW manifest *did* contain those exact filenames. Worth verifying whether:
-- The browser is requesting the font under a path the SW isn't matching (e.g. trailing query strings).
-- A `Cache-Control: no-store` or other header on the asset is making Workbox skip it at install time.
-- The Workbox precache is being installed but not actually populated before the controlled fetch fires.
+### Follow-ups still on the radar
 
-Most likely the SW update flow above hides this entirely; if it doesn't, dig in here.
+- **SW interception under Chrome DevTools "Offline" throttling** — during PR #11 validation, a tab whose `navigator.serviceWorker.controller` was set still fell through to Chrome's native offline page when the Network panel was switched to Offline, with no `(ServiceWorker)` annotations on any request. OS-level WiFi-off worked fine in the same session, and the Playwright suite (CDP `setOffline`) passes. Hypotheses: (a) Chrome state corruption from hard-reloads in the same session — try a clean profile or different device first; (b) real config gap — most likely candidate is adding `clientsClaim: true` to the workbox config; (c) existing offline E2E suite doesn't exercise a cold-load offline document fetch — worth adding a Playwright test that does `setOffline(true)` then `page.reload()` against a production build to pin `navigateFallback`.
+- **Font precache miss observed during PR #8** — if it reappears after the SW update flow is in production, add the woff2 URLs to `runtimeCaching` with `CacheFirst` as a backstop.
+
+---
+
+## Phase 5c: Local-first refactor (server + Dexie)
+
+**Goal**: Replace the failed three-layer architecture (server + TanStack Query cache + partial Dexie tables) with a two-layer **local-first** design: server is the cross-device source of truth, Dexie is the local source of truth, UI reads exclusively from Dexie via `useLiveQuery`, every user action writes to Dexie first and queues a server sync.
+
+**Absorbs the former Phase 5d (GameClient abstraction).** The generic match-client originally proposed in 5d is fulfilled by `src/client/lib/mutations.ts` below. Of the original 5d scope, only the per-game payload builders remain as a small extraction (folded into PR B at `src/client/lib/match-client/{seven-wonders,skull-king}.ts`). What disappears entirely: draft detection (no draft IDs exist), online vs offline routing (mutations.ts always writes to Dexie; the sync engine handles online vs offline transparently), optimistic cache writes (the Dexie row IS the source of truth), `saveStatus` lifecycle (replaced by the global `SyncStatus` driven by `db.syncQueue` count), and per-mutation cache invalidation (`useLiveQuery` rerenders automatically; `pullSync` after `flush` replaces `invalidateQueries`).
+
+**Why**: the three-layer approach has produced cascading bugs (see Phase 5b "Bugs that prompted the rebuild"). The root cause is leaky abstractions between layers — TanStack Query's cache becoming the de facto source of truth while only part of the data lived in Dexie meant every mutation had to coordinate both layers. The local-first pattern (used by Replicache, RxDB, WatermelonDB, Linear, etc.) collapses this to a single client-side source of truth.
+
+### Architecture summary
+
+**Two layers:**
+- **Server** — canonical store, source of truth across devices.
+- **Dexie** — full local mirror of `games`, `matches`, `players`, `scores`. UI reads exclusively from Dexie.
+
+**ID strategy:** client generates CUIDs upfront for every new record. The server accepts client-supplied IDs and treats `POST` as upsert (idempotent by ID, scoped to the authenticated user). The "draft_" prefix and the entire draft↔real reconciliation mechanism go away.
+
+**Writes (local-first):** every user action atomically writes the row to Dexie and adds a sync queue entry inside the same Dexie transaction. UI re-renders immediately because reads are reactive. `syncEngine.flush()` fires fire-and-forget after every write; no-ops when offline.
+
+**Reads (reactive):** read hooks use Dexie's `useLiveQuery` (from `dexie-react-hooks`). Any write — local OR pulled from server — triggers an automatic re-render. No `setQueryData`, no `invalidateQueries`.
+
+**Sync (push + pull):**
+- *Push* — reuse the existing `db.syncQueue` + FIFO replay loop in `src/client/lib/sync.ts`. Strip out `substitute`, `maybeRecordDraftMapping`, `reconcileDrafts`, and the `SYNC_DRAFTS_RESOLVED_EVENT` dispatch. On flush success: call `pullSync()` instead of `queryClient.invalidateQueries()`.
+- *Pull* — new `src/client/lib/pull-sync.ts`. Calls `GET /api/matches?since={syncMeta.lastPullAt}` + `GET /api/games`. Merges into Dexie row-by-row with Last-Write-Wins on `updatedAt`. Triggers: (a) once after auth ready on app mount, (b) after every successful `flush()`, (c) on `online` event, (d) on a soft 60s interval while a match is open.
+- *Conflict resolution* — LWW at row granularity using `updatedAt`. The product constraint "one device editing a given match at a time" makes same-row conflicts rare.
+- *Deletes* — no client-initiated deletes exist today; tombstone design deferred.
+
+**SyncStatus indicator (global, bound to the sync client):** `syncEngine.useStatus()` returns `"idle" | "saving" | "offline" | "saved"`. Internally implemented over `useLiveQuery(db.syncQueue.where("status").equals("pending").count())` + `useOnlineStatus()` + a 1.2s "saved" debounce. The `SyncStatus` component just calls `syncEngine.useStatus()` and renders. Mounted globally from `__root.tsx` next to `OfflineBanner` / `UpdateBanner`. Independent of any scorer screen. Both scorers stop owning `saveStatus` state and the `onSaveStatusChange` prop plumbing is removed.
+
+### Dexie schema (v2)
+
+Replace `src/client/lib/db.ts`. Schema version 1 → 2; the upgrader drops `matchDrafts` and any `syncQueue` rows whose URL contains `draft_` (orphaned from old clients on the abandoned PR #11 branch).
+
+```
+games:        "id, slug"
+matches:      "id, gameId, status, startedAt, updatedAt, [createdById+startedAt]"
+players:      "id, matchId, [matchId+position]"
+scores:       "id, matchId, [matchId+playerId+category], updatedAt"
+localProfiles:"name, usedAt, linkedUserId"        // unchanged
+syncQueue:    "++id, createdAt, status"           // status: "pending"|"failed"
+syncMeta:     "key"                                // singleton rows
+```
+
+Each row mirrors the corresponding server payload (`Match`, `Player`, `Score` from `src/client/types/match.ts`) plus a local `updatedAt: ISO string`. `match.game` is **derived** at read time by joining `db.games`, not denormalized.
+
+### Phasing — 3 PRs
+
+#### PR A — Server idempotency on client-generated IDs (`feat/server-client-ids`, ~half day)
+
+**Goal**: accept client-generated CUIDs on `POST /api/matches`; add `updatedAt` columns; add `?since=` filter for pull-sync.
+
+**Changes**:
+- `prisma/schema.prisma` — add `updatedAt DateTime @updatedAt` to `Match`, `Player`, `Score`. Migration: `npx prisma migrate dev --name add_updated_at`.
+- `src/server/routes/matches.ts`:
+  - `POST /` accepts optional `id` and per-player `id`. Validate format (CUID-shaped). Do `findUnique({ where: { id } })` first → return 403 if the row exists and belongs to another user. Otherwise `prisma.match.upsert(...)` (or `create` if no `id` provided). Returns 200 on upsert hit, 201 on create.
+  - `GET /` accepts `?since=` ISO timestamp query param; filters by `updatedAt > since`. Without it, returns all of the user's matches as before.
+- `e2e/api/matches.spec.ts`:
+  - POST with explicit `id` twice → 200 second time, single row in DB.
+  - POST with `id` belonging to another user → 403.
+  - GET with `?since=` after a known update → only the updated rows.
+
+**Acceptance**: backwards-compatible (current production clients keep working without `id`). `npm test` clean.
+
+**Verification**: `curl -X POST /api/matches` twice with the same `{ id, gameId, players }` → no duplicate row in `psql`.
+
+#### PR B — Full local-first refactor (`feat/local-first-architecture`, ~2-3 days)
+
+**Goal**: switch the client to Dexie as the source of truth. Drop draft-id reconciliation. Make all scorer flows hit `mutations.ts` instead of `setQueryData` + `syncEngine.enqueue`.
+
+**Requires**: PR A in production.
+
+**Changes**:
+- **`src/client/lib/db.ts`** — schema v2 with upgrader. Drops `matchDrafts`; adds `games`, `matches`, `players`, `scores`, `syncMeta` tables. One-time production data migration in the upgrader: read `localStorage["onboard_query_cache"]` if present, hydrate `db.matches/players/scores` from any `["matches", id]` and `["games", slug]` entries, then delete the localStorage key. Worst case (no migration data): `pullSync` repopulates from server on first online action.
+- **`src/client/lib/sync.ts`** — strip `substitute`, `maybeRecordDraftMapping`, `reconcileDrafts`, `SYNC_DRAFTS_RESOLVED_EVENT`. Add `useStatus()` reactive hook. On `flush()` success, call `pullSync()` instead of `queryClient.invalidateQueries()`. Keep the retry/backoff loop and 401/403 permanent-fail handling.
+- **`src/client/lib/mutations.ts`** (NEW) — `createMatch`, `upsertScores`, `patchMatch`, `completeMatch`. Each opens a Dexie transaction over the affected tables + `syncQueue`, writes the row(s), enqueues, fires `syncEngine.flush()` (no-op offline). Returns the matchId (always a real CUID).
+- **`src/client/lib/pull-sync.ts`** (NEW) — `pullSync()` + `syncMeta` cursor helpers. Calls `GET /api/matches?since={lastPullAt}` + `GET /api/games`. Merges into Dexie row-by-row LWW on `updatedAt`. Updates `syncMeta.lastPullAt`.
+- **`src/client/lib/match-client/`** (NEW directory — former Phase 5d remnant; per-game payload builders) — `seven-wonders.ts` (`buildScorePayload(values)`), `skull-king.ts` (`buildScorePayload(round, entries)`, `buildPersistDraftPatch(...)`). Pure functions.
+- **`src/client/hooks/data/`** (NEW directory) — `useMatch.ts`, `useMatchList.ts`, `useGame.ts`, `useGames.ts`. Each backed by `useLiveQuery`. Return `{ data, status: "loading" | "ok" | "missing" }`.
+- **`src/client/components/sync/SyncStatus.tsx`** (NEW) — calls `syncEngine.useStatus()` and renders. Mounted from `__root.tsx` near `OfflineBanner` / `UpdateBanner`.
+- **`src/client/main.tsx`** — drop `persistQueryClient` subscribe + hydrate. TanStack Query stays only for `authClient.useSession`.
+- **`src/client/hooks/usePrefetchGames.ts`** → renamed `usePullOnAuth` and reduced to: on session ready, call `pullSync()` once. No more `setQueryData` seeding.
+- **`src/client/routes/_authenticated/matches/$id.tsx`** — drop `useQuery`, drop draft-redirect effect, drop `SYNC_DRAFTS_RESOLVED_EVENT` listener; use `useMatch(id)`.
+- **`src/client/routes/_authenticated/games/$slug.tsx`** — replace both `useQuery`s with `useGame(slug)` + `useMatchList(gameId)`.
+- **`src/client/routes/_authenticated/games/$slug_.new.tsx`** — drop `useMutation` + draft fallback path; call `mutations.createMatch(input)`; navigate to the returned matchId (always a real CUID, never `draft_…`).
+- **`src/client/components/scoring/SevenWondersDuelScorer.tsx`** — replace 4 `setQueryData` sites + `applyScoresOptimistically` closure with `mutations.upsertScores` / `mutations.completeMatch` / `mutations.patchMatch` calls; delete the `isDraft` branch entirely. Drop `onSaveStatusChange` prop.
+- **`src/client/components/scoring/skull-king/SkullKingScorer.tsx`** — same shape: 5 `setQueryData` sites collapse to `mutations.*` calls; `applyMatchPatchOptimistically` deleted; `onSaveStatusChange` prop removed.
+- **`e2e/offline.spec.ts`** — adapt assertions (no `draft_` in URLs). Add: full offline create + score + reload-while-offline + reconnect → match present in history, scores intact, no server duplicates, URL never contained `draft_`. Add: two-tab same-user live updates via `useLiveQuery`.
+
+**Acceptance**:
+- All existing E2E specs pass (adapted).
+- New specs pass.
+- Manual on a real device (OS-level WiFi off, NOT DevTools throttling — see Phase 5b follow-up about DevTools throttling reliability):
+  1. Online: create a match, score a round → DevTools → IndexedDB shows the score row.
+  2. WiFi off; score 3 more rounds, complete the match → UI updates instantly each time.
+  3. Force-kill app, reopen → match present, scores intact, queue still pending in `db.syncQueue`.
+  4. WiFi on → `SyncStatus` cycles "offline" → "saving" → "saved" → "idle" within ~2s.
+  5. `psql`: one match row, correct scores, no duplicates.
+  6. Open same account on a second device → match appears within first `pullSync` after login.
+- All five known bad scenarios from PR #11 testing (duplicate matches, stuck "Sauvegarde", scores disappearing on nav-away, blank detail page, cross-match contamination) — none should reproduce.
+
+#### PR C — Cleanup (`chore/drop-tanstack-cache`, ~half day)
+
+**Goal**: dead-code removal after PR B has soaked in production.
+
+**Changes**:
+- Remove `@tanstack/react-query-persist-client` + `@tanstack/query-sync-storage-persister` from `package.json`. `npm install`.
+- Delete `usePullOnAuth` if its single call site can be inlined into `__root.tsx`.
+- `rg "setQueryData|invalidateQueries" src/client` — must return nothing in app code (test files OK).
+- Tighten types now that no string contains a `draft_` prefix.
+- Final `PLAN.md` update: mark Phase 5c as shipped; ensure Phase 5d (Users as first-class) still reads correctly against the post-refactor architecture.
+
+**Acceptance**: `npm run build` reports a smaller bundle. E2E suite still passes.
+
+### Risks and unknowns
+
+- **Same-row concurrent edits across devices** (rare per product constraint): LWW silently loses the loser's edit. Mitigation: at flush time, if the server's `updatedAt` for a row is newer than the local edit's, surface a banner. Probably v2; document as known gap.
+- **Cold-load bandwidth** (new device, fresh login): full match history pull. ~600 KB gzipped per 200 matches; fine for v1. Revisit at 1000+ matches with pagination.
+- **ID squatting**: addressed in PR A via explicit `findUnique` + ownership check before `upsert`.
+- **Production data migration**: handled in the Dexie upgrader, runs once. Worst case `pullSync` rehydrates from server.
+- **Service worker interaction**: orthogonal — the SW continues to serve the SPA shell and precached assets; nothing about local-first changes SW responsibilities.
+
+---
+
+## Phase 5d: Users as first-class entities
+
+**Goal**: Replace name-based unregistered-player references with proper `User` entities, owned by their creator until linked to an auth account.
+
+**Position in the roadmap**: lands **after** Phase 5c (Local-first refactor) completes. The refactor simplifies 5d by removing the need for sync-engine id substitution; everything else in 5d remains in scope.
+
+**Why before more games or features**:
+- Today's name-only matching is unstable (case/typo collisions, same-name friends)
+- The link-friend-account feature in Phase 6 needs a stable cross-match reference
+- Phase 7 (Skull King Rascal) and future games add complexity to the per-game data layer; better to lock the user model first
+
+### Design intent (preserved from the 2026-05-07 conversation)
+
+- The `Player` table becomes an association of Match to Users; `userId` is no longer optional, all players are actual Users.
+- For local-only Users: created by the app owner, saved in the **local AND server DB** (so they can be refetched on other devices). They remain unidentified Users as long as no Account is connected to them.
+- As long as no actual Account is linked to them, they are only known by the User who created them.
+- They can now be used to find matches where one User was involved (more stable than name matching).
+- We will be able to list our own users and reuse them for future matches, avoiding name duplication that doesn't guarantee we're talking about the same person.
+- They will be the reference point for the future feature to match "My users" to "Existing user" (Phase 6 link-to-account).
+
+### Open design questions to resolve at implementation time
+
+1. **Schema shape**: extend the existing `User` table with `ownerId String?` + nullable `email` + a `claimed Boolean`, OR introduce a separate `Profile` / `UnclaimedUser` table that linked Users reference. Better-auth wants `email` unique + non-null on `User` — both options have implications for the auth flow and migrations.
+2. **Server visibility boundary**: an unclaimed user is visible only to its `ownerId`. When linked to a real auth account, ownership is dropped and they become globally addressable subject to the privacy model. The `/api/players/suggestions` endpoint becomes `/api/users` filtered by `ownerId = me OR user appears in any match I created`.
+3. **Offline creation of unclaimed users** — *simplified by Phase 5c*: with client-generated CUIDs across the board, creating an unclaimed user offline becomes two enqueued writes (POST `/api/users` then POST `/api/matches`), both referencing the same client CUID. No sync-engine id substitution map is needed. If the `/api/matches` POST fires before the `/api/users` POST has succeeded server-side, the server returns 404; the entry stays in the queue and resolves on the next flush.
+4. **Migration**: every existing Player without `userId` → create a User per `(creator, distinct case-insensitive name)` tuple, attribute `Player.userId`, retain the original name on Player as a migration audit trail (or move it to `User.alias`). Reversibility via the audit trail.
+5. **Auth integration / claiming**: how does an unclaimed User become claimed? Options: (a) on Google sign-in, if email matches an unclaimed User any creator owns, prompt the new auth user to claim it; (b) the creator explicitly invites via email link; (c) deferred to Phase 6.
+6. **First-launch UX**: a brand-new authenticated user has no owned-users pool. The "self" entry in suggestions is them; the next entries come from creating new owned users inline as they type names in the new-match form.
+7. **Offline reads of the user list** — *simplified by Phase 5c*: users become another Dexie-mirrored table with `useLiveQuery`-backed reads, just like matches/players/scores. No separate persisted-cache concern.
+
+### Files likely affected
+
+- `prisma/schema.prisma` — schema change + migration
+- `src/server/routes/users.ts` (new) — list/create/patch + suggestions filter
+- `src/server/routes/matches.ts` — Player creation now references existing User; reject names without matching User
+- `src/server/routes/players.ts` — collapsed into users or removed
+- `src/client/lib/mutations.ts` — add `createUser`, `patchUser` (slots into the Phase 5c mutations module)
+- `src/client/hooks/data/useUser.ts` (new) — `useLiveQuery` over `db.users`
+- `src/client/hooks/usePlayerSuggestions.ts` → `useUserSuggestions` or `useOwnedUsers`, reads from `db.users`
+- `src/client/routes/_authenticated/games/$slug_.new.tsx` — autocomplete from owned users; "create new user" inline
+- `src/client/routes/_authenticated/users/` (new section?) — manage owned users
+- `src/client/lib/db.ts` — add `users` Dexie table; revisit `localProfiles`
 
 ### Validation
 
-- Create + score a match end-to-end with WiFi off the entire time, reconnect, see it sync correctly.
-- Deploy a new build while a tab is open; the user is prompted, accepts, and the new version is fully available offline immediately.
+- Existing match flows (create, score, complete) keep working with the new model
+- A friend with the same name as the logged-in user no longer collides on suggestions
+- Migration is reversible for at least one rollback window
+- Offline-created user → match references that user → flush replays both POSTs in order, server creates both with the client-supplied CUIDs
 
 ---
 

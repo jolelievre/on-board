@@ -39,15 +39,18 @@ export function clearSessionCache() {
  * Offline-safe wrapper around authClient.useSession().
  *
  * When online the real session is used and persisted to localStorage.
- * When the network request fails (navigator.onLine is false), the cached
- * session is returned so route guards don't redirect authenticated users
- * to the login page just because they're offline.
+ * When the session fetch fails with a network error, the cached session is
+ * returned so route guards don't redirect authenticated users to the login
+ * page just because they're offline.
  *
- * Only a definitive online failure (session = null while online + not pending)
- * triggers a redirect.
+ * We key the fallback on the fetch `error` (not on `navigator.onLine`) because
+ * `navigator.onLine` is unreliable: Chrome DevTools "Offline" throttling,
+ * captive portals, VPN drops, and flaky mobile connections can all leave
+ * `onLine` true while requests fail. A clean server-side logout returns 200
+ * with `data: null` and `error: null`, so it still drops to the login screen.
  */
 export function useAuthSession() {
-  const { data: session, isPending } = authClient.useSession();
+  const { data: session, isPending, error } = authClient.useSession();
   const cached = useRef<CachedSession | null>(readCache());
 
   useEffect(() => {
@@ -73,7 +76,7 @@ export function useAuthSession() {
     return { session, isPending: false, cachedSession: cached.current, isOfflineFallback: false };
   }
 
-  if (!navigator.onLine && cached.current) {
+  if (error && cached.current) {
     return {
       session: cached.current as unknown as typeof session,
       isPending: false,

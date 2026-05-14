@@ -14,7 +14,6 @@ import {
 import { queryClient, NINETY_DAYS } from "./lib/query-client";
 import { routeTree } from "./routeTree.gen";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { registerSW } from "virtual:pwa-register";
 import "./lib/i18n";
 
 const PERSIST_KEY = "onboard_query_cache";
@@ -65,9 +64,11 @@ import "@fontsource/jetbrains-mono/500.css";
 
 import "./globals.css";
 
-// Register the service worker so the app (and bundled fonts) work offline
-// once the user has visited at least once. Auto-updates on new deploys.
-registerSW({ immediate: true });
+// Service-worker registration is performed by `useRegisterSW` inside the
+// UpdateBanner component (mounted from __root.tsx). With registerType:
+// "prompt" the user explicitly accepts the update, so the new precache is
+// guaranteed to be ready before the page reloads — no stale-precache
+// window when going offline immediately after a new deploy.
 
 const router = createRouter({ routeTree });
 
