@@ -16,14 +16,20 @@ test.describe("Offline", () => {
   );
 
   test.beforeEach(async ({ page }) => {
-    // Wipe the persisted query cache so each test starts from a known empty
-    // state and the per-game prefetch is forced to fire (otherwise prefetch
-    // staleTime: 1h would skip it on a warm cache).
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
-    await page.evaluate(() => {
+    // Wipe the persisted query cache on EVERY navigation. A one-shot
+    // `localStorage.removeItem` here races `createSyncStoragePersister`'s
+    // deferred write (it always wraps via `setTimeout(fn, 0)` even with
+    // `throttleTime: 0`): on slow runners (CI) the persister's pending
+    // write from this `goto("/")` lands AFTER the removeItem, repopulating
+    // the cache. The next page.goto("/games") then hydrates that stale
+    // cache and — with staleTime 60s — skips the `/api/games` refetch the
+    // tests rely on. `addInitScript` runs before the page's first script,
+    // so the queryClient always hydrates from an empty localStorage.
+    await page.addInitScript(() => {
       localStorage.removeItem("onboard_query_cache");
     });
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
   });
 
   test("offline navigation to a prefetched game detail page renders cached data", async ({
