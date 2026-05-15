@@ -1,16 +1,16 @@
 # Graph Report - on-board  (2026-05-15)
 
 ## Corpus Check
-- 140 files · ~428,263 words
+- 140 files · ~428,671 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2059 nodes · 2590 edges · 181 communities (144 shown, 37 thin omitted)
+- 2059 nodes · 2590 edges · 180 communities (143 shown, 37 thin omitted)
 - Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 214 edges (avg confidence: 0.89)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `027aee9a`
+- Built from commit: `240ead95`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -104,7 +104,6 @@
 - [[_COMMUNITY_App Branding (B)|App Branding (B)]]
 - [[_COMMUNITY_SK Bid Prompt Strings (B)|SK Bid Prompt Strings (B)]]
 - [[_COMMUNITY_Score Cell & Match Screen|Score Cell & Match Screen]]
-- [[_COMMUNITY_InstallPWA Hooks|Install/PWA Hooks]]
 - [[_COMMUNITY_Scorer Components & Offline Mutations|Scorer Components & Offline Mutations]]
 - [[_COMMUNITY_PWA Logo Concepts|PWA Logo Concepts]]
 - [[_COMMUNITY_TanStack Cache & Session Persister|TanStack Cache & Session Persister]]
@@ -226,7 +225,7 @@
 - **Skull King handoff bundle (HTML loads React + Babel + all component scripts)** — sk_project_index_html, sk_project_app, sk_project_design_canvas, sk_components_sk_shared_score, sk_components_bid_variants, sk_components_result_phase, sk_components_scoreboard_variants [EXTRACTED 1.00]
 - **OnBoard hand-drawn design language (themes + typography + sketch primitives + glyphs)** — concept_theme_parchment, concept_theme_candlelit, concept_typography_caveat, concept_sketch_primitives, concept_catglyphs, concept_hand_match_grid [EXTRACTED 1.00]
 
-## Communities (181 total, 37 thin omitted)
+## Communities (180 total, 37 thin omitted)
 
 ### Community 0 - "Skull King Scoring Engine & 7WD Scorer"
 Cohesion: 0.06
@@ -254,7 +253,7 @@ Nodes (45): Back Navigation Link, Back navigation to Games list, Blue (civilian)
 
 ### Community 6 - "Offline & Sync Rationales"
 Cohesion: 0.09
-Nodes (32): userId only attached on explicit self-chip click, cleared on manual typing, Fallback keyed on fetch error, not navigator.onLine (unreliable), gcTime: Infinity (setTimeout 24.8-day overflow workaround), Invalidate all queries after any successful sync flush, isSelf determined by userId equality, never name equality, MAX_RETRIES = 3 for queued mutation replay, localStorage session cache prevents redirect-to-login while offline, offlineFirst networkMode for paused queries on no-cache miss (+24 more)
+Nodes (29): userId only attached on explicit self-chip click, cleared on manual typing, Fallback keyed on fetch error, not navigator.onLine (unreliable), gcTime: Infinity (setTimeout 24.8-day overflow workaround), Invalidate all queries after any successful sync flush, isSelf determined by userId equality, never name equality, localStorage session cache prevents redirect-to-login while offline, offlineFirst networkMode for paused queries on no-cache miss, 1-hour prefetch staleness threshold for offline availability (+21 more)
 
 ### Community 7 - "Dev/Test Tooling Deps"
 Cohesion: 0.06
@@ -281,12 +280,12 @@ Cohesion: 0.07
 Nodes (35): Player alias feature, Alias input field, Back link to 7 Wonders Duel, Bottom navigation (Games/Settings), Bottom Tab Navigation (Games/Settings), Category Row Icons (colored shapes), Coins Category (7 coins / 2 VP), Complete Match Banner (Alice wins by score) (+27 more)
 
 ### Community 13 - "Game Cover Art"
-Cohesion: 0.12
-Nodes (10): CoverArt(), Props, Game, Route, Logo(), Phase, Props, Pill() (+2 more)
+Cohesion: 0.15
+Nodes (7): CoverArt(), Props, Game, Route, Pill(), Props, Tone
 
 ### Community 14 - "Settings Page & Auth Caching"
-Cohesion: 0.12
-Nodes (18): LangCode, LANGUAGES, LanguageSelector(), CachedSession, clearSessionCache(), readCache(), useAuthSession(), authClient (+10 more)
+Cohesion: 0.1
+Nodes (20): Route, SettingsPage(), LanguageSelector(), BeforeInstallPromptEvent, detectIOS(), isStandalone(), subscribers, useInstallPrompt() (+12 more)
 
 ### Community 15 - "Design Handoff Mocks"
 Cohesion: 0.1
@@ -297,16 +296,16 @@ Cohesion: 0.13
 Nodes (22): captureAuthScreens(), captureLoginScreens(), captureScoringFlow(), captureAuthScreens(), captureLoginScreens(), captureScoringFlow(), clickPillOption(), clickPillOption() (+14 more)
 
 ### Community 17 - "TanStack Router Route Tree"
-Cohesion: 0.08
-Nodes (23): Route, AuthenticatedGamesIndexRoute, AuthenticatedGamesSlugNewRoute, AuthenticatedGamesSlugRoute, AuthenticatedMatchesIdRoute, AuthenticatedRoute, AuthenticatedRouteChildren, AuthenticatedRouteWithChildren (+15 more)
+Cohesion: 0.09
+Nodes (21): AuthenticatedGamesIndexRoute, AuthenticatedGamesSlugNewRoute, AuthenticatedGamesSlugRoute, AuthenticatedMatchesIdRoute, AuthenticatedRoute, AuthenticatedRouteChildren, AuthenticatedRouteWithChildren, AuthenticatedSettingsRoute (+13 more)
 
 ### Community 18 - "Server Auth & Prisma"
 Cohesion: 0.16
 Nodes (16): auth, prisma, AuthEnv, AuthSession, AuthUser, requireAuth, gamesRoutes, AuthEnv (+8 more)
 
 ### Community 19 - "Router/Persister/Theme Wiring"
-Cohesion: 0.17
-Nodes (12): isTheme(), readStoredTheme(), Theme, ThemeContext, ThemeContextValue, THEMES, useTheme(), Option (+4 more)
+Cohesion: 0.14
+Nodes (15): LangCode, LANGUAGES, isTheme(), readStoredTheme(), Theme, ThemeContext, ThemeContextValue, THEMES (+7 more)
 
 ### Community 20 - "Skull King Phase Flow"
 Cohesion: 0.1
@@ -381,8 +380,8 @@ Cohesion: 0.06
 Nodes (36): empty, inProgress, resume, vs, matches, back, completeByScore, completeByTiebreaker (+28 more)
 
 ### Community 39 - "Bottom Nav & Prefetch"
-Cohesion: 0.2
-Nodes (10): GameSummary, usePrefetchGames(), BottomNav(), Tab, TABS, OfflineBanner(), AuthenticatedLayout(), Route (+2 more)
+Cohesion: 0.14
+Nodes (14): CachedSession, clearSessionCache(), readCache(), useAuthSession(), GameSummary, usePrefetchGames(), BottomNav(), Tab (+6 more)
 
 ### Community 40 - "Match Completed Dark Theme"
 Cohesion: 0.12
@@ -393,7 +392,7 @@ Cohesion: 0.13
 Nodes (14): compilerOptions, esModuleInterop, module, moduleResolution, outDir, paths, resolveJsonModule, rootDir (+6 more)
 
 ### Community 42 - "New Match Page"
-Cohesion: 0.17
+Cohesion: 0.19
 Nodes (11): AVATAR_CLASSES, Game, Match, NewMatchPage(), Route, persistPlayersToLocalProfiles(), PlayerSuggestion, usePlayerSuggestions() (+3 more)
 
 ### Community 43 - "SK Bid Result Strings (A)"
@@ -568,10 +567,6 @@ Nodes (6): app, name, tagline, nav, games, settings
 Cohesion: 0.29
 Nodes (7): bidPrompt, caption, playerBid, progress, scoreboardLabel, startRoundCta, bid
 
-### Community 92 - "Install/PWA Hooks"
-Cohesion: 0.38
-Nodes (6): SettingsPage(), BeforeInstallPromptEvent, detectIOS(), isStandalone(), subscribers, useInstallPrompt()
-
 ### Community 93 - "Scorer Components & Offline Mutations"
 Cohesion: 0.33
 Nodes (6): BidRecapScreen (Skull King), HandMatchGrid (7 Wonders Duel score grid), SevenWondersDuelScorer, WinnerBanner, Offline mutations re-enqueued via syncEngine on ApiError-less failures, Save status lifted to parent for Header SyncPill
@@ -621,8 +616,8 @@ Cohesion: 0.4
 Nodes (5): hint, placeholder, saved, title, alias
 
 ### Community 106 - "7WD Victory Types (B)"
-Cohesion: 0.22
-Nodes (7): persister, Register, router, stored, routeTree, ThemeProvider(), queryClient
+Cohesion: 0.15
+Nodes (12): persister, Register, router, stored, routeTree, MAX_RETRIES = 3 for queued mutation replay, ThemeProvider(), db (+4 more)
 
 ### Community 107 - "Match Lifecycle Mutations"
 Cohesion: 0.4

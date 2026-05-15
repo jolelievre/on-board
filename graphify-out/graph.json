@@ -1530,7 +1530,7 @@
       "label": "enabledMcpjsonServers",
       "file_type": "code",
       "source_file": ".claude/settings.local.json",
-      "source_location": "L62",
+      "source_location": "L63",
       "id": "claude_settings_local_enabledmcpjsonservers",
       "community": 109,
       "norm_label": "enabledmcpjsonservers"
@@ -3537,7 +3537,7 @@
       "label": "sparkline",
       "file_type": "code",
       "source_file": "e2e/skull-king.spec.ts",
-      "source_location": "L235",
+      "source_location": "L314",
       "id": "e2e_skull_king_spec_sparkline",
       "community": 24,
       "norm_label": "sparkline"
@@ -3546,7 +3546,7 @@
       "label": "waitForDraftPatch()",
       "file_type": "code",
       "source_file": "e2e/skull-king.spec.ts",
-      "source_location": "L266",
+      "source_location": "L345",
       "id": "e2e_skull_king_spec_waitfordraftpatch",
       "community": 24,
       "norm_label": "waitfordraftpatch()"
@@ -3555,7 +3555,7 @@
       "label": "clearDraftPromise",
       "file_type": "code",
       "source_file": "e2e/skull-king.spec.ts",
-      "source_location": "L383",
+      "source_location": "L462",
       "id": "e2e_skull_king_spec_cleardraftpromise",
       "community": 24,
       "norm_label": "cleardraftpromise"
@@ -3564,7 +3564,7 @@
       "label": "totals",
       "file_type": "code",
       "source_file": "e2e/skull-king.spec.ts",
-      "source_location": "L443",
+      "source_location": "L522",
       "id": "e2e_skull_king_spec_totals",
       "community": 24,
       "norm_label": "totals"
@@ -3573,7 +3573,7 @@
       "label": "transition",
       "file_type": "code",
       "source_file": "e2e/skull-king.spec.ts",
-      "source_location": "L463",
+      "source_location": "L542",
       "id": "e2e_skull_king_spec_transition",
       "community": 24,
       "norm_label": "transition"
@@ -3582,7 +3582,7 @@
       "label": "history",
       "file_type": "code",
       "source_file": "e2e/skull-king.spec.ts",
-      "source_location": "L598",
+      "source_location": "L677",
       "id": "e2e_skull_king_spec_history",
       "community": 24,
       "norm_label": "history"
@@ -3591,7 +3591,7 @@
       "label": "row",
       "file_type": "code",
       "source_file": "e2e/skull-king.spec.ts",
-      "source_location": "L601",
+      "source_location": "L680",
       "id": "e2e_skull_king_spec_row",
       "community": 24,
       "norm_label": "row"
@@ -3600,7 +3600,7 @@
       "label": "cta",
       "file_type": "code",
       "source_file": "e2e/skull-king.spec.ts",
-      "source_location": "L649",
+      "source_location": "L728",
       "id": "e2e_skull_king_spec_cta",
       "community": 24,
       "norm_label": "cta"
@@ -3609,7 +3609,7 @@
       "label": "totalCells",
       "file_type": "code",
       "source_file": "e2e/skull-king.spec.ts",
-      "source_location": "L673",
+      "source_location": "L752",
       "id": "e2e_skull_king_spec_totalcells",
       "community": 24,
       "norm_label": "totalcells"
@@ -8390,7 +8390,7 @@
       "source_file": "src/client/components/LanguageSelector.tsx",
       "source_location": "L1",
       "id": "src_client_components_languageselector_tsx",
-      "community": 14,
+      "community": 19,
       "norm_label": "languageselector.tsx"
     },
     {
@@ -8399,7 +8399,7 @@
       "source_file": "src/client/components/LanguageSelector.tsx",
       "source_location": "L5",
       "id": "components_languageselector_languages",
-      "community": 14,
+      "community": 19,
       "norm_label": "languages"
     },
     {
@@ -8408,7 +8408,7 @@
       "source_file": "src/client/components/LanguageSelector.tsx",
       "source_location": "L10",
       "id": "components_languageselector_langcode",
-      "community": 14,
+      "community": 19,
       "norm_label": "langcode"
     },
     {
@@ -8831,7 +8831,7 @@
       "source_file": "src/client/components/ui/Logo.tsx",
       "source_location": "L1",
       "id": "src_client_components_ui_logo_tsx",
-      "community": 13,
+      "community": 14,
       "norm_label": "logo.tsx"
     },
     {
@@ -8840,7 +8840,7 @@
       "source_file": "src/client/components/ui/Logo.tsx",
       "source_location": "L4",
       "id": "ui_logo_phase",
-      "community": 13,
+      "community": 14,
       "norm_label": "phase"
     },
     {
@@ -8849,7 +8849,7 @@
       "source_file": "src/client/components/ui/Logo.tsx",
       "source_location": "L6",
       "id": "ui_logo_props",
-      "community": 13,
+      "community": 14,
       "norm_label": "props"
     },
     {
@@ -8858,7 +8858,7 @@
       "source_file": "src/client/components/ui/Logo.tsx",
       "source_location": "L29",
       "id": "ui_logo_logo",
-      "community": 13,
+      "community": 14,
       "norm_label": "logo()"
     },
     {
@@ -9558,7 +9558,7 @@
       "label": "CounterChip()",
       "file_type": "code",
       "source_file": "src/client/components/scoring/skull-king/RoundResultScreen.tsx",
-      "source_location": "L321",
+      "source_location": "L333",
       "id": "skull_king_roundresultscreen_counterchip",
       "community": 0,
       "norm_label": "counterchip()"
@@ -9567,7 +9567,7 @@
       "label": "ToggleChip()",
       "file_type": "code",
       "source_file": "src/client/components/scoring/skull-king/RoundResultScreen.tsx",
-      "source_location": "L360",
+      "source_location": "L372",
       "id": "skull_king_roundresultscreen_togglechip",
       "community": 0,
       "norm_label": "togglechip()"
@@ -9902,7 +9902,7 @@
       "source_file": "src/client/hooks/useInstallPrompt.ts",
       "source_location": "L1",
       "id": "src_client_hooks_useinstallprompt_ts",
-      "community": 92,
+      "community": 14,
       "norm_label": "useinstallprompt.ts"
     },
     {
@@ -9911,7 +9911,7 @@
       "source_file": "src/client/hooks/useInstallPrompt.ts",
       "source_location": "L3",
       "id": "hooks_useinstallprompt_beforeinstallpromptevent",
-      "community": 92,
+      "community": 14,
       "norm_label": "beforeinstallpromptevent"
     },
     {
@@ -9920,7 +9920,7 @@
       "source_file": "src/client/hooks/useInstallPrompt.ts",
       "source_location": "L17",
       "id": "hooks_useinstallprompt_subscribers",
-      "community": 92,
+      "community": 14,
       "norm_label": "subscribers"
     },
     {
@@ -9929,7 +9929,7 @@
       "source_file": "src/client/hooks/useInstallPrompt.ts",
       "source_location": "L33",
       "id": "hooks_useinstallprompt_isstandalone",
-      "community": 92,
+      "community": 14,
       "norm_label": "isstandalone()"
     },
     {
@@ -9938,7 +9938,7 @@
       "source_file": "src/client/hooks/useInstallPrompt.ts",
       "source_location": "L43",
       "id": "hooks_useinstallprompt_detectios",
-      "community": 92,
+      "community": 14,
       "norm_label": "detectios()"
     },
     {
@@ -9947,7 +9947,7 @@
       "source_file": "src/client/hooks/useInstallPrompt.ts",
       "source_location": "L61",
       "id": "hooks_useinstallprompt_useinstallprompt",
-      "community": 92,
+      "community": 14,
       "norm_label": "useinstallprompt()"
     },
     {
@@ -9956,7 +9956,7 @@
       "source_file": "src/client/hooks/useAuthSession.ts",
       "source_location": "L1",
       "id": "src_client_hooks_useauthsession_ts",
-      "community": 14,
+      "community": 39,
       "norm_label": "useauthsession.ts"
     },
     {
@@ -9965,7 +9965,7 @@
       "source_file": "src/client/hooks/useAuthSession.ts",
       "source_location": "L6",
       "id": "hooks_useauthsession_cachedsession",
-      "community": 14,
+      "community": 39,
       "norm_label": "cachedsession"
     },
     {
@@ -9974,7 +9974,7 @@
       "source_file": "src/client/hooks/useAuthSession.ts",
       "source_location": "L16",
       "id": "hooks_useauthsession_readcache",
-      "community": 14,
+      "community": 39,
       "norm_label": "readcache()"
     },
     {
@@ -9983,7 +9983,7 @@
       "source_file": "src/client/hooks/useAuthSession.ts",
       "source_location": "L26",
       "id": "hooks_useauthsession_writecache",
-      "community": 14,
+      "community": 39,
       "norm_label": "writecache()"
     },
     {
@@ -9992,7 +9992,7 @@
       "source_file": "src/client/hooks/useAuthSession.ts",
       "source_location": "L34",
       "id": "hooks_useauthsession_clearsessioncache",
-      "community": 14,
+      "community": 39,
       "norm_label": "clearsessioncache()"
     },
     {
@@ -10001,7 +10001,7 @@
       "source_file": "src/client/hooks/useAuthSession.ts",
       "source_location": "L52",
       "id": "hooks_useauthsession_useauthsession",
-      "community": 14,
+      "community": 39,
       "norm_label": "useauthsession()"
     },
     {
@@ -10100,7 +10100,7 @@
       "source_file": "src/client/lib/db.ts",
       "source_location": "L1",
       "id": "src_client_lib_db_ts",
-      "community": 42,
+      "community": 106,
       "norm_label": "db.ts"
     },
     {
@@ -10118,7 +10118,7 @@
       "source_file": "src/client/lib/db.ts",
       "source_location": "L14",
       "id": "lib_db_syncqueueentry",
-      "community": 6,
+      "community": 106,
       "norm_label": "syncqueueentry"
     },
     {
@@ -10127,7 +10127,7 @@
       "source_file": "src/client/lib/db.ts",
       "source_location": "L25",
       "id": "lib_db_matchdraft",
-      "community": 42,
+      "community": 106,
       "norm_label": "matchdraft"
     },
     {
@@ -10154,7 +10154,7 @@
       "source_file": "src/client/lib/db.ts",
       "source_location": "L49",
       "id": "lib_db_db",
-      "community": 42,
+      "community": 106,
       "norm_label": "db"
     },
     {
@@ -10163,7 +10163,7 @@
       "source_file": "src/client/lib/auth-client.ts",
       "source_location": "L1",
       "id": "src_client_lib_auth_client_ts",
-      "community": 14,
+      "community": 42,
       "norm_label": "auth-client.ts"
     },
     {
@@ -10172,7 +10172,7 @@
       "source_file": "src/client/lib/auth-client.ts",
       "source_location": "L3",
       "id": "lib_auth_client_authclient",
-      "community": 14,
+      "community": 42,
       "norm_label": "authclient"
     },
     {
@@ -10181,7 +10181,7 @@
       "source_file": "src/client/lib/auth-client.ts",
       "source_location": "L14",
       "id": "lib_auth_client_profileupdate",
-      "community": 14,
+      "community": 42,
       "norm_label": "profileupdate"
     },
     {
@@ -10190,7 +10190,7 @@
       "source_file": "src/client/lib/auth-client.ts",
       "source_location": "L22",
       "id": "lib_auth_client_updateprofile",
-      "community": 14,
+      "community": 19,
       "norm_label": "updateprofile()"
     },
     {
@@ -10208,7 +10208,7 @@
       "source_file": "src/client/lib/sync.ts",
       "source_location": "L6",
       "id": "lib_sync_syncengine",
-      "community": 6,
+      "community": 106,
       "norm_label": "syncengine"
     },
     {
@@ -10235,7 +10235,7 @@
       "source_file": "src/client/routes/index.tsx",
       "source_location": "L12",
       "id": "routes_index_route",
-      "community": 17,
+      "community": 14,
       "norm_label": "route"
     },
     {
@@ -10343,7 +10343,7 @@
       "source_file": "src/client/routes/_authenticated/settings.tsx",
       "source_location": "L17",
       "id": "authenticated_settings_route",
-      "community": 17,
+      "community": 14,
       "norm_label": "route"
     },
     {
@@ -10352,7 +10352,7 @@
       "source_file": "src/client/routes/_authenticated/settings.tsx",
       "source_location": "L21",
       "id": "authenticated_settings_settingspage",
-      "community": 92,
+      "community": 14,
       "norm_label": "settingspage()"
     },
     {
@@ -15246,7 +15246,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 6,
+      "community": 106,
       "norm_label": "max_retries = 3 for queued mutation replay",
       "id": "concept_max_retries_3"
     },
@@ -22865,9 +22865,9 @@
       "source_file": ".claude/settings.json",
       "source_location": "L24",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_settings_json",
-      "target": "claude_settings_hooks",
-      "confidence_score": 1.0
+      "target": "claude_settings_hooks"
     },
     {
       "relation": "contains",
@@ -22885,9 +22885,9 @@
       "source_file": ".claude/settings.json",
       "source_location": "L25",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_settings_hooks",
-      "target": "claude_settings_hooks_pretooluse",
-      "confidence_score": 1.0
+      "target": "claude_settings_hooks_pretooluse"
     },
     {
       "relation": "contains",
@@ -37193,9 +37193,9 @@
       "source_file": "PLAN.md",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_md",
-      "target": "on_board_plan_onboard_development_plan",
-      "confidence_score": 1.0
+      "target": "on_board_plan_onboard_development_plan"
     },
     {
       "relation": "contains",
@@ -37203,9 +37203,9 @@
       "source_file": "PLAN.md",
       "source_location": "L11",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_tech_stack_rationale",
-      "confidence_score": 1.0
+      "target": "on_board_plan_tech_stack_rationale"
     },
     {
       "relation": "contains",
@@ -37213,9 +37213,9 @@
       "source_file": "PLAN.md",
       "source_location": "L86",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_phase_0_project_bootstrap_deployment_done",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phase_0_project_bootstrap_deployment_done"
     },
     {
       "relation": "contains",
@@ -37223,9 +37223,9 @@
       "source_file": "PLAN.md",
       "source_location": "L102",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_phase_1_auth_data_model_i18n_done",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phase_1_auth_data_model_i18n_done"
     },
     {
       "relation": "contains",
@@ -37233,9 +37233,9 @@
       "source_file": "PLAN.md",
       "source_location": "L190",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_phase_2_7_wonders_duel_poc_done",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phase_2_7_wonders_duel_poc_done"
     },
     {
       "relation": "contains",
@@ -37243,9 +37243,9 @@
       "source_file": "PLAN.md",
       "source_location": "L223",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_phase_3_claude_design_branding_ux_implementation",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phase_3_claude_design_branding_ux_implementation"
     },
     {
       "relation": "contains",
@@ -37253,9 +37253,9 @@
       "source_file": "PLAN.md",
       "source_location": "L256",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_phase_4_skull_king",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phase_4_skull_king"
     },
     {
       "relation": "contains",
@@ -37263,9 +37263,9 @@
       "source_file": "PLAN.md",
       "source_location": "L304",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_phase_5_offline_first_pwa",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phase_5_offline_first_pwa"
     },
     {
       "relation": "contains",
@@ -37273,9 +37273,9 @@
       "source_file": "PLAN.md",
       "source_location": "L350",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_phase_5b_complete_offline_first",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phase_5b_complete_offline_first"
     },
     {
       "relation": "contains",
@@ -37283,9 +37283,9 @@
       "source_file": "PLAN.md",
       "source_location": "L386",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_phase_5c_local_first_refactor_server_dexie",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phase_5c_local_first_refactor_server_dexie"
     },
     {
       "relation": "contains",
@@ -37293,9 +37293,9 @@
       "source_file": "PLAN.md",
       "source_location": "L508",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_phase_5d_users_as_first_class_entities",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phase_5d_users_as_first_class_entities"
     },
     {
       "relation": "contains",
@@ -37303,9 +37303,9 @@
       "source_file": "PLAN.md",
       "source_location": "L560",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_phase_6_polish_distribution",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phase_6_polish_distribution"
     },
     {
       "relation": "contains",
@@ -37313,9 +37313,9 @@
       "source_file": "PLAN.md",
       "source_location": "L577",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_onboard_development_plan",
-      "target": "on_board_plan_phase_7_skull_king_rascal_variant",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phase_7_skull_king_rascal_variant"
     },
     {
       "relation": "contains",
@@ -37323,9 +37323,9 @@
       "source_file": "PLAN.md",
       "source_location": "L13",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_tech_stack_rationale",
-      "target": "on_board_plan_frontend_react_19_vite_spa",
-      "confidence_score": 1.0
+      "target": "on_board_plan_frontend_react_19_vite_spa"
     },
     {
       "relation": "contains",
@@ -37333,9 +37333,9 @@
       "source_file": "PLAN.md",
       "source_location": "L25",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_tech_stack_rationale",
-      "target": "on_board_plan_backend_hono_postgresql_prisma",
-      "confidence_score": 1.0
+      "target": "on_board_plan_backend_hono_postgresql_prisma"
     },
     {
       "relation": "contains",
@@ -37343,9 +37343,9 @@
       "source_file": "PLAN.md",
       "source_location": "L34",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_tech_stack_rationale",
-      "target": "on_board_plan_pwa_offline",
-      "confidence_score": 1.0
+      "target": "on_board_plan_pwa_offline"
     },
     {
       "relation": "contains",
@@ -37353,9 +37353,9 @@
       "source_file": "PLAN.md",
       "source_location": "L42",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_tech_stack_rationale",
-      "target": "on_board_plan_testing_quality",
-      "confidence_score": 1.0
+      "target": "on_board_plan_testing_quality"
     },
     {
       "relation": "contains",
@@ -37363,9 +37363,9 @@
       "source_file": "PLAN.md",
       "source_location": "L50",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_tech_stack_rationale",
-      "target": "on_board_plan_infrastructure_deploy",
-      "confidence_score": 1.0
+      "target": "on_board_plan_infrastructure_deploy"
     },
     {
       "relation": "contains",
@@ -37373,9 +37373,9 @@
       "source_file": "PLAN.md",
       "source_location": "L57",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_tech_stack_rationale",
-      "target": "on_board_plan_architecture_overview",
-      "confidence_score": 1.0
+      "target": "on_board_plan_architecture_overview"
     },
     {
       "relation": "contains",
@@ -37383,9 +37383,9 @@
       "source_file": "PLAN.md",
       "source_location": "L59",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_architecture_overview",
-      "target": "on_board_plan_codeblock_1",
-      "confidence_score": 1.0
+      "target": "on_board_plan_codeblock_1"
     },
     {
       "relation": "contains",
@@ -37393,9 +37393,9 @@
       "source_file": "PLAN.md",
       "source_location": "L106",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_1_auth_data_model_i18n_done",
-      "target": "on_board_plan_auth_better_auth",
-      "confidence_score": 1.0
+      "target": "on_board_plan_auth_better_auth"
     },
     {
       "relation": "contains",
@@ -37403,9 +37403,9 @@
       "source_file": "PLAN.md",
       "source_location": "L112",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_1_auth_data_model_i18n_done",
-      "target": "on_board_plan_data_model_prisma",
-      "confidence_score": 1.0
+      "target": "on_board_plan_data_model_prisma"
     },
     {
       "relation": "contains",
@@ -37413,9 +37413,9 @@
       "source_file": "PLAN.md",
       "source_location": "L142",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_1_auth_data_model_i18n_done",
-      "target": "on_board_plan_player_identity_approach",
-      "confidence_score": 1.0
+      "target": "on_board_plan_player_identity_approach"
     },
     {
       "relation": "contains",
@@ -37423,9 +37423,9 @@
       "source_file": "PLAN.md",
       "source_location": "L148",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_1_auth_data_model_i18n_done",
-      "target": "on_board_plan_i18n_react_i18next",
-      "confidence_score": 1.0
+      "target": "on_board_plan_i18n_react_i18next"
     },
     {
       "relation": "contains",
@@ -37433,9 +37433,9 @@
       "source_file": "PLAN.md",
       "source_location": "L156",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_1_auth_data_model_i18n_done",
-      "target": "on_board_plan_routes",
-      "confidence_score": 1.0
+      "target": "on_board_plan_routes"
     },
     {
       "relation": "contains",
@@ -37443,9 +37443,9 @@
       "source_file": "PLAN.md",
       "source_location": "L180",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_1_auth_data_model_i18n_done",
-      "target": "on_board_plan_e2e",
-      "confidence_score": 1.0
+      "target": "on_board_plan_e2e"
     },
     {
       "relation": "contains",
@@ -37453,9 +37453,9 @@
       "source_file": "PLAN.md",
       "source_location": "L114",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_data_model_prisma",
-      "target": "on_board_plan_codeblock_2",
-      "confidence_score": 1.0
+      "target": "on_board_plan_codeblock_2"
     },
     {
       "relation": "contains",
@@ -37463,9 +37463,9 @@
       "source_file": "PLAN.md",
       "source_location": "L159",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_routes",
-      "target": "on_board_plan_codeblock_3",
-      "confidence_score": 1.0
+      "target": "on_board_plan_codeblock_3"
     },
     {
       "relation": "contains",
@@ -37473,9 +37473,9 @@
       "source_file": "PLAN.md",
       "source_location": "L172",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_routes",
-      "target": "on_board_plan_codeblock_4",
-      "confidence_score": 1.0
+      "target": "on_board_plan_codeblock_4"
     },
     {
       "relation": "contains",
@@ -37483,9 +37483,9 @@
       "source_file": "PLAN.md",
       "source_location": "L194",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_2_7_wonders_duel_poc_done",
-      "target": "on_board_plan_score_categories_2_players",
-      "confidence_score": 1.0
+      "target": "on_board_plan_score_categories_2_players"
     },
     {
       "relation": "contains",
@@ -37493,9 +37493,9 @@
       "source_file": "PLAN.md",
       "source_location": "L204",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_2_7_wonders_duel_poc_done",
-      "target": "on_board_plan_features",
-      "confidence_score": 1.0
+      "target": "on_board_plan_features"
     },
     {
       "relation": "contains",
@@ -37503,9 +37503,9 @@
       "source_file": "PLAN.md",
       "source_location": "L215",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_2_7_wonders_duel_poc_done",
-      "target": "on_board_plan_e2e_215",
-      "confidence_score": 1.0
+      "target": "on_board_plan_e2e_215"
     },
     {
       "relation": "contains",
@@ -37513,9 +37513,9 @@
       "source_file": "PLAN.md",
       "source_location": "L227",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_3_claude_design_branding_ux_implementation",
-      "target": "on_board_plan_step_1_prepare_design_brief",
-      "confidence_score": 1.0
+      "target": "on_board_plan_step_1_prepare_design_brief"
     },
     {
       "relation": "contains",
@@ -37523,9 +37523,9 @@
       "source_file": "PLAN.md",
       "source_location": "L237",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_3_claude_design_branding_ux_implementation",
-      "target": "on_board_plan_step_2_claude_design_session",
-      "confidence_score": 1.0
+      "target": "on_board_plan_step_2_claude_design_session"
     },
     {
       "relation": "contains",
@@ -37533,9 +37533,9 @@
       "source_file": "PLAN.md",
       "source_location": "L243",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_3_claude_design_branding_ux_implementation",
-      "target": "on_board_plan_step_3_implementation",
-      "confidence_score": 1.0
+      "target": "on_board_plan_step_3_implementation"
     },
     {
       "relation": "contains",
@@ -37543,9 +37543,9 @@
       "source_file": "PLAN.md",
       "source_location": "L260",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_4_skull_king",
-      "target": "on_board_plan_scoring_rules_classic",
-      "confidence_score": 1.0
+      "target": "on_board_plan_scoring_rules_classic"
     },
     {
       "relation": "contains",
@@ -37553,9 +37553,9 @@
       "source_file": "PLAN.md",
       "source_location": "L270",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_4_skull_king",
-      "target": "on_board_plan_scoring_rules_rascal_variant",
-      "confidence_score": 1.0
+      "target": "on_board_plan_scoring_rules_rascal_variant"
     },
     {
       "relation": "contains",
@@ -37563,9 +37563,9 @@
       "source_file": "PLAN.md",
       "source_location": "L278",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_4_skull_king",
-      "target": "on_board_plan_data_model",
-      "confidence_score": 1.0
+      "target": "on_board_plan_data_model"
     },
     {
       "relation": "contains",
@@ -37573,9 +37573,9 @@
       "source_file": "PLAN.md",
       "source_location": "L284",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_4_skull_king",
-      "target": "on_board_plan_ux_flow_from_claude_design",
-      "confidence_score": 1.0
+      "target": "on_board_plan_ux_flow_from_claude_design"
     },
     {
       "relation": "contains",
@@ -37583,9 +37583,9 @@
       "source_file": "PLAN.md",
       "source_location": "L292",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_4_skull_king",
-      "target": "on_board_plan_shared_scoring_logic",
-      "confidence_score": 1.0
+      "target": "on_board_plan_shared_scoring_logic"
     },
     {
       "relation": "contains",
@@ -37593,9 +37593,9 @@
       "source_file": "PLAN.md",
       "source_location": "L296",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_4_skull_king",
-      "target": "on_board_plan_e2e_296",
-      "confidence_score": 1.0
+      "target": "on_board_plan_e2e_296"
     },
     {
       "relation": "contains",
@@ -37603,9 +37603,9 @@
       "source_file": "PLAN.md",
       "source_location": "L308",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5_offline_first_pwa",
-      "target": "on_board_plan_what_this_phase_adds",
-      "confidence_score": 1.0
+      "target": "on_board_plan_what_this_phase_adds"
     },
     {
       "relation": "contains",
@@ -37613,9 +37613,9 @@
       "source_file": "PLAN.md",
       "source_location": "L317",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5_offline_first_pwa",
-      "target": "on_board_plan_stack",
-      "confidence_score": 1.0
+      "target": "on_board_plan_stack"
     },
     {
       "relation": "contains",
@@ -37623,9 +37623,9 @@
       "source_file": "PLAN.md",
       "source_location": "L323",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5_offline_first_pwa",
-      "target": "on_board_plan_sync_strategy_last_write_wins",
-      "confidence_score": 1.0
+      "target": "on_board_plan_sync_strategy_last_write_wins"
     },
     {
       "relation": "contains",
@@ -37633,9 +37633,9 @@
       "source_file": "PLAN.md",
       "source_location": "L330",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5_offline_first_pwa",
-      "target": "on_board_plan_key_files",
-      "confidence_score": 1.0
+      "target": "on_board_plan_key_files"
     },
     {
       "relation": "contains",
@@ -37643,9 +37643,9 @@
       "source_file": "PLAN.md",
       "source_location": "L339",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5_offline_first_pwa",
-      "target": "on_board_plan_e2e_339",
-      "confidence_score": 1.0
+      "target": "on_board_plan_e2e_339"
     },
     {
       "relation": "contains",
@@ -37653,9 +37653,9 @@
       "source_file": "PLAN.md",
       "source_location": "L354",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5b_complete_offline_first",
-      "target": "on_board_plan_shipped_via_stabilize_cherry_picks_the_parts_that_survived",
-      "confidence_score": 1.0
+      "target": "on_board_plan_shipped_via_stabilize_cherry_picks_the_parts_that_survived"
     },
     {
       "relation": "contains",
@@ -37663,9 +37663,9 @@
       "source_file": "PLAN.md",
       "source_location": "L364",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5b_complete_offline_first",
-      "target": "on_board_plan_scrapped_from_pr_11_replaced_by_phase_5c",
-      "confidence_score": 1.0
+      "target": "on_board_plan_scrapped_from_pr_11_replaced_by_phase_5c"
     },
     {
       "relation": "contains",
@@ -37673,9 +37673,9 @@
       "source_file": "PLAN.md",
       "source_location": "L369",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5b_complete_offline_first",
-      "target": "on_board_plan_bugs_that_prompted_the_rebuild_pr_11_device_testing",
-      "confidence_score": 1.0
+      "target": "on_board_plan_bugs_that_prompted_the_rebuild_pr_11_device_testing"
     },
     {
       "relation": "contains",
@@ -37683,9 +37683,9 @@
       "source_file": "PLAN.md",
       "source_location": "L379",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5b_complete_offline_first",
-      "target": "on_board_plan_follow_ups_still_on_the_radar",
-      "confidence_score": 1.0
+      "target": "on_board_plan_follow_ups_still_on_the_radar"
     },
     {
       "relation": "contains",
@@ -37693,9 +37693,9 @@
       "source_file": "PLAN.md",
       "source_location": "L394",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5c_local_first_refactor_server_dexie",
-      "target": "on_board_plan_architecture_summary",
-      "confidence_score": 1.0
+      "target": "on_board_plan_architecture_summary"
     },
     {
       "relation": "contains",
@@ -37703,9 +37703,9 @@
       "source_file": "PLAN.md",
       "source_location": "L414",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5c_local_first_refactor_server_dexie",
-      "target": "on_board_plan_dexie_schema_v2",
-      "confidence_score": 1.0
+      "target": "on_board_plan_dexie_schema_v2"
     },
     {
       "relation": "contains",
@@ -37713,9 +37713,9 @@
       "source_file": "PLAN.md",
       "source_location": "L430",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5c_local_first_refactor_server_dexie",
-      "target": "on_board_plan_phasing_3_prs",
-      "confidence_score": 1.0
+      "target": "on_board_plan_phasing_3_prs"
     },
     {
       "relation": "contains",
@@ -37723,9 +37723,9 @@
       "source_file": "PLAN.md",
       "source_location": "L498",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5c_local_first_refactor_server_dexie",
-      "target": "on_board_plan_risks_and_unknowns",
-      "confidence_score": 1.0
+      "target": "on_board_plan_risks_and_unknowns"
     },
     {
       "relation": "contains",
@@ -37733,9 +37733,9 @@
       "source_file": "PLAN.md",
       "source_location": "L418",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_dexie_schema_v2",
-      "target": "on_board_plan_codeblock_5",
-      "confidence_score": 1.0
+      "target": "on_board_plan_codeblock_5"
     },
     {
       "relation": "contains",
@@ -37743,9 +37743,9 @@
       "source_file": "PLAN.md",
       "source_location": "L432",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phasing_3_prs",
-      "target": "on_board_plan_pr_a_server_idempotency_on_client_generated_ids_feat_server_client_ids_half_day",
-      "confidence_score": 1.0
+      "target": "on_board_plan_pr_a_server_idempotency_on_client_generated_ids_feat_server_client_ids_half_day"
     },
     {
       "relation": "contains",
@@ -37753,9 +37753,9 @@
       "source_file": "PLAN.md",
       "source_location": "L450",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phasing_3_prs",
-      "target": "on_board_plan_pr_b_full_local_first_refactor_feat_local_first_architecture_2_3_days",
-      "confidence_score": 1.0
+      "target": "on_board_plan_pr_b_full_local_first_refactor_feat_local_first_architecture_2_3_days"
     },
     {
       "relation": "contains",
@@ -37763,9 +37763,9 @@
       "source_file": "PLAN.md",
       "source_location": "L485",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phasing_3_prs",
-      "target": "on_board_plan_pr_c_cleanup_chore_drop_tanstack_cache_half_day",
-      "confidence_score": 1.0
+      "target": "on_board_plan_pr_c_cleanup_chore_drop_tanstack_cache_half_day"
     },
     {
       "relation": "contains",
@@ -37773,9 +37773,9 @@
       "source_file": "PLAN.md",
       "source_location": "L519",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5d_users_as_first_class_entities",
-      "target": "on_board_plan_design_intent_preserved_from_the_2026_05_07_conversation",
-      "confidence_score": 1.0
+      "target": "on_board_plan_design_intent_preserved_from_the_2026_05_07_conversation"
     },
     {
       "relation": "contains",
@@ -37783,9 +37783,9 @@
       "source_file": "PLAN.md",
       "source_location": "L528",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5d_users_as_first_class_entities",
-      "target": "on_board_plan_open_design_questions_to_resolve_at_implementation_time",
-      "confidence_score": 1.0
+      "target": "on_board_plan_open_design_questions_to_resolve_at_implementation_time"
     },
     {
       "relation": "contains",
@@ -37793,9 +37793,9 @@
       "source_file": "PLAN.md",
       "source_location": "L538",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5d_users_as_first_class_entities",
-      "target": "on_board_plan_files_likely_affected",
-      "confidence_score": 1.0
+      "target": "on_board_plan_files_likely_affected"
     },
     {
       "relation": "contains",
@@ -37803,9 +37803,9 @@
       "source_file": "PLAN.md",
       "source_location": "L551",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_5d_users_as_first_class_entities",
-      "target": "on_board_plan_validation",
-      "confidence_score": 1.0
+      "target": "on_board_plan_validation"
     },
     {
       "relation": "contains",
@@ -37813,9 +37813,9 @@
       "source_file": "PLAN.md",
       "source_location": "L581",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_7_skull_king_rascal_variant",
-      "target": "on_board_plan_scoring_rules_rascal",
-      "confidence_score": 1.0
+      "target": "on_board_plan_scoring_rules_rascal"
     },
     {
       "relation": "contains",
@@ -37823,9 +37823,9 @@
       "source_file": "PLAN.md",
       "source_location": "L590",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_7_skull_king_rascal_variant",
-      "target": "on_board_plan_what_to_build",
-      "confidence_score": 1.0
+      "target": "on_board_plan_what_to_build"
     },
     {
       "relation": "contains",
@@ -37833,9 +37833,9 @@
       "source_file": "PLAN.md",
       "source_location": "L598",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_plan_phase_7_skull_king_rascal_variant",
-      "target": "on_board_plan_e2e_598",
-      "confidence_score": 1.0
+      "target": "on_board_plan_e2e_598"
     },
     {
       "relation": "contains",
@@ -37843,9 +37843,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_md",
-      "target": "on_board_claude_onboard_project_conventions",
-      "confidence_score": 1.0
+      "target": "on_board_claude_onboard_project_conventions"
     },
     {
       "relation": "contains",
@@ -37853,9 +37853,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L3",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_onboard_project_conventions",
-      "target": "on_board_claude_overview",
-      "confidence_score": 1.0
+      "target": "on_board_claude_overview"
     },
     {
       "relation": "contains",
@@ -37863,9 +37863,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L10",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_onboard_project_conventions",
-      "target": "on_board_claude_development",
-      "confidence_score": 1.0
+      "target": "on_board_claude_development"
     },
     {
       "relation": "contains",
@@ -37873,9 +37873,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L85",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_onboard_project_conventions",
-      "target": "on_board_claude_testing",
-      "confidence_score": 1.0
+      "target": "on_board_claude_testing"
     },
     {
       "relation": "contains",
@@ -37883,9 +37883,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L105",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_onboard_project_conventions",
-      "target": "on_board_claude_code_style",
-      "confidence_score": 1.0
+      "target": "on_board_claude_code_style"
     },
     {
       "relation": "contains",
@@ -37893,9 +37893,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L113",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_onboard_project_conventions",
-      "target": "on_board_claude_tanstack_query_invalidation_is_mandatory_after_mutations",
-      "confidence_score": 1.0
+      "target": "on_board_claude_tanstack_query_invalidation_is_mandatory_after_mutations"
     },
     {
       "relation": "contains",
@@ -37903,9 +37903,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L129",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_onboard_project_conventions",
-      "target": "on_board_claude_deployment",
-      "confidence_score": 1.0
+      "target": "on_board_claude_deployment"
     },
     {
       "relation": "contains",
@@ -37913,9 +37913,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L152",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_onboard_project_conventions",
-      "target": "on_board_claude_git_workflow",
-      "confidence_score": 1.0
+      "target": "on_board_claude_git_workflow"
     },
     {
       "relation": "contains",
@@ -37923,9 +37923,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L159",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_onboard_project_conventions",
-      "target": "on_board_claude_graphify",
-      "confidence_score": 1.0
+      "target": "on_board_claude_graphify"
     },
     {
       "relation": "contains",
@@ -37933,9 +37933,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L12",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_development",
-      "target": "on_board_claude_prerequisites",
-      "confidence_score": 1.0
+      "target": "on_board_claude_prerequisites"
     },
     {
       "relation": "contains",
@@ -37943,9 +37943,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L17",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_development",
-      "target": "on_board_claude_setup",
-      "confidence_score": 1.0
+      "target": "on_board_claude_setup"
     },
     {
       "relation": "contains",
@@ -37953,9 +37953,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L28",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_development",
-      "target": "on_board_claude_commands",
-      "confidence_score": 1.0
+      "target": "on_board_claude_commands"
     },
     {
       "relation": "contains",
@@ -37963,9 +37963,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L52",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_development",
-      "target": "on_board_claude_architecture",
-      "confidence_score": 1.0
+      "target": "on_board_claude_architecture"
     },
     {
       "relation": "contains",
@@ -37973,9 +37973,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L73",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_development",
-      "target": "on_board_claude_dev_workflow",
-      "confidence_score": 1.0
+      "target": "on_board_claude_dev_workflow"
     },
     {
       "relation": "contains",
@@ -37983,9 +37983,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L79",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_development",
-      "target": "on_board_claude_port_conflicts",
-      "confidence_score": 1.0
+      "target": "on_board_claude_port_conflicts"
     },
     {
       "relation": "contains",
@@ -37993,9 +37993,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L19",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_setup",
-      "target": "on_board_claude_codeblock_1",
-      "confidence_score": 1.0
+      "target": "on_board_claude_codeblock_1"
     },
     {
       "relation": "contains",
@@ -38003,9 +38003,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L54",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_architecture",
-      "target": "on_board_claude_codeblock_2",
-      "confidence_score": 1.0
+      "target": "on_board_claude_codeblock_2"
     },
     {
       "relation": "contains",
@@ -38013,9 +38013,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L87",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_testing",
-      "target": "on_board_claude_e2e_playwright",
-      "confidence_score": 1.0
+      "target": "on_board_claude_e2e_playwright"
     },
     {
       "relation": "contains",
@@ -38023,9 +38023,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L97",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_testing",
-      "target": "on_board_claude_running_against_deployed_environments",
-      "confidence_score": 1.0
+      "target": "on_board_claude_running_against_deployed_environments"
     },
     {
       "relation": "contains",
@@ -38033,9 +38033,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L99",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_running_against_deployed_environments",
-      "target": "on_board_claude_codeblock_3",
-      "confidence_score": 1.0
+      "target": "on_board_claude_codeblock_3"
     },
     {
       "relation": "contains",
@@ -38043,9 +38043,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L136",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_deployment",
-      "target": "on_board_claude_resetting_the_preview_integration_database",
-      "confidence_score": 1.0
+      "target": "on_board_claude_resetting_the_preview_integration_database"
     },
     {
       "relation": "contains",
@@ -38053,9 +38053,9 @@
       "source_file": "CLAUDE.md",
       "source_location": "L140",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "on_board_claude_deployment",
-      "target": "on_board_claude_per_env_pwa_branding",
-      "confidence_score": 1.0
+      "target": "on_board_claude_per_env_pwa_branding"
     },
     {
       "relation": "contains",
@@ -38063,9 +38063,9 @@
       "source_file": ".claude/skills/frontend-design/SKILL.md",
       "source_location": "L11",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_skills_frontend_design_skill_md",
-      "target": "frontend_design_skill_design_thinking",
-      "confidence_score": 1.0
+      "target": "frontend_design_skill_design_thinking"
     },
     {
       "relation": "contains",
@@ -38073,9 +38073,9 @@
       "source_file": ".claude/skills/frontend-design/SKILL.md",
       "source_location": "L27",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_skills_frontend_design_skill_md",
-      "target": "frontend_design_skill_frontend_aesthetics_guidelines",
-      "confidence_score": 1.0
+      "target": "frontend_design_skill_frontend_aesthetics_guidelines"
     },
     {
       "relation": "contains",
@@ -38083,9 +38083,9 @@
       "source_file": ".claude/skills/create-pr/SKILL.md",
       "source_location": "L6",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_skills_create_pr_skill_md",
-      "target": "create_pr_skill_create_pull_request",
-      "confidence_score": 1.0
+      "target": "create_pr_skill_create_pull_request"
     },
     {
       "relation": "contains",
@@ -38093,9 +38093,9 @@
       "source_file": ".claude/skills/create-pr/SKILL.md",
       "source_location": "L10",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "create_pr_skill_create_pull_request",
-      "target": "create_pr_skill_pre_flight",
-      "confidence_score": 1.0
+      "target": "create_pr_skill_pre_flight"
     },
     {
       "relation": "contains",
@@ -38103,9 +38103,9 @@
       "source_file": ".claude/skills/create-pr/SKILL.md",
       "source_location": "L19",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "create_pr_skill_create_pull_request",
-      "target": "create_pr_skill_pr_description_format",
-      "confidence_score": 1.0
+      "target": "create_pr_skill_pr_description_format"
     },
     {
       "relation": "contains",
@@ -38113,9 +38113,9 @@
       "source_file": ".claude/skills/create-pr/SKILL.md",
       "source_location": "L67",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "create_pr_skill_create_pull_request",
-      "target": "create_pr_skill_rules",
-      "confidence_score": 1.0
+      "target": "create_pr_skill_rules"
     },
     {
       "relation": "contains",
@@ -38123,9 +38123,9 @@
       "source_file": ".claude/skills/create-pr/SKILL.md",
       "source_location": "L23",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "create_pr_skill_pr_description_format",
-      "target": "create_pr_skill_codeblock_1",
-      "confidence_score": 1.0
+      "target": "create_pr_skill_codeblock_1"
     },
     {
       "relation": "contains",
@@ -38133,9 +38133,9 @@
       "source_file": ".claude/skills/create-pr/SKILL.md",
       "source_location": "L52",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "create_pr_skill_pr_description_format",
-      "target": "create_pr_skill_codeblock_2",
-      "confidence_score": 1.0
+      "target": "create_pr_skill_codeblock_2"
     },
     {
       "relation": "contains",
@@ -38143,9 +38143,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_md",
-      "target": "docs_offline_architecture_offline_architecture",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_offline_architecture"
     },
     {
       "relation": "contains",
@@ -38153,9 +38153,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L9",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_the_three_layers_today",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_the_three_layers_today"
     },
     {
       "relation": "contains",
@@ -38163,9 +38163,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L47",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_storage_locations",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_storage_locations"
     },
     {
       "relation": "contains",
@@ -38173,9 +38173,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L69",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_what_works_offline",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_what_works_offline"
     },
     {
       "relation": "contains",
@@ -38183,9 +38183,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L87",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_key_files",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_key_files"
     },
     {
       "relation": "contains",
@@ -38193,9 +38193,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L104",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_login_when_offline",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_login_when_offline"
     },
     {
       "relation": "contains",
@@ -38203,9 +38203,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L116",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_player_suggestions_three_tier_resolution",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_player_suggestions_three_tier_resolution"
     },
     {
       "relation": "contains",
@@ -38213,9 +38213,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L132",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_service_worker_update_flow",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_service_worker_update_flow"
     },
     {
       "relation": "contains",
@@ -38223,9 +38223,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L142",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_where_offline_runs",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_where_offline_runs"
     },
     {
       "relation": "contains",
@@ -38233,9 +38233,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L156",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_online_offline",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_online_offline"
     },
     {
       "relation": "contains",
@@ -38243,9 +38243,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L179",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_offline_online",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_offline_online"
     },
     {
       "relation": "contains",
@@ -38253,9 +38253,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L214",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_staletime_vs_gctime_what_each_one_does",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_staletime_vs_gctime_what_each_one_does"
     },
     {
       "relation": "contains",
@@ -38263,9 +38263,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L232",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_cache_invalidation_rules",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_cache_invalidation_rules"
     },
     {
       "relation": "contains",
@@ -38273,9 +38273,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L247",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_architecture",
-      "target": "docs_offline_architecture_offline_ux",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_offline_ux"
     },
     {
       "relation": "contains",
@@ -38283,9 +38283,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L13",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_the_three_layers_today",
-      "target": "docs_offline_architecture_codeblock_1",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_codeblock_1"
     },
     {
       "relation": "contains",
@@ -38293,9 +38293,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L35",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_the_three_layers_today",
-      "target": "docs_offline_architecture_layer_2_hydration_timing",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_layer_2_hydration_timing"
     },
     {
       "relation": "contains",
@@ -38303,9 +38303,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L39",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_the_three_layers_today",
-      "target": "docs_offline_architecture_gctime_infinity_don_t_change_without_reading_this",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_gctime_infinity_don_t_change_without_reading_this"
     },
     {
       "relation": "contains",
@@ -38313,9 +38313,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L57",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_storage_locations",
-      "target": "docs_offline_architecture_why_two_storage_systems",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_why_two_storage_systems"
     },
     {
       "relation": "contains",
@@ -38323,9 +38323,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L160",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_online_offline",
-      "target": "docs_offline_architecture_codeblock_2",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_codeblock_2"
     },
     {
       "relation": "contains",
@@ -38333,9 +38333,9 @@
       "source_file": "docs/offline-architecture.md",
       "source_location": "L183",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "docs_offline_architecture_offline_online",
-      "target": "docs_offline_architecture_codeblock_3",
-      "confidence_score": 1.0
+      "target": "docs_offline_architecture_codeblock_3"
     },
     {
       "relation": "contains",
@@ -38343,9 +38343,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_md",
-      "target": "plan_assets_design_brief_onboard_design_brief",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_onboard_design_brief"
     },
     {
       "relation": "contains",
@@ -38353,9 +38353,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L7",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_onboard_design_brief",
-      "target": "plan_assets_design_brief_1_project_at_a_glance",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_1_project_at_a_glance"
     },
     {
       "relation": "contains",
@@ -38363,9 +38363,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L20",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_onboard_design_brief",
-      "target": "plan_assets_design_brief_2_tone_feel_open_direction",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_2_tone_feel_open_direction"
     },
     {
       "relation": "contains",
@@ -38373,9 +38373,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L34",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_onboard_design_brief",
-      "target": "plan_assets_design_brief_3_hard_constraints",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_3_hard_constraints"
     },
     {
       "relation": "contains",
@@ -38383,9 +38383,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L50",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_onboard_design_brief",
-      "target": "plan_assets_design_brief_4_reference_assets",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_4_reference_assets"
     },
     {
       "relation": "contains",
@@ -38393,9 +38393,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L72",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_onboard_design_brief",
-      "target": "plan_assets_design_brief_5_brand_identity_asks",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_5_brand_identity_asks"
     },
     {
       "relation": "contains",
@@ -38403,9 +38403,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L108",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_onboard_design_brief",
-      "target": "plan_assets_design_brief_6_design_system_asks",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_6_design_system_asks"
     },
     {
       "relation": "contains",
@@ -38413,9 +38413,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L142",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_onboard_design_brief",
-      "target": "plan_assets_design_brief_7_screens_to_design",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_7_screens_to_design"
     },
     {
       "relation": "contains",
@@ -38423,9 +38423,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L181",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_onboard_design_brief",
-      "target": "plan_assets_design_brief_8_pwa_asset_checklist",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_8_pwa_asset_checklist"
     },
     {
       "relation": "contains",
@@ -38433,9 +38433,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L204",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_onboard_design_brief",
-      "target": "plan_assets_design_brief_9_out_of_scope_for_this_design_session",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_9_out_of_scope_for_this_design_session"
     },
     {
       "relation": "contains",
@@ -38443,9 +38443,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L216",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_onboard_design_brief",
-      "target": "plan_assets_design_brief_10_deliverables_expected_back",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_10_deliverables_expected_back"
     },
     {
       "relation": "contains",
@@ -38453,9 +38453,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L231",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_onboard_design_brief",
-      "target": "plan_assets_design_brief_appendix_current_tech_context_informational",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_appendix_current_tech_context_informational"
     },
     {
       "relation": "contains",
@@ -38463,9 +38463,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L74",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_5_brand_identity_asks",
-      "target": "plan_assets_design_brief_logo_wordmark",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_logo_wordmark"
     },
     {
       "relation": "contains",
@@ -38473,9 +38473,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L82",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_5_brand_identity_asks",
-      "target": "plan_assets_design_brief_color_palette",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_color_palette"
     },
     {
       "relation": "contains",
@@ -38483,9 +38483,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L98",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_5_brand_identity_asks",
-      "target": "plan_assets_design_brief_typography",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_typography"
     },
     {
       "relation": "contains",
@@ -38493,9 +38493,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L103",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_5_brand_identity_asks",
-      "target": "plan_assets_design_brief_iconography",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_iconography"
     },
     {
       "relation": "contains",
@@ -38503,9 +38503,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L112",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_6_design_system_asks",
-      "target": "plan_assets_design_brief_components",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_components"
     },
     {
       "relation": "contains",
@@ -38513,9 +38513,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L131",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_6_design_system_asks",
-      "target": "plan_assets_design_brief_score_grid_a_special_case_worth_calling_out",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_score_grid_a_special_case_worth_calling_out"
     },
     {
       "relation": "contains",
@@ -38523,9 +38523,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L148",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_7_screens_to_design",
-      "target": "plan_assets_design_brief_login_unauthenticated",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_login_unauthenticated"
     },
     {
       "relation": "contains",
@@ -38533,9 +38533,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L153",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_7_screens_to_design",
-      "target": "plan_assets_design_brief_games_games_list_home_authenticated",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_games_games_list_home_authenticated"
     },
     {
       "relation": "contains",
@@ -38543,9 +38543,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L158",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_7_screens_to_design",
-      "target": "plan_assets_design_brief_games_slug_game_detail_match_history",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_games_slug_game_detail_match_history"
     },
     {
       "relation": "contains",
@@ -38553,9 +38553,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L163",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_7_screens_to_design",
-      "target": "plan_assets_design_brief_games_slug_new_new_match_form",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_games_slug_new_new_match_form"
     },
     {
       "relation": "contains",
@@ -38563,9 +38563,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L168",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_7_screens_to_design",
-      "target": "plan_assets_design_brief_matches_id_match_scoring_7wd",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_matches_id_match_scoring_7wd"
     },
     {
       "relation": "contains",
@@ -38573,9 +38573,9 @@
       "source_file": "plan-assets/design-brief.md",
       "source_location": "L174",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_brief_7_screens_to_design",
-      "target": "plan_assets_design_brief_settings",
-      "confidence_score": 1.0
+      "target": "plan_assets_design_brief_settings"
     },
     {
       "relation": "contains",
@@ -38583,9 +38583,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_md",
-      "target": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief"
     },
     {
       "relation": "contains",
@@ -38593,9 +38593,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L7",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "target": "plan_assets_skull_king_design_brief_1_project_at_a_glance",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_1_project_at_a_glance"
     },
     {
       "relation": "contains",
@@ -38603,9 +38603,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L17",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "target": "plan_assets_skull_king_design_brief_2_reuse_the_existing_design_language_non_negotiable",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_2_reuse_the_existing_design_language_non_negotiable"
     },
     {
       "relation": "contains",
@@ -38613,9 +38613,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L38",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "target": "plan_assets_skull_king_design_brief_3_what_is_skull_king",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_3_what_is_skull_king"
     },
     {
       "relation": "contains",
@@ -38623,9 +38623,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L92",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "target": "plan_assets_skull_king_design_brief_4_hard_constraints",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_4_hard_constraints"
     },
     {
       "relation": "contains",
@@ -38633,9 +38633,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L105",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "target": "plan_assets_skull_king_design_brief_5_critical_ux_problem_1_bid_entry_one_handed",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_5_critical_ux_problem_1_bid_entry_one_handed"
     },
     {
       "relation": "contains",
@@ -38643,9 +38643,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L156",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "target": "plan_assets_skull_king_design_brief_6_critical_ux_problem_2_round_result_entry",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_6_critical_ux_problem_2_round_result_entry"
     },
     {
       "relation": "contains",
@@ -38653,9 +38653,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L201",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "target": "plan_assets_skull_king_design_brief_7_other_screens_needed",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_7_other_screens_needed"
     },
     {
       "relation": "contains",
@@ -38663,9 +38663,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L248",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "target": "plan_assets_skull_king_design_brief_8_reference_materials",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_8_reference_materials"
     },
     {
       "relation": "contains",
@@ -38673,9 +38673,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L271",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "target": "plan_assets_skull_king_design_brief_9_deliverables",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_9_deliverables"
     },
     {
       "relation": "contains",
@@ -38683,9 +38683,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L288",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "target": "plan_assets_skull_king_design_brief_10_out_of_scope",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_10_out_of_scope"
     },
     {
       "relation": "contains",
@@ -38693,9 +38693,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L302",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_onboard_skull_king_scoring_design_brief",
-      "target": "plan_assets_skull_king_design_brief_11_success_criteria",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_11_success_criteria"
     },
     {
       "relation": "contains",
@@ -38703,9 +38703,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L48",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_3_what_is_skull_king",
-      "target": "plan_assets_skull_king_design_brief_card_counting_context_helpful_for_design_intuition",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_card_counting_context_helpful_for_design_intuition"
     },
     {
       "relation": "contains",
@@ -38713,9 +38713,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L55",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_3_what_is_skull_king",
-      "target": "plan_assets_skull_king_design_brief_scoring_rules_classic_the_only_variant_in_this_design_pass",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_scoring_rules_classic_the_only_variant_in_this_design_pass"
     },
     {
       "relation": "contains",
@@ -38723,9 +38723,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L78",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_3_what_is_skull_king",
-      "target": "plan_assets_skull_king_design_brief_worked_example_from_pdf_page_16",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_worked_example_from_pdf_page_16"
     },
     {
       "relation": "contains",
@@ -38733,9 +38733,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L109",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_5_critical_ux_problem_1_bid_entry_one_handed",
-      "target": "plan_assets_skull_king_design_brief_the_physical_reality",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_the_physical_reality"
     },
     {
       "relation": "contains",
@@ -38743,9 +38743,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L115",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_5_critical_ux_problem_1_bid_entry_one_handed",
-      "target": "plan_assets_skull_king_design_brief_the_constraint_restated",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_the_constraint_restated"
     },
     {
       "relation": "contains",
@@ -38753,9 +38753,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L123",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_5_critical_ux_problem_1_bid_entry_one_handed",
-      "target": "plan_assets_skull_king_design_brief_approaches_to_consider_not_prescribed_pick_propose_alternatives",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_approaches_to_consider_not_prescribed_pick_propose_alternatives"
     },
     {
       "relation": "contains",
@@ -38763,9 +38763,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L141",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_5_critical_ux_problem_1_bid_entry_one_handed",
-      "target": "plan_assets_skull_king_design_brief_accessibility_error_tolerance",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_accessibility_error_tolerance"
     },
     {
       "relation": "contains",
@@ -38773,9 +38773,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L148",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_5_critical_ux_problem_1_bid_entry_one_handed",
-      "target": "plan_assets_skull_king_design_brief_out_of_scope_for_this_brief",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_out_of_scope_for_this_brief"
     },
     {
       "relation": "contains",
@@ -38783,9 +38783,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L160",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_6_critical_ux_problem_2_round_result_entry",
-      "target": "plan_assets_skull_king_design_brief_what_the_user_enters_per_player_per_round",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_what_the_user_enters_per_player_per_round"
     },
     {
       "relation": "contains",
@@ -38793,9 +38793,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L172",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_6_critical_ux_problem_2_round_result_entry",
-      "target": "plan_assets_skull_king_design_brief_visual_approaches_to_consider",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_visual_approaches_to_consider"
     },
     {
       "relation": "contains",
@@ -38803,9 +38803,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L178",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_6_critical_ux_problem_2_round_result_entry",
-      "target": "plan_assets_skull_king_design_brief_bonus_chip_design",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_bonus_chip_design"
     },
     {
       "relation": "contains",
@@ -38813,9 +38813,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L186",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_6_critical_ux_problem_2_round_result_entry",
-      "target": "plan_assets_skull_king_design_brief_validation_surface_helpful_never_blocking",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_validation_surface_helpful_never_blocking"
     },
     {
       "relation": "contains",
@@ -38823,9 +38823,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L191",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_6_critical_ux_problem_2_round_result_entry",
-      "target": "plan_assets_skull_king_design_brief_live_scoring_feedback",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_live_scoring_feedback"
     },
     {
       "relation": "contains",
@@ -38833,9 +38833,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L205",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_7_other_screens_needed",
-      "target": "plan_assets_skull_king_design_brief_7_1_match_start_variant_pre_game",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_7_1_match_start_variant_pre_game"
     },
     {
       "relation": "contains",
@@ -38843,9 +38843,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L214",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_7_other_screens_needed",
-      "target": "plan_assets_skull_king_design_brief_7_2_round_transitions",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_7_2_round_transitions"
     },
     {
       "relation": "contains",
@@ -38853,9 +38853,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L221",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_7_other_screens_needed",
-      "target": "plan_assets_skull_king_design_brief_7_3_live_scoreboard_always_reachable",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_7_3_live_scoreboard_always_reachable"
     },
     {
       "relation": "contains",
@@ -38863,9 +38863,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L233",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_7_other_screens_needed",
-      "target": "plan_assets_skull_king_design_brief_7_4_match_completion",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_7_4_match_completion"
     },
     {
       "relation": "contains",
@@ -38873,9 +38873,9 @@
       "source_file": "plan-assets/skull-king-design-brief.md",
       "source_location": "L242",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_design_brief_7_other_screens_needed",
-      "target": "plan_assets_skull_king_design_brief_7_5_sync_indicator",
-      "confidence_score": 1.0
+      "target": "plan_assets_skull_king_design_brief_7_5_sync_indicator"
     },
     {
       "relation": "contains",
@@ -38883,9 +38883,9 @@
       "source_file": "plan-assets/skull-king-handoff/README.md",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_skull_king_handoff_readme_md",
-      "target": "skull_king_handoff_readme_coding_agents_read_this_first",
-      "confidence_score": 1.0
+      "target": "skull_king_handoff_readme_coding_agents_read_this_first"
     },
     {
       "relation": "contains",
@@ -38893,9 +38893,9 @@
       "source_file": "plan-assets/skull-king-handoff/README.md",
       "source_location": "L7",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "skull_king_handoff_readme_coding_agents_read_this_first",
-      "target": "skull_king_handoff_readme_what_you_should_do_important",
-      "confidence_score": 1.0
+      "target": "skull_king_handoff_readme_what_you_should_do_important"
     },
     {
       "relation": "contains",
@@ -38903,9 +38903,9 @@
       "source_file": "plan-assets/skull-king-handoff/README.md",
       "source_location": "L13",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "skull_king_handoff_readme_coding_agents_read_this_first",
-      "target": "skull_king_handoff_readme_about_the_design_files",
-      "confidence_score": 1.0
+      "target": "skull_king_handoff_readme_about_the_design_files"
     },
     {
       "relation": "contains",
@@ -38913,9 +38913,9 @@
       "source_file": "plan-assets/skull-king-handoff/README.md",
       "source_location": "L19",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "skull_king_handoff_readme_coding_agents_read_this_first",
-      "target": "skull_king_handoff_readme_bundle_contents",
-      "confidence_score": 1.0
+      "target": "skull_king_handoff_readme_bundle_contents"
     },
     {
       "relation": "contains",
@@ -38923,9 +38923,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "plan_assets_design_handoff_onboard_readme_md",
-      "target": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_handoff_onboard_score_pad_app"
     },
     {
       "relation": "contains",
@@ -38933,9 +38933,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L3",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_overview",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_overview"
     },
     {
       "relation": "contains",
@@ -38943,9 +38943,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L10",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_about_the_design_files",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_about_the_design_files"
     },
     {
       "relation": "contains",
@@ -38953,9 +38953,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L15",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_fidelity",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_fidelity"
     },
     {
       "relation": "contains",
@@ -38963,9 +38963,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L18",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_screens_views",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_screens_views"
     },
     {
       "relation": "contains",
@@ -38973,9 +38973,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L64",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_glyph_set",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_glyph_set"
     },
     {
       "relation": "contains",
@@ -38983,9 +38983,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L81",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_interactions_behavior",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_interactions_behavior"
     },
     {
       "relation": "contains",
@@ -38993,9 +38993,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L103",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_state_management",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_state_management"
     },
     {
       "relation": "contains",
@@ -39003,9 +39003,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L124",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_design_tokens",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_design_tokens"
     },
     {
       "relation": "contains",
@@ -39013,9 +39013,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L155",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_assets",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_assets"
     },
     {
       "relation": "contains",
@@ -39023,9 +39023,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L165",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_files",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_files"
     },
     {
       "relation": "contains",
@@ -39033,9 +39033,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L180",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_implementation_order_suggested",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_implementation_order_suggested"
     },
     {
       "relation": "contains",
@@ -39043,9 +39043,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L188",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_handoff_onboard_score_pad_app",
-      "target": "design_handoff_onboard_readme_notes_for_the_implementer",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_notes_for_the_implementer"
     },
     {
       "relation": "contains",
@@ -39053,9 +39053,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L21",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_screens_views",
-      "target": "design_handoff_onboard_readme_01_login",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_01_login"
     },
     {
       "relation": "contains",
@@ -39063,9 +39063,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L26",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_screens_views",
-      "target": "design_handoff_onboard_readme_02_games_home",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_02_games_home"
     },
     {
       "relation": "contains",
@@ -39073,9 +39073,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L31",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_screens_views",
-      "target": "design_handoff_onboard_readme_03_game_detail",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_03_game_detail"
     },
     {
       "relation": "contains",
@@ -39083,9 +39083,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L37",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_screens_views",
-      "target": "design_handoff_onboard_readme_04_new_match",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_04_new_match"
     },
     {
       "relation": "contains",
@@ -39093,9 +39093,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L41",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_screens_views",
-      "target": "design_handoff_onboard_readme_05_match_in_progress_the_core_screen",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_05_match_in_progress_the_core_screen"
     },
     {
       "relation": "contains",
@@ -39103,9 +39103,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L53",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_screens_views",
-      "target": "design_handoff_onboard_readme_05b_match_empty",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_05b_match_empty"
     },
     {
       "relation": "contains",
@@ -39113,9 +39113,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L56",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_screens_views",
-      "target": "design_handoff_onboard_readme_06_match_completed",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_06_match_completed"
     },
     {
       "relation": "contains",
@@ -39123,9 +39123,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L59",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_screens_views",
-      "target": "design_handoff_onboard_readme_07_settings_and_07_fr",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_07_settings_and_07_fr"
     },
     {
       "relation": "contains",
@@ -39133,9 +39133,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L83",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_interactions_behavior",
-      "target": "design_handoff_onboard_readme_logo_splash_on_first_paint_match_screen_entry_login",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_logo_splash_on_first_paint_match_screen_entry_login"
     },
     {
       "relation": "contains",
@@ -39143,9 +39143,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L86",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_interactions_behavior",
-      "target": "design_handoff_onboard_readme_score_entry",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_score_entry"
     },
     {
       "relation": "contains",
@@ -39153,9 +39153,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L91",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_interactions_behavior",
-      "target": "design_handoff_onboard_readme_supremacy",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_supremacy"
     },
     {
       "relation": "contains",
@@ -39163,9 +39163,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L94",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_interactions_behavior",
-      "target": "design_handoff_onboard_readme_sync_states",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_sync_states"
     },
     {
       "relation": "contains",
@@ -39173,9 +39173,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L97",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_interactions_behavior",
-      "target": "design_handoff_onboard_readme_themes",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_themes"
     },
     {
       "relation": "contains",
@@ -39183,9 +39183,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L100",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_interactions_behavior",
-      "target": "design_handoff_onboard_readme_localization",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_localization"
     },
     {
       "relation": "contains",
@@ -39193,9 +39193,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L105",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_state_management",
-      "target": "design_handoff_onboard_readme_codeblock_1",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_codeblock_1"
     },
     {
       "relation": "contains",
@@ -39203,9 +39203,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L127",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_design_tokens",
-      "target": "design_handoff_onboard_readme_parchment_hybrid_light_key_values",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_parchment_hybrid_light_key_values"
     },
     {
       "relation": "contains",
@@ -39213,9 +39213,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L137",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_design_tokens",
-      "target": "design_handoff_onboard_readme_candlelit_hybrid_dark_key_values",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_candlelit_hybrid_dark_key_values"
     },
     {
       "relation": "contains",
@@ -39223,9 +39223,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L141",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_design_tokens",
-      "target": "design_handoff_onboard_readme_type",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_type"
     },
     {
       "relation": "contains",
@@ -39233,9 +39233,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L146",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_design_tokens",
-      "target": "design_handoff_onboard_readme_spacing_radius",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_spacing_radius"
     },
     {
       "relation": "contains",
@@ -39243,9 +39243,9 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md",
       "source_location": "L151",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "design_handoff_onboard_readme_design_tokens",
-      "target": "design_handoff_onboard_readme_shadow",
-      "confidence_score": 1.0
+      "target": "design_handoff_onboard_readme_shadow"
     },
     {
       "relation": "shares_data_with",
@@ -48305,5 +48305,5 @@
       "source_file": "plan-assets/design_handoff_onboard/README.md"
     }
   ],
-  "built_at_commit": "027aee9a5321846f02cfe688214ca9879c415d54"
+  "built_at_commit": "240ead958a70fdefd42d0b62d781478d601f673b"
 }
