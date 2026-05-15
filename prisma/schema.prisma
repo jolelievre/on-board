@@ -103,6 +103,7 @@ model Match {
   winnerId    String?   /// References Player.id (not a FK to avoid circular deps)
   metadata    Json      @default("{}") /// Game-specific match settings (e.g. { skullKing: { dealerStart: 0 } })
   startedAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt /// Drives Last-Write-Wins merging during pull-sync
   completedAt DateTime?
 
   players Player[]
@@ -119,6 +120,7 @@ model Player {
   user     User?   @relation(fields: [userId], references: [id])
   name     String  /// Display name for this match
   position Int     /// Seat/turn order (0-indexed)
+  updatedAt DateTime @updatedAt
 
   scores Score[]
 
@@ -136,6 +138,7 @@ model Score {
   category String /// Scoring category (e.g. "military", "civil", "round_1")
   value    Int    /// Calculated score for this category
   metadata Json   @default("{}") /// Extra data (e.g. { bid, tricks, bonusDetails[] } for Skull King)
+  updatedAt DateTime @updatedAt
 
   @@unique([matchId, playerId, category])
 }
