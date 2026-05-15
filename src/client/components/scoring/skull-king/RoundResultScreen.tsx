@@ -59,11 +59,15 @@ export function RoundResultScreen({
     0,
   );
 
-  // Soft validation: bonuses each represent a trick the player won, so the
-  // total bonus count must stay ≤ tricks won. Each bonus's effective max is
-  // therefore min(itemMax, tricks - othersTotal). Once a counter reaches its
-  // dynamic max, the next click loops back to 0, which frees budget for the
-  // siblings to become tappable again.
+  // Soft validation: bonuses count CARDS captured in won tricks, not tricks
+  // themselves — a single trick can contain several bonus cards (e.g. all
+  // three color 14s, or two mermaids beaten by a pirate). Three caps apply:
+  //   1. deck cap per type (SK_BONUS_MAX) — only N of each card exist
+  //   2. deck remaining across players — others' captures eat into the cap
+  //   3. player's captured-card budget = tricks × playerCount minus the
+  //      bonuses already counted (each won trick carries playerCount cards)
+  // Once a counter reaches its dynamic max, the next click loops back to 0,
+  // which frees budget for the siblings to become tappable again.
   const BONUS_KEYS: SkullKingBonusKey[] = [
     "color14",
     "black14",
@@ -72,22 +76,30 @@ export function RoundResultScreen({
     "skByMermaid",
   ];
   const totalBonuses = BONUS_KEYS.reduce((sum, k) => sum + entry[k], 0);
+  const playerCount = players.length;
 
   const dynamicMaxFor = (key: SkullKingBonusKey): number => {
     const itemMax = SK_BONUS_MAX[key];
-    const others = totalBonuses - entry[key];
-    const allowed = Math.max(0, entry.tricks - others);
-    return Math.min(itemMax, allowed);
+    const otherPlayersSame = players.reduce(
+      (sum, p) =>
+        p.id === active.id ? sum : sum + (entries[p.id]?.[key] ?? 0),
+      0,
+    );
+    const deckRemaining = Math.max(0, itemMax - otherPlayersSame);
+    const playerBudget = Math.max(
+      0,
+      entry.tricks * playerCount - (totalBonuses - entry[key]),
+    );
+    return Math.min(deckRemaining, playerBudget);
   };
 
   const update = (patch: Partial<SkullKingRoundEntry>) => {
     let next: SkullKingRoundEntry = { ...entry, ...patch };
-    // Bonuses require winning the trick that contained the bonus card. If
-    // tricks drops below the current bonus sum (including the tricks=0 case),
-    // clear all bonuses so the user re-enters them under the new budget —
-    // simpler and more predictable than picking which to keep.
+    // If tricks drops so the captured-card budget no longer covers the
+    // bonus sum, clear all bonuses so the user re-enters them under the new
+    // budget — simpler and more predictable than picking which to keep.
     const nextBonusSum = BONUS_KEYS.reduce((s, k) => s + next[k], 0);
-    if (nextBonusSum > next.tricks) {
+    if (nextBonusSum > next.tricks * playerCount) {
       next = {
         ...next,
         color14: 0,

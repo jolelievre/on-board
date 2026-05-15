@@ -170,7 +170,7 @@ test.describe("Skull King — Classic flow", () => {
     );
   });
 
-  test("bonus budget: total bonuses cannot exceed tricks won", async ({
+  test("bonus budget: total bonus cards cannot exceed tricks × playerCount", async ({
     page,
   }) => {
     const names = uniqueNames(2);
@@ -184,15 +184,22 @@ test.describe("Skull King — Classic flow", () => {
     await page.click("[data-testid='sk-bid-recap-continue']");
     await pickTricks(page, 1);
 
-    // P1 has 1 trick → budget 1. Setting black-14 fills it.
+    // P1 captured 1 trick × 2 players = 2 cards. Setting black-14 uses 1 —
+    // siblings still tappable for 1 more card.
     await page.click("[data-testid='sk-bonus-black14']");
+    await expect(
+      page.locator("[data-testid='sk-bonus-color14']"),
+    ).toBeEnabled();
+
+    // Bump color14 to 1 — budget fully used (2/2). Score: bid made (+20)
+    // + black14 (+20) + color14 (+10) = +50.
+    await page.click("[data-testid='sk-bonus-color14']");
     await expect(page.locator("[data-testid='sk-round-total']")).toHaveText(
-      "+40",
+      "+50",
     );
 
-    // Other bonuses are now disabled — their dynamic max is 0.
+    // Remaining bonus chips disabled — their dynamic max is 0.
     for (const id of [
-      "sk-bonus-color14",
       "sk-bonus-mermaidByPirate",
       "sk-bonus-pirateBySK",
       "sk-bonus-skByMermaid",
@@ -200,18 +207,90 @@ test.describe("Skull King — Classic flow", () => {
       await expect(page.locator(`[data-testid='${id}']`)).toBeDisabled();
     }
 
-    // Tap the active bonus again — toggles off, freeing budget.
-    await page.click("[data-testid='sk-bonus-black14']");
+    // Tap color14 again — wraps to 0, freeing 1 card of budget.
+    await page.click("[data-testid='sk-bonus-color14']");
     await expect(
-      page.locator("[data-testid='sk-bonus-black14']"),
-    ).toHaveAttribute("data-on", "false");
+      page.locator("[data-testid='sk-bonus-color14']"),
+    ).toHaveAttribute("data-count", "0");
 
-    // Other bonuses are tappable again.
+    // Siblings tappable again.
+    await expect(
+      page.locator("[data-testid='sk-bonus-mermaidByPirate']"),
+    ).toBeEnabled();
+  });
+
+  test("bonus budget: round 1 with 3 players — winner can stack all 3 color-14s in one trick", async ({
+    page,
+  }) => {
+    const names = uniqueNames(3);
+    await startMatchAndDeal(page, names);
+
+    // Round 1, 1 trick. P1 bids 1 takes 1, others bid 0 take 0.
+    await enterBids(page, [1, 0, 0]);
+    await pickTricks(page, 1);
+
+    // The won trick contains 3 cards (one per player); all three can be
+    // colored 14s. With the prior tricks-only budget this used to cap at 1.
+    await page.click("[data-testid='sk-bonus-color14']");
+    await page.click("[data-testid='sk-bonus-color14']");
+    await page.click("[data-testid='sk-bonus-color14']");
+    await expect(
+      page.locator("[data-testid='sk-bonus-color14']"),
+    ).toHaveAttribute("data-count", "3");
+
+    // Score: bid 1 made (+20) + 3 × color14 (+30) = +50.
+    await expect(page.locator("[data-testid='sk-round-total']")).toHaveText(
+      "+50",
+    );
+
+    // Budget exhausted (3 cards = 3 bonuses). Other bonus chips disabled.
+    for (const id of [
+      "sk-bonus-black14",
+      "sk-bonus-mermaidByPirate",
+      "sk-bonus-pirateBySK",
+      "sk-bonus-skByMermaid",
+    ]) {
+      await expect(page.locator(`[data-testid='${id}']`)).toBeDisabled();
+    }
+  });
+
+  test("bonus deck cap: shared across players — once P1 takes both mermaids, P2 cannot claim any", async ({
+    page,
+  }) => {
+    const names = uniqueNames(2);
+    await startMatchAndDeal(page, names);
+
+    // Round 1: P1 bids 1 takes 1, P2 bids 0 takes 0 (legal split).
+    await enterBids(page, [1, 0]);
+    await enterResults(page, [1, 0]);
+    await expect(page.locator("[data-testid='sk-transition']")).toBeVisible();
+    await page.click("[data-testid='sk-transition-continue']");
+
+    // Round 2: 2 cards, 2 tricks. Both bid 1.
+    await enterBids(page, [1, 1]);
+
+    // P1 takes 1 trick → 1 × 2 = 2-card budget. Claim both mermaids (deck = 2).
+    await pickTricks(page, 1);
+    await page.click("[data-testid='sk-bonus-mermaidByPirate']");
+    await page.click("[data-testid='sk-bonus-mermaidByPirate']");
+    await expect(
+      page.locator("[data-testid='sk-bonus-mermaidByPirate']"),
+    ).toHaveAttribute("data-count", "2");
+    await page.click("[data-testid='sk-result-next']");
+
+    // P2 takes the other trick → 2-card budget. But the mermaid deck is
+    // exhausted, so the mermaid chip is disabled despite the budget being open.
+    await pickTricks(page, 1);
+    await expect(
+      page.locator("[data-testid='sk-bonus-mermaidByPirate']"),
+    ).toBeDisabled();
+
+    // Other bonuses (different card types) remain tappable for P2.
     await expect(
       page.locator("[data-testid='sk-bonus-color14']"),
     ).toBeEnabled();
     await expect(
-      page.locator("[data-testid='sk-bonus-mermaidByPirate']"),
+      page.locator("[data-testid='sk-bonus-black14']"),
     ).toBeEnabled();
   });
 
