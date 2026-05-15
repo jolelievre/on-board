@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { authClient, updateProfile } from "../../lib/auth-client";
+import { pullSync, setSyncMeta } from "../../lib/pull-sync";
 import { useInstallPrompt } from "../../hooks/useInstallPrompt";
 import { clearSessionCache } from "../../hooks/useAuthSession";
 import { LanguageSelector } from "../../components/LanguageSelector";
@@ -121,6 +122,11 @@ function SettingsPage() {
   );
 }
 
+async function resetPullCursorAndPull(): Promise<void> {
+  await setSyncMeta("lastPullAt", new Date(0).toISOString());
+  await pullSync();
+}
+
 function AliasInput({ initialValue }: { initialValue: string }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -141,15 +147,15 @@ function AliasInput({ initialValue }: { initialValue: string }) {
     setValue(trimmed);
     void updateProfile({ alias: trimmed })
       .then(() => {
-        // The new alias changes how the current user is rendered in player
-        // suggestions and in any cached match history (linked players show
-        // the alias). Invalidate so the next mount of those queries refetches
-        // — without this, gcTime: Infinity keeps the pre-update entries
-        // until staleTime expires.
+        // The alias change affects player suggestions (still a useQuery)
+        // and the player.user.alias mirrored into Dexie. We refetch the
+        // suggestions and reset the pull cursor so the next pullSync
+        // refreshes every match (alias edits don't bump Player.updatedAt
+        // on the server, so a regular incremental pull would skip them).
         void queryClient.invalidateQueries({
           queryKey: ["players", "suggestions"],
         });
-        void queryClient.invalidateQueries({ queryKey: ["matches"] });
+        void resetPullCursorAndPull();
         setShowSaved(true);
         window.setTimeout(() => setShowSaved(false), 1500);
       })

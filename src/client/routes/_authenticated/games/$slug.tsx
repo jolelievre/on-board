@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
-import { api } from "../../../lib/api";
 import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
+import { useGame } from "../../../hooks/data/useGame";
+import { useMatchList } from "../../../hooks/data/useMatchList";
 import {
   computeTotalsByPlayer,
   type SevenWondersVictoryType,
@@ -21,15 +21,6 @@ export const Route = createFileRoute("/_authenticated/games/$slug")({
   component: GameDetailPage,
 });
 
-type Game = {
-  id: string;
-  slug: string;
-  name: string;
-  description: string;
-  minPlayers: number;
-  maxPlayers: number;
-};
-
 type Player = {
   id: string;
   name: string;
@@ -40,7 +31,7 @@ type ScoreRow = { playerId: string; category: string; value: number };
 type MatchListItem = {
   id: string;
   status: "IN_PROGRESS" | "COMPLETED";
-  victoryType: SevenWondersVictoryType | "draw" | null;
+  victoryType: SevenWondersVictoryType | "draw" | string | null;
   winnerId: string | null;
   startedAt: string;
   completedAt: string | null;
@@ -53,21 +44,10 @@ function GameDetailPage() {
   const { t, i18n } = useTranslation();
   const { isOnline } = useOnlineStatus();
 
-  const { data: game, isPending, isPaused } = useQuery<Game>({
-    queryKey: ["games", slug],
-    queryFn: () => api<Game>(`/api/games/${slug}`),
-  });
+  const { data: game, status: gameStatus } = useGame(slug);
+  const { data: matches } = useMatchList(game?.id);
 
-  const { data: matches } = useQuery<MatchListItem[]>({
-    queryKey: ["matches", { gameId: game?.id }],
-    queryFn: () => api<MatchListItem[]>(`/api/matches?gameId=${game!.id}`),
-    enabled: !!game?.id,
-  });
-
-  // isPaused: offlineFirst fired the queryFn once, it failed, and the retry
-  // is now paused waiting for network. Treat the same as an error with no
-  // cache — show the offline-no-cache message instead of spinning forever.
-  if (isPending && !isPaused) {
+  if (gameStatus === "loading") {
     return (
       <>
         <Header

@@ -1,59 +1,58 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * Offline behavior — covers the gcTime: Infinity fix (prefetched queries
- * survive in the cache) and the offline-no-cache fallback UX.
+ * Offline behavior — covers the local-first refactor (PR B).
+ *
+ * After login, `usePullOnAuth` populates Dexie with games + matches from
+ * the server. All UI reads come from Dexie via `useLiveQuery`, so once
+ * Dexie has the rows the screens render offline. Mutations write to
+ * Dexie + the sync queue locally and replay on reconnect; the server
+ * accepts the client-generated CUIDs idempotently (PR A).
  *
  * Chromium-only: Playwright's BrowserContext.setOffline uses CDP's
- * Network.emulateNetworkConditions, which is the same mechanism Chrome
- * DevTools' "Offline" throttle uses. Reliable on Chromium; less so on WebKit,
- * so we skip the Mobile Safari project.
+ * Network.emulateNetworkConditions, which matches Chrome DevTools'
+ * "Offline" throttle. Reliable on Chromium; less so on WebKit.
  */
-test.describe("Offline", () => {
+test.describe("Offline (local-first)", () => {
   test.skip(
     ({ browserName }) => browserName !== "chromium",
     "Playwright's CDP-based setOffline is chromium-only",
   );
 
   test.beforeEach(async ({ page }) => {
-    // Wipe the persisted query cache on EVERY navigation. A one-shot
-    // `localStorage.removeItem` here races `createSyncStoragePersister`'s
-    // deferred write (it always wraps via `setTimeout(fn, 0)` even with
-    // `throttleTime: 0`): on slow runners (CI) the persister's pending
-    // write from this `goto("/")` lands AFTER the removeItem, repopulating
-    // the cache. The next page.goto("/games") then hydrates that stale
-    // cache and — with staleTime 60s — skips the `/api/games` refetch the
-    // tests rely on. `addInitScript` runs before the page's first script,
-    // so the queryClient always hydrates from an empty localStorage.
+    // Wipe both the legacy persisted-cache key (pre-v2 clients may still
+    // have it after rolling forward) and the Dexie database so each test
+    // starts from a clean slate. addInitScript runs before any page
+    // script so the v2 upgrader and pullSync rehydrate from scratch.
     await page.addInitScript(() => {
       localStorage.removeItem("onboard_query_cache");
+      // Best-effort: synchronous delete with no completion handler — Dexie
+      // re-opens on next access. The deletion is fire-and-forget; pullSync
+      // populates the empty DB shortly after.
+      indexedDB.deleteDatabase("onboard");
     });
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
   });
 
-  test("offline navigation to a prefetched game detail page renders cached data", async ({
+  test("offline navigation to a previously-pulled game renders from Dexie", async ({
     page,
     context,
   }) => {
-    // Online: load the games list and wait for the per-game prefetches to
-    // resolve. usePrefetchGames warms ['games', slug] and ['matches', {gameId}]
-    // for every game returned by /api/games.
+    // Online: load /games and wait for pullSync to fetch both endpoints.
+    // After both resolve, Dexie has the full games catalogue and the
+    // user's matches.
     await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
       page.waitForResponse(
-        (r) => r.url().includes("/api/games/7-wonders-duel") && r.ok(),
-      ),
-      page.waitForResponse(
-        (r) => /\/api\/matches\?gameId=/.test(r.url()) && r.ok(),
+        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
       ),
       page.goto("/games"),
     ]);
     await expect(page.locator("h1")).toContainText("Games");
 
-    // Drop the network. With gcTime: Infinity the prefetched entries must
-    // still be in cache; with the previous 90-day gcTime they were GC'd
-    // microseconds after success and the navigation below would render the
-    // offline-no-cache fallback instead.
+    // Drop the network. Dexie still holds the games rows so the detail
+    // page must render entirely from local storage.
     await context.setOffline(true);
 
     await page.click("text=7 Wonders Duel");
@@ -68,16 +67,14 @@ test.describe("Offline", () => {
     ).not.toBeVisible();
   });
 
-  test("offline match history is visible on the prefetched game detail page", async ({
+  test("offline match history is visible on the game detail page", async ({
     page,
     context,
   }) => {
     await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
       page.waitForResponse(
-        (r) => r.url().includes("/api/games/7-wonders-duel") && r.ok(),
-      ),
-      page.waitForResponse(
-        (r) => /\/api\/matches\?gameId=/.test(r.url()) && r.ok(),
+        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
       ),
       page.goto("/games"),
     ]);
@@ -87,48 +84,63 @@ test.describe("Offline", () => {
     await page.click("text=7 Wonders Duel");
     await page.waitForURL("**/games/7-wonders-duel");
 
-    // The match-history container is always rendered (with either rows or an
-    // empty state); its presence proves the ['matches', {gameId}] query
-    // resolved from cache rather than failing the network call.
     await expect(page.getByTestId("match-history")).toBeVisible();
   });
 
-  test("offline navigation to an uncached game shows the offline-no-cache message", async ({
+  test("offline-created match persists, surfaces real CUID, and replays on reconnect", async ({
     page,
     context,
   }) => {
-    // Force the per-game prefetch to fail so the games detail entry never
-    // makes it into the cache. usePrefetchGames also prefetches matches; we
-    // let those through so the page render is purely about the missing game
-    // detail entry.
-    //
-    // We use in-app navigation (a click on the SPA Link) rather than
-    // page.goto so this test works in dev mode too — the dev server doesn't
-    // ship the service worker (vite-plugin-pwa devOptions.enabled = false),
-    // so a hard offline navigation would fail at the document-request layer
-    // before our React code ever mounts. The production build's SW handles
-    // that case via navigateFallback; we cover the document-request path
-    // through the manual validation plan instead.
-    await context.route("**/api/games/7-wonders-duel", (route) =>
-      route.abort("connectionfailed"),
-    );
-
+    // Warm Dexie with the games catalogue.
     await Promise.all([
       page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
+      page.waitForResponse(
+        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
       page.goto("/games"),
     ]);
-    await expect(page.locator("h1")).toContainText("Games");
 
     await context.setOffline(true);
 
+    // Create a new match while offline — mutations.createMatch writes the
+    // row + queues a POST to /api/matches with the client CUID.
     await page.click("text=7 Wonders Duel");
-    await page.waitForURL("**/games/7-wonders-duel");
+    await page.click('[data-testid="new-match-button"]');
+    await page.waitForURL("**/games/7-wonders-duel/new");
+    await page.fill('[data-testid="new-match-player-0"]', "Alice");
+    await page.fill('[data-testid="new-match-player-1"]', "Bob");
+    await page.click('[data-testid="new-match-submit"]');
 
-    await expect(
-      page.getByText("This page wasn't saved for offline use", {
-        exact: false,
-      }),
-    ).toBeVisible();
+    // The URL is the real CUID generated locally — never a "draft_…"
+    // prefix (that mechanism was removed in PR B).
+    await page.waitForURL(/\/matches\/[a-z][a-z0-9]{19,}$/);
+    const matchUrl = page.url();
+    const matchId = matchUrl.split("/").pop()!;
+    expect(matchId).not.toMatch(/^draft_/);
+
+    // Reload while still offline. The URL stays the same and the page
+    // re-renders from Dexie.
+    await page.reload();
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page).toHaveURL(matchUrl);
+
+    // Reconnect: the sync queue flushes; pullSync runs after success.
+    const matchPost = page.waitForResponse(
+      (r) =>
+        r.request().method() === "POST" &&
+        r.url().endsWith("/api/matches") &&
+        r.ok(),
+    );
+    await context.setOffline(false);
+    await matchPost;
+
+    // Match must now exist on the server. Replaying the queued POST is
+    // safe because PR A made the endpoint upsert on the client-supplied
+    // id — a second replay returns 200 with the same row, never a dupe.
+    const apiRes = await page.request.get(`/api/matches/${matchId}`);
+    expect(apiRes.ok()).toBeTruthy();
+    const apiMatch = (await apiRes.json()) as { id: string };
+    expect(apiMatch.id).toBe(matchId);
   });
 });
 
@@ -145,7 +157,6 @@ test.describe("Auth session error-driven fallback", () => {
     page,
     context,
   }) => {
-    // Online load to populate `onboard_session_cache` from the live session.
     await page.goto("/games");
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator("h1")).toContainText("Games");
@@ -155,10 +166,6 @@ test.describe("Auth session error-driven fallback", () => {
     );
     expect(cached).not.toBeNull();
 
-    // Fail get-session without flipping navigator.onLine. Pre-fix this drove
-    // useAuthSession into the `session: null` branch — _authenticated then
-    // bounced to "/". Post-fix the better-auth `error` triggers the cached
-    // fallback regardless of `navigator.onLine`.
     await context.route("**/api/auth/get-session*", (route) =>
       route.abort("connectionfailed"),
     );

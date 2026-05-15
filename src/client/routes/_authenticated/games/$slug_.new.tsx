@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, ApiError } from "../../../lib/api";
 import { authClient } from "../../../lib/auth-client";
+import { useGame } from "../../../hooks/data/useGame";
+import { createMatch } from "../../../lib/mutations";
 import { usePlayerSuggestions, persistPlayersToLocalProfiles } from "../../../hooks/usePlayerSuggestions";
 import { Header } from "../../../components/layout/Header";
 import { Pill } from "../../../components/ui/Pill";
@@ -14,18 +14,6 @@ import styles from "./$slug_.new.module.css";
 export const Route = createFileRoute("/_authenticated/games/$slug_/new")({
   component: NewMatchPage,
 });
-
-type Game = {
-  id: string;
-  slug: string;
-  name: string;
-  minPlayers: number;
-  maxPlayers: number;
-};
-
-type Match = {
-  id: string;
-};
 
 const AVATAR_CLASSES = [
   styles.avatarA,
@@ -42,18 +30,15 @@ function NewMatchPage() {
   const { slug } = Route.useParams();
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
-  const { data: game, isPending } = useQuery<Game>({
-    queryKey: ["games", slug],
-    queryFn: () => api<Game>(`/api/games/${slug}`),
-  });
+  const { data: game, status: gameStatus } = useGame(slug);
 
   const { data: suggestions = [] } = usePlayerSuggestions();
 
   const { data: session } = authClient.useSession();
   const myUserId = session?.user.id;
 
+  const [submitting, setSubmitting] = useState(false);
   const [names, setNames] = useState<string[]>([]);
   // Parallel array: when a slot was filled by clicking the "self"
   // suggestion, store the user's id here so we can attribute the Player
@@ -72,36 +57,7 @@ function NewMatchPage() {
     }
   }, [game, names.length]);
 
-  const createMatch = useMutation({
-    mutationFn: (input: {
-      gameId: string;
-      players: { name: string; userId: string | null }[];
-    }) =>
-      api<Match>("/api/matches", {
-        method: "POST",
-        body: JSON.stringify({
-          gameId: input.gameId,
-          players: input.players.map((p, i) => ({
-            name: p.name,
-            position: i,
-            ...(p.userId ? { userId: p.userId } : {}),
-          })),
-        }),
-      }),
-    onSuccess: (match, input) => {
-      void persistPlayersToLocalProfiles(input.players, myUserId ?? null);
-      // The cached `["matches", { gameId }]` lists need to refetch so the
-      // new match shows up in the game-detail history list (and stays in
-      // sync with the cache that gcTime: Infinity now keeps long-lived).
-      void queryClient.invalidateQueries({ queryKey: ["matches"] });
-      navigate({ to: "/matches/$id", params: { id: match.id } });
-    },
-    onError: (err: unknown) => {
-      setError(err instanceof ApiError ? err.message : "Unknown error");
-    },
-  });
-
-  if (isPending || !game) {
+  if (gameStatus === "loading" || !game) {
     return (
       <>
         <Header back={{ to: "/games", label: t("nav.games") }} />
@@ -128,7 +84,7 @@ function NewMatchPage() {
     setError(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -143,10 +99,23 @@ function NewMatchPage() {
       return;
     }
 
-    createMatch.mutate({
-      gameId: game.id,
-      players: trimmed.map((name, i) => ({ name, userId: userIds[i] ?? null })),
-    });
+    const players = trimmed.map((name, i) => ({
+      name,
+      userId: userIds[i] ?? null,
+    }));
+
+    setSubmitting(true);
+    try {
+      const { matchId } = await createMatch({
+        gameId: game.id,
+        players,
+      });
+      void persistPlayersToLocalProfiles(players, myUserId ?? null);
+      navigate({ to: "/matches/$id", params: { id: matchId } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -330,7 +299,7 @@ function NewMatchPage() {
 
           <Button
             type="submit"
-            disabled={createMatch.isPending}
+            disabled={submitting}
             data-testid="new-match-submit"
             variant="primary"
             size="lg"

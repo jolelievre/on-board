@@ -1,19 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api } from "../../../lib/api";
 import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
+import { useMatch } from "../../../hooks/data/useMatch";
 import { SevenWondersDuelScorer } from "../../../components/scoring/SevenWondersDuelScorer";
 import { SkullKingScorer } from "../../../components/scoring/skull-king/SkullKingScorer";
 import { Header } from "../../../components/layout/Header";
 import { Card } from "../../../components/ui/Card";
 import { Icon } from "../../../components/ui/Icon";
-import {
-  SyncPill,
-  saveStatusToSyncState,
-  type SaveStatus,
-} from "../../../components/ui/SyncPill";
 import type { Match } from "../../../types/match";
 
 export const Route = createFileRoute("/_authenticated/matches/$id")({
@@ -24,15 +18,11 @@ function MatchPage() {
   const { id } = Route.useParams();
   const { t } = useTranslation();
   const { isOnline } = useOnlineStatus();
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
 
-  const { data: match, isPending, isPaused } = useQuery<Match>({
-    queryKey: ["matches", id],
-    queryFn: () => api<Match>(`/api/matches/${id}`),
-  });
+  const { data: match, status } = useMatch(id);
 
-  if (isPending && !isPaused) {
+  if (status === "loading") {
     return (
       <>
         <Header back={{ to: "/games", label: t("nav.games") }} />
@@ -67,11 +57,8 @@ function MatchPage() {
     defaultValue: match.game.name,
   });
 
-  const isInProgress = match.status !== "COMPLETED";
-  const is7WD = match.game.slug === "7-wonders-duel";
   const isSkullKing = match.game.slug === "skull-king";
-
-  const showSyncPill = isInProgress && (is7WD || isSkullKing);
+  const is7WD = match.game.slug === "7-wonders-duel";
   // Scoreboard toggle is available throughout a Skull King match — including
   // after completion — so the header chrome is consistent with the explicit
   // CTA on the match-complete screen.
@@ -86,67 +73,53 @@ function MatchPage() {
           label: gameName,
         }}
         right={
-          <>
-            {showScoreboardToggle && (
-              <button
-                type="button"
-                onClick={() => setScoreboardOpen((v) => !v)}
-                aria-label={t(
-                  scoreboardOpen
-                    ? "scoring.skullKing.closeScoreboard"
-                    : "scoring.skullKing.openScoreboard",
-                )}
-                aria-pressed={scoreboardOpen}
-                data-testid="sk-scoreboard-toggle"
-                style={{
-                  background: scoreboardOpen
-                    ? "var(--color-primary)"
-                    : "transparent",
-                  color: scoreboardOpen
-                    ? "var(--color-primary-fg)"
-                    : "var(--color-ink-soft)",
-                  border: "1.5px solid var(--color-border-strong)",
-                  borderColor: scoreboardOpen
-                    ? "var(--color-primary)"
-                    : "var(--color-border-strong)",
-                  borderRadius: 999,
-                  padding: 6,
-                  width: 36,
-                  height: 36,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                }}
-              >
-                <Icon name="cards" size={18} />
-              </button>
-            )}
-            {showSyncPill && (
-              <SyncPill
-                size="lg"
-                state={saveStatusToSyncState(saveStatus)}
-                data-testid="save-status"
-                data-status={saveStatus}
-              />
-            )}
-          </>
+          showScoreboardToggle ? (
+            <button
+              type="button"
+              onClick={() => setScoreboardOpen((v) => !v)}
+              aria-label={t(
+                scoreboardOpen
+                  ? "scoring.skullKing.closeScoreboard"
+                  : "scoring.skullKing.openScoreboard",
+              )}
+              aria-pressed={scoreboardOpen}
+              data-testid="sk-scoreboard-toggle"
+              style={{
+                background: scoreboardOpen
+                  ? "var(--color-primary)"
+                  : "transparent",
+                color: scoreboardOpen
+                  ? "var(--color-primary-fg)"
+                  : "var(--color-ink-soft)",
+                border: "1.5px solid var(--color-border-strong)",
+                borderColor: scoreboardOpen
+                  ? "var(--color-primary)"
+                  : "var(--color-border-strong)",
+                borderRadius: 999,
+                padding: 6,
+                width: 36,
+                height: 36,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <Icon name="cards" size={18} />
+            </button>
+          ) : null
         }
       />
 
       <div className="px-5" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
         {is7WD ? (
-          <SevenWondersDuelScorer
-            match={match}
-            onSaveStatusChange={setSaveStatus}
-          />
+          <SevenWondersDuelScorer match={match} />
         ) : isSkullKing ? (
           <SkullKingScorer
             match={match}
             scoreboardOpen={scoreboardOpen}
             onScoreboardOpen={() => setScoreboardOpen(true)}
             onScoreboardClose={() => setScoreboardOpen(false)}
-            onSaveStatusChange={setSaveStatus}
           />
         ) : (
           <UnsupportedScorer match={match} gameName={gameName} />
