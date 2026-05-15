@@ -52,3 +52,10 @@ public/favicon.svg
 public/favicon-32.png
 public/pwa-icon-192.png
 public/pwa-icon-512.png
+
+# Graphify
+graphify-out/manifest.json
+graphify-out/cost.json
+graphify-out/cache/
+graphify-out/.graphify_python
+graphify-out/.graphify_root
