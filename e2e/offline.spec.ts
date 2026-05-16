@@ -145,6 +145,68 @@ test.describe("Offline (local-first)", () => {
 });
 
 /**
+ * Cross-tab live updates — pins the useLiveQuery + Dexie reactivity contract.
+ *
+ * Same browser context => same IndexedDB. Dexie's BroadcastChannel-based
+ * change notifier reaches every tab on the origin, so a write in tab A
+ * must rerender any useLiveQuery subscriber in tab B without a manual
+ * pull or reload. If this ever fails, our entire local-first read model
+ * is broken — every screen would silently lag until the next pullSync.
+ */
+test.describe("Cross-tab live updates", () => {
+  test.skip(
+    ({ browserName }) => browserName !== "chromium",
+    "Cross-tab IndexedDB reactivity is consistent on Chromium; webkit is flakier",
+  );
+
+  test("a match created in tab A appears in tab B's history without reload", async ({
+    context,
+  }) => {
+    const tabA = await context.newPage();
+    await tabA.addInitScript(() => {
+      localStorage.removeItem("onboard_query_cache");
+      indexedDB.deleteDatabase("onboard");
+    });
+
+    // Tab A: wait for the initial pullSync so Dexie has the games row.
+    await Promise.all([
+      tabA.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
+      tabA.waitForResponse(
+        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
+      tabA.goto("/games/7-wonders-duel"),
+    ]);
+    await expect(tabA.locator("h1")).toContainText("7 Wonders Duel");
+
+    const tabB = await context.newPage();
+    await Promise.all([
+      tabB.waitForResponse(
+        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
+      tabB.goto("/games/7-wonders-duel"),
+    ]);
+    await expect(tabB.locator("h1")).toContainText("7 Wonders Duel");
+
+    // Tab A: create a new match. mutations.createMatch writes the row
+    // to the shared IndexedDB; BroadcastChannel notifies tab B's
+    // useLiveQuery subscribers.
+    await tabA.click("[data-testid='new-match-button']");
+    await tabA.waitForURL("**/games/7-wonders-duel/new");
+    await tabA.fill("[data-testid='new-match-player-0']", "TabA-P1");
+    await tabA.fill("[data-testid='new-match-player-1']", "TabA-P2");
+    await tabA.click("[data-testid='new-match-submit']");
+    await tabA.waitForURL(/\/matches\/[a-z][a-z0-9]{19,}$/);
+    const newMatchId = tabA.url().split("/").pop()!;
+
+    // Tab B: the new match row appears in the history list reactively.
+    // No goto, no reload — useLiveQuery must rerender on its own.
+    await expect(
+      tabB.locator(`[data-testid='match-history-row-${newMatchId}']`),
+    ).toBeVisible({ timeout: 5000 });
+  });
+});
+
+/**
  * Auth-session fallback regression — pins useAuthSession's error-driven
  * branch. Distinct from the BrowserContext.setOffline tests above because the
  * bug it covers shows up specifically when network requests fail while
