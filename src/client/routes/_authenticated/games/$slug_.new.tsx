@@ -1,10 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../../lib/auth-client";
 import { useGame } from "../../../hooks/data/useGame";
 import { createMatch } from "../../../lib/mutations";
-import { usePlayerSuggestions, persistPlayersToLocalProfiles } from "../../../hooks/usePlayerSuggestions";
+import type { GameRow } from "../../../lib/db";
+import {
+  usePlayerSuggestions,
+  persistPlayersToLocalProfiles,
+} from "../../../hooks/usePlayerSuggestions";
 import { Header } from "../../../components/layout/Header";
 import { Pill } from "../../../components/ui/Pill";
 import { Button } from "../../../components/ui/Button";
@@ -29,33 +33,8 @@ const AVATAR_CLASSES = [
 function NewMatchPage() {
   const { slug } = Route.useParams();
   const { t } = useTranslation();
-  const navigate = useNavigate();
 
   const { data: game, status: gameStatus } = useGame(slug);
-
-  const { data: suggestions = [] } = usePlayerSuggestions();
-
-  const { data: session } = authClient.useSession();
-  const myUserId = session?.user.id;
-
-  const [submitting, setSubmitting] = useState(false);
-  const [names, setNames] = useState<string[]>([]);
-  // Parallel array: when a slot was filled by clicking the "self"
-  // suggestion, store the user's id here so we can attribute the Player
-  // on submit. Typing the same name manually leaves this null — the
-  // server only attaches userId on explicit chip selection to avoid
-  // mis-linking friends who happen to share the user's name.
-  const [userIds, setUserIds] = useState<(string | null)[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (game && names.length === 0) {
-      const slots = game.minPlayers;
-      setNames(Array.from({ length: slots }, () => ""));
-      setUserIds(Array.from({ length: slots }, () => null));
-    }
-  }, [game, names.length]);
 
   if (gameStatus === "loading" || !game) {
     return (
@@ -67,6 +46,37 @@ function NewMatchPage() {
       </>
     );
   }
+
+  // The form is extracted so its `useState` initializers run AFTER game
+  // is known — no useEffect race to populate `names`. Without this split,
+  // useLiveQuery re-emits during form interaction could re-trigger the
+  // init effect, and tests filling the third (added) slot intermittently
+  // saw it cleared between fill and submit.
+  return <NewMatchForm slug={slug} game={game} />;
+}
+
+function NewMatchForm({ slug, game }: { slug: string; game: GameRow }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  const { data: suggestions = [] } = usePlayerSuggestions();
+  const { data: session } = authClient.useSession();
+  const myUserId = session?.user.id;
+
+  const [submitting, setSubmitting] = useState(false);
+  const [names, setNames] = useState<string[]>(() =>
+    Array.from({ length: game.minPlayers }, () => ""),
+  );
+  // Parallel array: when a slot was filled by clicking the "self"
+  // suggestion, store the user's id here so we can attribute the Player
+  // on submit. Typing the same name manually leaves this null — the
+  // server only attaches userId on explicit chip selection to avoid
+  // mis-linking friends who happen to share the user's name.
+  const [userIds, setUserIds] = useState<(string | null)[]>(() =>
+    Array.from({ length: game.minPlayers }, () => null),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   const canRemove = names.length > game.minPlayers;
   const canAdd = names.length < game.maxPlayers;

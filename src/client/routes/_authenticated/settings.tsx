@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { authClient, updateProfile } from "../../lib/auth-client";
-import { pullSync, setSyncMeta } from "../../lib/pull-sync";
+import { refreshLocalAliases } from "../../lib/pull-sync";
 import { useInstallPrompt } from "../../hooks/useInstallPrompt";
 import { clearSessionCache } from "../../hooks/useAuthSession";
 import { LanguageSelector } from "../../components/LanguageSelector";
@@ -122,14 +122,11 @@ function SettingsPage() {
   );
 }
 
-async function resetPullCursorAndPull(): Promise<void> {
-  await setSyncMeta("lastPullAt", new Date(0).toISOString());
-  await pullSync();
-}
-
 function AliasInput({ initialValue }: { initialValue: string }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { data: session } = authClient.useSession();
+  const myUserId = session?.user.id;
   const [value, setValue] = useState(initialValue);
   const [persisted, setPersisted] = useState(initialValue);
   const [showSaved, setShowSaved] = useState(false);
@@ -147,13 +144,14 @@ function AliasInput({ initialValue }: { initialValue: string }) {
     setValue(trimmed);
     void updateProfile({ alias: trimmed })
       .then(async () => {
-        // The alias change affects player suggestions (still a useQuery)
-        // and the player.user.alias mirrored into Dexie. Await the
-        // re-pull so Dexie's mirrored rows reflect the new alias before
-        // the user navigates away — otherwise the next screen renders
-        // stale match history. The saved badge means "everything in
-        // sync", not just "PATCH returned 200".
-        await resetPullCursorAndPull();
+        // Mirror the new alias into Dexie's player.user rows for this
+        // user. pullSync alone is insufficient: alias edits don't bump
+        // Match.updatedAt server-side, so the LWW merge would skip
+        // every match and leave the cached `player.user.alias` stale.
+        // The saved badge means "everything in sync".
+        if (myUserId) {
+          await refreshLocalAliases(myUserId, trimmed === "" ? null : trimmed);
+        }
         void queryClient.invalidateQueries({
           queryKey: ["players", "suggestions"],
         });

@@ -55,6 +55,32 @@ type ApiMatch = {
 
 const SYNC_META_LAST_PULL = "lastPullAt";
 
+/** Patch the cached `player.user.alias` on every local Player linked
+ * to the given user id.
+ *
+ * Alias edits don't bump `Match.updatedAt` on the server (they only
+ * touch the User row), so a subsequent `pullSync()` would LWW-skip
+ * every match and leave Dexie's mirrored `player.user.alias` stale.
+ * Settings calls this directly after `updateProfile` so the UI sees
+ * the new alias on the next render without waiting for any external
+ * bump. */
+export async function refreshLocalAliases(
+  userId: string,
+  newAlias: string | null,
+): Promise<void> {
+  const players = await db.players.where("userId").equals(userId).toArray();
+  if (players.length === 0) return;
+  const ts = new Date().toISOString();
+  for (const p of players) {
+    p.user = {
+      name: p.user?.name ?? p.name,
+      alias: newAlias,
+    };
+    p.updatedAt = ts;
+  }
+  await db.players.bulkPut(players);
+}
+
 /** Read a key from the singleton syncMeta keystore. */
 export async function getSyncMeta(key: string): Promise<string | undefined> {
   const row = await db.syncMeta.get(key);

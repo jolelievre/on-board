@@ -126,9 +126,11 @@ test.describe("Offline (local-first)", () => {
     // would fail with ERR_INTERNET_DISCONNECTED. SPA navigation never
     // touches the network for the document and exercises the same
     // local-first read path.
-    await page.click("nav[aria-label='Primary'] a[href='/games']");
-    await page.waitForURL("**/games");
-    await page.click("a[href='/games/7-wonders-duel']");
+    //
+    // BottomNav is hidden on /matches/:id, so leave via the Header back
+    // link (points at /games/7-wonders-duel), then re-enter the match
+    // through the match-history row.
+    await page.click("header a[href='/games/7-wonders-duel']");
     await page.waitForURL("**/games/7-wonders-duel");
     await expect(
       page.locator(`[data-testid='match-history-row-${matchId}']`),
