@@ -56,12 +56,20 @@ function SettingsPage() {
           <Group
             title={t("settings.alias.title", { defaultValue: "Alias" })}
           >
-            <AliasInput
-              initialValue={
-                (session?.user as { alias?: string | null } | undefined)
-                  ?.alias ?? ""
-              }
-            />
+            {/* Render only when session is known. AliasInput's commit
+                path depends on session.user.id to refresh Dexie's
+                cached player.user.alias for matches linked to the
+                current user; rendering before session is loaded lets
+                a fast test (or user) fill + blur before myUserId is
+                set, skipping the refresh and leaving stale data. */}
+            {session && (
+              <AliasInput
+                initialValue={
+                  (session.user as { alias?: string | null }).alias ?? ""
+                }
+                userId={session.user.id}
+              />
+            )}
             <p className={styles.hint}>{t("settings.alias.hint")}</p>
           </Group>
 
@@ -122,11 +130,15 @@ function SettingsPage() {
   );
 }
 
-function AliasInput({ initialValue }: { initialValue: string }) {
+function AliasInput({
+  initialValue,
+  userId,
+}: {
+  initialValue: string;
+  userId: string;
+}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const { data: session } = authClient.useSession();
-  const myUserId = session?.user.id;
   const [value, setValue] = useState(initialValue);
   const [persisted, setPersisted] = useState(initialValue);
   const [showSaved, setShowSaved] = useState(false);
@@ -149,9 +161,7 @@ function AliasInput({ initialValue }: { initialValue: string }) {
         // Match.updatedAt server-side, so the LWW merge would skip
         // every match and leave the cached `player.user.alias` stale.
         // The saved badge means "everything in sync".
-        if (myUserId) {
-          await refreshLocalAliases(myUserId, trimmed === "" ? null : trimmed);
-        }
+        await refreshLocalAliases(userId, trimmed === "" ? null : trimmed);
         void queryClient.invalidateQueries({
           queryKey: ["players", "suggestions"],
         });

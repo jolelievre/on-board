@@ -35,8 +35,15 @@ function NewMatchPage() {
   const { t } = useTranslation();
 
   const { data: game, status: gameStatus } = useGame(slug);
+  const { data: session } = authClient.useSession();
 
-  if (gameStatus === "loading" || !game) {
+  // Gate on session as well as game: the self-suggestion chip attaches
+  // the current user's id to userIds[i] at click time. If session is
+  // still loading when the user clicks, myUserId is undefined and the
+  // Player row gets created with userId=null — silently breaking the
+  // alias propagation flow downstream (refreshLocalAliases can't find
+  // a row with userId === null to update).
+  if (gameStatus === "loading" || !game || !session) {
     return (
       <>
         <Header back={{ to: "/games", label: t("nav.games") }} />
@@ -52,16 +59,22 @@ function NewMatchPage() {
   // useLiveQuery re-emits during form interaction could re-trigger the
   // init effect, and tests filling the third (added) slot intermittently
   // saw it cleared between fill and submit.
-  return <NewMatchForm slug={slug} game={game} />;
+  return <NewMatchForm slug={slug} game={game} myUserId={session.user.id} />;
 }
 
-function NewMatchForm({ slug, game }: { slug: string; game: GameRow }) {
+function NewMatchForm({
+  slug,
+  game,
+  myUserId,
+}: {
+  slug: string;
+  game: GameRow;
+  myUserId: string;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
   const { data: suggestions = [] } = usePlayerSuggestions();
-  const { data: session } = authClient.useSession();
-  const myUserId = session?.user.id;
 
   const [submitting, setSubmitting] = useState(false);
   const [names, setNames] = useState<string[]>(() =>

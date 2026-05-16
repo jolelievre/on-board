@@ -134,6 +134,14 @@ class OnBoardDB extends Dexie {
           // authoritative recovery path.
         }
       });
+
+    // v3 — adds `userId` to the players index so refreshLocalAliases
+    // can query `db.players.where("userId").equals(currentUserId)`
+    // without a full-table scan. No data migration needed; only the
+    // index is added.
+    this.version(3).stores({
+      players: "id, matchId, userId, [matchId+position]",
+    });
   }
 }
 
