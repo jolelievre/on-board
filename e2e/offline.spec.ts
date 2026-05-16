@@ -118,10 +118,22 @@ test.describe("Offline (local-first)", () => {
     const matchId = matchUrl.split("/").pop()!;
     expect(matchId).not.toMatch(/^draft_/);
 
-    // Reload while still offline. The URL stays the same and the page
-    // re-renders from Dexie.
-    await page.reload();
-    await page.waitForLoadState("domcontentloaded");
+    // Navigate away and back via SPA links to prove Dexie is the source
+    // of truth: the match row + players survive a route unmount/remount
+    // without a server hit. A hard `page.reload()` would also work
+    // against a production build (service worker serves the document),
+    // but the dev server doesn't ship the SW, so the document request
+    // would fail with ERR_INTERNET_DISCONNECTED. SPA navigation never
+    // touches the network for the document and exercises the same
+    // local-first read path.
+    await page.click("nav[aria-label='Primary'] a[href='/games']");
+    await page.waitForURL("**/games");
+    await page.click("a[href='/games/7-wonders-duel']");
+    await page.waitForURL("**/games/7-wonders-duel");
+    await expect(
+      page.locator(`[data-testid='match-history-row-${matchId}']`),
+    ).toBeVisible();
+    await page.click(`[data-testid='match-history-row-${matchId}']`);
     await expect(page).toHaveURL(matchUrl);
 
     // Reconnect: the sync queue flushes; pullSync runs after success.

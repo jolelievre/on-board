@@ -146,16 +146,17 @@ function AliasInput({ initialValue }: { initialValue: string }) {
     setPersisted(trimmed);
     setValue(trimmed);
     void updateProfile({ alias: trimmed })
-      .then(() => {
+      .then(async () => {
         // The alias change affects player suggestions (still a useQuery)
-        // and the player.user.alias mirrored into Dexie. We refetch the
-        // suggestions and reset the pull cursor so the next pullSync
-        // refreshes every match (alias edits don't bump Player.updatedAt
-        // on the server, so a regular incremental pull would skip them).
+        // and the player.user.alias mirrored into Dexie. Await the
+        // re-pull so Dexie's mirrored rows reflect the new alias before
+        // the user navigates away — otherwise the next screen renders
+        // stale match history. The saved badge means "everything in
+        // sync", not just "PATCH returned 200".
+        await resetPullCursorAndPull();
         void queryClient.invalidateQueries({
           queryKey: ["players", "suggestions"],
         });
-        void resetPullCursorAndPull();
         setShowSaved(true);
         window.setTimeout(() => setShowSaved(false), 1500);
       })

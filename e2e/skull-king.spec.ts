@@ -15,9 +15,15 @@ async function startMatch(page: Page, names: string[]) {
     const input = page.locator(`[data-testid='new-match-player-${i}']`);
     if (await input.count() === 0) {
       // Add an extra slot if the form rendered with fewer than `names.length`.
+      // Wait for the new input to actually render before filling — under
+      // local-first, useLiveQuery re-renders interleave with the React
+      // commit for the add-player click, and `page.fill` can otherwise
+      // race the re-render and leave the slot empty.
       await page.click("[data-testid='new-match-add-player']");
+      await expect(input).toBeVisible();
     }
     await page.fill(`[data-testid='new-match-player-${i}']`, names[i]);
+    await expect(input).toHaveValue(names[i]);
   }
   await page.click("[data-testid='new-match-submit']");
   await page.waitForURL(/\/matches\/[a-z0-9-]+/i);
