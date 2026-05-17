@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { authClient, updateProfile } from "../../lib/auth-client";
+import { refreshLocalAliases } from "../../lib/pull-sync";
 import { useInstallPrompt } from "../../hooks/useInstallPrompt";
 import { clearSessionCache } from "../../hooks/useAuthSession";
 import { LanguageSelector } from "../../components/LanguageSelector";
@@ -55,12 +56,20 @@ function SettingsPage() {
           <Group
             title={t("settings.alias.title", { defaultValue: "Alias" })}
           >
-            <AliasInput
-              initialValue={
-                (session?.user as { alias?: string | null } | undefined)
-                  ?.alias ?? ""
-              }
-            />
+            {/* Render only when session is known. AliasInput's commit
+                path depends on session.user.id to refresh Dexie's
+                cached player.user.alias for matches linked to the
+                current user; rendering before session is loaded lets
+                a fast test (or user) fill + blur before myUserId is
+                set, skipping the refresh and leaving stale data. */}
+            {session && (
+              <AliasInput
+                initialValue={
+                  (session.user as { alias?: string | null }).alias ?? ""
+                }
+                userId={session.user.id}
+              />
+            )}
             <p className={styles.hint}>{t("settings.alias.hint")}</p>
           </Group>
 
@@ -121,7 +130,13 @@ function SettingsPage() {
   );
 }
 
-function AliasInput({ initialValue }: { initialValue: string }) {
+function AliasInput({
+  initialValue,
+  userId,
+}: {
+  initialValue: string;
+  userId: string;
+}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [value, setValue] = useState(initialValue);
@@ -140,16 +155,16 @@ function AliasInput({ initialValue }: { initialValue: string }) {
     setPersisted(trimmed);
     setValue(trimmed);
     void updateProfile({ alias: trimmed })
-      .then(() => {
-        // The new alias changes how the current user is rendered in player
-        // suggestions and in any cached match history (linked players show
-        // the alias). Invalidate so the next mount of those queries refetches
-        // — without this, gcTime: Infinity keeps the pre-update entries
-        // until staleTime expires.
+      .then(async () => {
+        // Mirror the new alias into Dexie's player.user rows for this
+        // user. pullSync alone is insufficient: alias edits don't bump
+        // Match.updatedAt server-side, so the LWW merge would skip
+        // every match and leave the cached `player.user.alias` stale.
+        // The saved badge means "everything in sync".
+        await refreshLocalAliases(userId, trimmed === "" ? null : trimmed);
         void queryClient.invalidateQueries({
           queryKey: ["players", "suggestions"],
         });
-        void queryClient.invalidateQueries({ queryKey: ["matches"] });
         setShowSaved(true);
         window.setTimeout(() => setShowSaved(false), 1500);
       })

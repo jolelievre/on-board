@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError } from "../../../lib/api";
-import { syncEngine } from "../../../lib/sync";
+import {
+  patchMatch,
+  upsertScores,
+  completeMatch,
+} from "../../../lib/mutations";
+import {
+  buildScorePayload,
+  buildPersistDraftPatch,
+  type SkDraft,
+  type SkDraftPhase,
+} from "../../../lib/match-client/skull-king";
 import {
   EMPTY_SK_ROUND,
   SKULL_KING_TOTAL_ROUNDS,
   dealerForRound,
   parseRoundCategory,
   resolveSkullKingOutcome,
-  roundCategory,
   scoreSkullKingRound,
   type SkullKingRoundEntry,
 } from "../../../../shared/scoring/skull-king";
 import type { Match, Player } from "../../../types/match";
-import type { SaveStatus } from "../../ui/SyncPill";
 import { MatchStartScreen } from "./MatchStartScreen";
 import { BiddingScreen } from "./BiddingScreen";
 import { BidRecapScreen } from "./BidRecapScreen";
@@ -35,25 +41,6 @@ type Props = {
   scoreboardOpen: boolean;
   onScoreboardOpen: () => void;
   onScoreboardClose: () => void;
-  onSaveStatusChange?: (status: SaveStatus) => void;
-};
-
-const SAVED_INDICATOR_MS = 1500;
-
-/** Phases that have meaningful in-flight state worth persisting. The
- * round-transition + completed + match-start phases derive cleanly from the
- * server data, so they don't need a draft. */
-type DraftablePhase = "bidding" | "bid-recap" | "result";
-
-/** Snapshot of the in-flight round, persisted under
- * `Match.metadata.skullKing.draft`. Reset to null when the round is finalized. */
-type SkDraft = {
-  round: number;
-  phase: DraftablePhase;
-  bids: Record<string, number>;
-  entries: Record<string, SkullKingRoundEntry>;
-  activeBidIdx: number;
-  activeResultIdx: number;
 };
 
 type SkMatchMetadata = {
@@ -67,10 +54,9 @@ function readSkMetadata(match: Match): SkMatchMetadata {
   return meta?.skullKing ?? {};
 }
 
-/** How long after a tap we wait before flushing the draft to the server.
- * Short enough that even fast successive inputs (~100ms apart) settle in
- * one save once the user pauses. Phase-transition / End-round flows flush
- * imperatively, so the debounce only needs to cover incremental input. */
+/** How long after a tap we wait before flushing the draft. Short enough
+ * that even fast successive inputs (~100ms apart) settle in one save
+ * once the user pauses. */
 const DRAFT_DEBOUNCE_MS = 200;
 
 /** Build the per-round, per-player entry map from server score rows. */
@@ -130,10 +116,7 @@ export function SkullKingScorer({
   scoreboardOpen,
   onScoreboardOpen,
   onScoreboardClose,
-  onSaveStatusChange,
 }: Props) {
-  const queryClient = useQueryClient();
-
   // Server-derived state.
   const persistedEntries = useMemo(() => buildEntriesFromScores(match), [match]);
   const lastDoneRound = useMemo(
@@ -143,7 +126,6 @@ export function SkullKingScorer({
   const skMeta = readSkMetadata(match);
   const playerCount = match.players.length;
 
-  // Match-start state — local copies so the user can edit before persisting.
   const [dealerStart, setDealerStart] = useState<number>(
     typeof skMeta.dealerStart === "number" ? skMeta.dealerStart : 0,
   );
@@ -155,7 +137,6 @@ export function SkullKingScorer({
     setOrderedIds(match.players.map((p) => p.id));
   }, [match.players]);
 
-  // Keep dealerStart in sync when the persisted match data refreshes.
   useEffect(() => {
     if (typeof skMeta.dealerStart === "number") {
       setDealerStart(skMeta.dealerStart);
@@ -163,7 +144,9 @@ export function SkullKingScorer({
   }, [skMeta.dealerStart]);
 
   const orderedPlayers = useMemo(() => {
-    // Use orderedIds to project; fall back to match.players if any id missing.
+    // Project match.players through orderedIds. If any id is missing from
+    // orderedIds (drift between server and local state) fall back to the
+    // canonical match.players order rather than rendering a truncated list.
     const byId = new Map(match.players.map((p) => [p.id, p]));
     const out: Player[] = [];
     for (const id of orderedIds) {
@@ -179,16 +162,13 @@ export function SkullKingScorer({
     lastDoneRound + 1,
   );
 
-  // Hydrate the in-flight round from the persisted draft if it matches the
-  // round we're on (a stale draft from a prior round is ignored — End-round
-  // would normally clear it, but we guard anyway so divergent server state
-  // can't surface old values). Computed every render but only consumed by
-  // useState lazy initializers, so the hydration is one-shot per mount.
+  // Resume from the persisted draft only when it belongs to the round we're
+  // about to play. A stale draft from a prior round is ignored — End-round
+  // normally clears it, but we guard anyway so divergent server state can't
+  // surface old values into the new round.
   const persistedDraft: SkDraft | null =
     skMeta.draft && skMeta.draft.round === currentRound ? skMeta.draft : null;
 
-  // Phase derivation. When the match is COMPLETED, we lock the completed view.
-  // Otherwise, if the persisted draft has a phase, resume there.
   const initialPhase: Phase = useMemo(() => {
     if (match.status === "COMPLETED") return "completed";
     if (!skMeta.startedAt) return "match-start";
@@ -198,9 +178,9 @@ export function SkullKingScorer({
   }, [match.status, skMeta.startedAt, lastDoneRound, persistedDraft]);
 
   const [phase, setPhase] = useState<Phase>(initialPhase);
-  // When the match data changes (e.g. after a save round-trips), realign the
-  // phase. We only auto-advance forward — never backwards into match-start
-  // once the user has begun.
+  // Realign the phase when the match data changes (e.g. after a save round-
+  // trips). We only auto-advance forward — never backwards into match-start
+  // once the user has begun — to avoid clobbering an in-flight bidding screen.
   useEffect(() => {
     setPhase((prev) => {
       if (initialPhase === "completed") return "completed";
@@ -211,8 +191,8 @@ export function SkullKingScorer({
     });
   }, [initialPhase]);
 
-  // In-flight round state. Initialized from the persisted draft on mount; the
-  // round-change effect below resets it once the user advances rounds.
+  // In-flight round state. Initialized from the persisted draft on mount;
+  // the round-change effect below resets it once the user advances rounds.
   const [bids, setBids] = useState<Record<string, number | undefined>>(
     () => persistedDraft?.bids ?? {},
   );
@@ -229,13 +209,12 @@ export function SkullKingScorer({
   // While non-null, the result screen renders for that round and End-round
   // upserts back to its row instead of progressing to a new round.
   const [editingRound, setEditingRound] = useState<number | null>(null);
-  /** Round we're currently editing (in edit mode) or about to finalize. */
   const activeResultRound = editingRound ?? currentRound;
 
-  // When the round changes (after End-round → server bumps lastDoneRound),
-  // clear the in-memory state so the next round starts fresh. Don't reset
+  // When currentRound changes (server bumps lastDoneRound after End-round),
+  // clear in-memory state so the next round starts fresh. Skip the reset
   // while editing a previous round — the round-change race after a re-save
-  // would clobber the user's still-in-flight edit.
+  // would otherwise clobber the user's still-in-flight edit.
   const previousRoundRef = useRef(currentRound);
   useEffect(() => {
     if (previousRoundRef.current === currentRound) return;
@@ -247,141 +226,16 @@ export function SkullKingScorer({
     setActiveResultIdx(0);
   }, [currentRound, editingRound]);
 
-  // ── Save plumbing ──────────────────────────────────────────────────────
-
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  useEffect(() => {
-    onSaveStatusChange?.(saveStatus);
-  }, [saveStatus, onSaveStatusChange]);
-
-  const flashSaved = useCallback(() => {
-    setSaveStatus("saved");
-    const t = window.setTimeout(() => setSaveStatus("idle"), SAVED_INDICATOR_MS);
-    return () => window.clearTimeout(t);
-  }, []);
-
-  const patchMatch = useMutation({
-    mutationFn: (input: {
-      metadata?: Record<string, unknown>;
-      playerOrder?: { playerId: string; position: number }[];
-    }) =>
-      api<Match>(`/api/matches/${match.id}`, {
-        method: "PATCH",
-        body: JSON.stringify(input),
-      }),
-    onMutate: () => setSaveStatus("saving"),
-    onSuccess: (updated) => {
-      queryClient.setQueryData<Match>(["matches", match.id], (prev) =>
-        prev ? { ...prev, ...updated } : updated,
-      );
-      flashSaved();
-    },
-    onError: (
-      err: unknown,
-      input: { metadata?: Record<string, unknown>; playerOrder?: { playerId: string; position: number }[] },
-    ) => {
-      if (!(err instanceof ApiError)) {
-        void syncEngine.enqueue("PATCH", `/api/matches/${match.id}`, input);
-        setSaveStatus("offline");
-      } else {
-        setSaveStatus("error");
-      }
-    },
-  });
-
-  const saveScores = useMutation({
-    mutationFn: (
-      scores: {
-        playerId: string;
-        category: string;
-        value: number;
-        metadata: Record<string, unknown>;
-      }[],
-    ) =>
-      api(`/api/matches/${match.id}/scores`, {
-        method: "PATCH",
-        body: JSON.stringify({ scores }),
-      }),
-    onMutate: () => setSaveStatus("saving"),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["matches", match.id] });
-      flashSaved();
-    },
-    onError: (
-      err: unknown,
-      scores: { playerId: string; category: string; value: number; metadata: Record<string, unknown> }[],
-    ) => {
-      if (!(err instanceof ApiError)) {
-        void syncEngine.enqueue("PATCH", `/api/matches/${match.id}/scores`, { scores });
-        setSaveStatus("offline");
-      } else {
-        setSaveStatus("error");
-      }
-    },
-  });
-
-  const completeMatch = useMutation({
-    mutationFn: (input: {
-      victoryType: "score" | "draw";
-      winnerId: string | null;
-    }) =>
-      api<Match>(`/api/matches/${match.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          status: "COMPLETED",
-          victoryType: input.victoryType,
-          winnerId: input.winnerId,
-        }),
-      }),
-    onSuccess: (updated) => {
-      queryClient.setQueryData<Match>(["matches", match.id], (prev) =>
-        prev ? { ...prev, ...updated } : updated,
-      );
-      queryClient.invalidateQueries({ queryKey: ["matches"] });
-    },
-    onError: (
-      err: unknown,
-      input: { victoryType: "score" | "draw"; winnerId: string | null },
-    ) => {
-      if (!(err instanceof ApiError)) {
-        void syncEngine.enqueue("PUT", `/api/matches/${match.id}`, {
-          status: "COMPLETED",
-          victoryType: input.victoryType,
-          winnerId: input.winnerId,
-        });
-        queryClient.setQueryData<Match>(["matches", match.id], (prev) =>
-          prev
-            ? {
-                ...prev,
-                status: "COMPLETED",
-                victoryType: input.victoryType,
-                winnerId: input.winnerId,
-              }
-            : prev,
-        );
-      }
-    },
-  });
-
   // ── Draft persistence ──────────────────────────────────────────────────
-  // Survive a refresh during the bidding / bid-recap / result phases. We
-  // serialize the relevant slice of state and PATCH it into
-  // match.metadata.skullKing.draft, debounced. The match prop is read via a
-  // ref so a server round-trip echoing our just-saved draft doesn't retrigger
-  // the effect or merge stale fields back in.
+
   const matchRef = useRef(match);
   useEffect(() => {
     matchRef.current = match;
   });
 
-  // Track the last serialized draft we sent so we don't re-PATCH identical
-  // payloads on benign re-renders.
   const lastSavedDraftRef = useRef<string | null>(
     persistedDraft ? JSON.stringify(persistedDraft) : null,
   );
-  // Pending debounce handle — held in a ref so handleEndRound can cancel it
-  // before finalizing the round, even when the bursty test clicks would
-  // otherwise leave the timer perpetually rescheduled.
   const draftTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -399,16 +253,14 @@ export function SkullKingScorer({
     }
     const draft: SkDraft = {
       round: currentRound,
-      phase,
+      phase: phase as SkDraftPhase,
       bids: filteredBids,
       entries,
       activeBidIdx,
       activeResultIdx,
     };
     // Skip trivial drafts — there's nothing recoverable to persist when the
-    // user has just entered a fresh round with no input. Avoids a save
-    // race at the bidding-phase entry that would otherwise flash "saved"
-    // before any real user state is captured.
+    // user has just entered a fresh round with no input.
     const isTrivial =
       phase === "bidding" &&
       Object.keys(filteredBids).length === 0 &&
@@ -424,15 +276,9 @@ export function SkullKingScorer({
     draftTimerRef.current = window.setTimeout(() => {
       draftTimerRef.current = null;
       lastSavedDraftRef.current = serialized;
-      const latest = matchRef.current;
-      const latestMeta = (latest.metadata as Record<string, unknown>) ?? {};
-      const latestSk =
-        (latestMeta.skullKing as SkMatchMetadata | undefined) ?? {};
-      patchMatch.mutate({
-        metadata: {
-          ...latestMeta,
-          skullKing: { ...latestSk, draft },
-        },
+      void patchMatch({
+        matchId: matchRef.current.id,
+        metadata: buildPersistDraftPatch(matchRef.current, draft),
       });
     }, DRAFT_DEBOUNCE_MS);
     return () => {
@@ -441,35 +287,26 @@ export function SkullKingScorer({
         draftTimerRef.current = null;
       }
     };
-    // patchMatch is a stable mutation handle; omitting it from deps avoids
-    // a re-fire every render when react-query re-creates internal refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, bids, entries, activeBidIdx, activeResultIdx, currentRound]);
 
   /** Wipe the draft from match.metadata. Called unconditionally from
    * End-round so the finalized scores are the source of truth — even on the
-   * fast path where the debounced save never fired (rapid input cancelled
-   * each timer before it elapsed). */
+   * fast path where the debounced save never fired. */
   const clearDraft = useCallback(async () => {
     if (draftTimerRef.current) {
       clearTimeout(draftTimerRef.current);
       draftTimerRef.current = null;
     }
     lastSavedDraftRef.current = null;
-    const latest = matchRef.current;
-    const latestMeta = (latest.metadata as Record<string, unknown>) ?? {};
-    const latestSk =
-      (latestMeta.skullKing as SkMatchMetadata | undefined) ?? {};
-    await patchMatch.mutateAsync({
-      metadata: {
-        ...latestMeta,
-        skullKing: { ...latestSk, draft: null },
-      },
+    await patchMatch({
+      matchId: matchRef.current.id,
+      metadata: buildPersistDraftPatch(matchRef.current, null),
     });
-  }, [patchMatch]);
+  }, []);
 
   // ── Phase handlers ─────────────────────────────────────────────────────
 
+  const [starting, setStarting] = useState(false);
   const handleStart = async () => {
     const newMeta = {
       ...((match.metadata as Record<string, unknown>) ?? {}),
@@ -483,15 +320,23 @@ export function SkullKingScorer({
       playerId,
       position,
     }));
-    await patchMatch.mutateAsync({ metadata: newMeta, playerOrder });
-    setPhase("bidding");
-    setActiveBidIdx(0);
+    setStarting(true);
+    try {
+      await patchMatch({
+        matchId: match.id,
+        metadata: newMeta,
+        playerOrder,
+      });
+      setPhase("bidding");
+      setActiveBidIdx(0);
+    } finally {
+      setStarting(false);
+    }
   };
 
   const handleReveal = () => setPhase("bid-recap");
   const handleBackToBids = () => setPhase("bidding");
   const handleEnterResults = () => {
-    // Seed entries with bids so each player's row has the right bid baked in.
     const seeded: Record<string, SkullKingRoundEntry> = {};
     for (const p of orderedPlayers) {
       seeded[p.id] = {
@@ -518,9 +363,6 @@ export function SkullKingScorer({
     [orderedPlayers, persistedEntries, activeResultRound],
   );
 
-  /** Re-enter the result phase for the round that was just finalized so the
-   * scribe can correct a typo. Pre-fills bids + entries from the persisted
-   * scores and locks the round number to the one being edited. */
   const handleEditLastRound = () => {
     if (lastDoneRound < 1) return;
     const target = lastDoneRound;
@@ -544,41 +386,17 @@ export function SkullKingScorer({
     const targetRound = activeResultRound;
     const isEditing = editingRound !== null;
 
-    // Build the score payloads.
-    const payloads = orderedPlayers.map((p) => {
-      const e = entries[p.id] ?? {
-        ...EMPTY_SK_ROUND,
-        bid: bids[p.id] ?? 0,
-      };
-      const s = scoreSkullKingRound(targetRound, e);
-      return {
-        playerId: p.id,
-        category: roundCategory(targetRound),
-        value: s.total,
-        metadata: {
-          bid: e.bid,
-          tricks: e.tricks,
-          color14: e.color14,
-          black14: e.black14,
-          mermaidByPirate: e.mermaidByPirate,
-          pirateBySK: e.pirateBySK,
-          skByMermaid: e.skByMermaid,
-          base: s.base,
-          bonus: s.bonus,
-        },
-      };
-    });
+    const payloads = buildScorePayload(
+      targetRound,
+      orderedPlayers,
+      bids,
+      entries,
+    );
 
-    await saveScores.mutateAsync(payloads);
-    // Clear the persisted draft now that the round is finalized. Done after
-    // the score save so a save failure doesn't leave us with a wiped draft
-    // and no row to show for it.
+    await upsertScores({ matchId: match.id, scores: payloads });
     await clearDraft();
 
     if (isEditing) {
-      // Re-saved an earlier round. Drop the editing flag, clear the
-      // scratchpad, and bounce back to the transition recap so the user
-      // sees the updated standings.
       setEditingRound(null);
       setBids({});
       setEntries({});
@@ -589,9 +407,9 @@ export function SkullKingScorer({
     }
 
     if (targetRound >= SKULL_KING_TOTAL_ROUNDS) {
-      // Compute totals from the freshly persisted history (saved scores
-      // round-trip via the invalidation; we duplicate the math here so the
-      // completion call doesn't race the refetch).
+      // Compute totals from the freshly persisted history merged with
+      // the round we just saved (the merge keeps the completion call
+      // from racing the next render).
       const totals: Record<string, number> = {};
       for (const p of orderedPlayers) {
         let sum = 0;
@@ -604,12 +422,14 @@ export function SkullKingScorer({
       }
       const outcome = resolveSkullKingOutcome(totals);
       if (outcome.kind === "winner") {
-        await completeMatch.mutateAsync({
+        await completeMatch({
+          matchId: match.id,
           victoryType: "score",
           winnerId: outcome.winnerId,
         });
       } else if (outcome.kind === "draw") {
-        await completeMatch.mutateAsync({
+        await completeMatch({
+          matchId: match.id,
           victoryType: "draw",
           winnerId: null,
         });
@@ -628,8 +448,6 @@ export function SkullKingScorer({
   // ── Header / scoreboard overlay ────────────────────────────────────────
 
   if (scoreboardOpen) {
-    // Scoreboard shows ALL persisted entries plus, if we're mid-result, the
-    // in-memory entries for the current round so the user can compare.
     const merged: Record<
       string,
       Record<number, SkullKingRoundEntry | undefined>
@@ -679,7 +497,7 @@ export function SkullKingScorer({
         onDealerChange={setDealerStart}
         onReorder={(ids) => setOrderedIds(ids)}
         onStart={handleStart}
-        disabled={patchMatch.isPending}
+        disabled={starting}
       />
     );
   }
@@ -757,18 +575,11 @@ export function SkullKingScorer({
   }
 
   if (phase === "round-transition") {
-    // After End-round the server's scores have been refreshed, so
-    // `lastDoneRound` reflects the round we just finalized and `currentRound`
-    // is the upcoming round (currentRound = lastDoneRound + 1). Don't add
-    // another +1 — that's the off-by-one we used to ship.
     const justFinished = lastDoneRound;
     const next = currentRound;
     const dealerIdxNext = dealerForRound(next, dealerStart, playerCount);
     const nextDealer = orderedPlayers[dealerIdxNext];
 
-    // Standings = totals after the round just played, all sourced from the
-    // server. (No need to fall back to in-memory `entries`: the End-round
-    // save resolved before this render, so persistedEntries is current.)
     const totals: Record<string, number> = {};
     const lastDeltas: Record<string, number> = {};
     for (const p of orderedPlayers) {

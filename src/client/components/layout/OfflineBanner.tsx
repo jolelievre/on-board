@@ -25,6 +25,11 @@ export function OfflineBanner() {
       aria-live="polite"
       data-testid="offline-banner"
       style={{
+        // Stack above the global SyncStatus pill (z-index 50) — without
+        // a position context, z-index has no effect, so the static
+        // banner would render behind the fixed pill at the top-right.
+        position: "relative",
+        zIndex: 60,
         display: "flex",
         alignItems: "center",
         gap: 8,

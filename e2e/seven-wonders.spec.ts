@@ -61,10 +61,15 @@ test.describe("7 Wonders Duel — full flow", () => {
       page.locator(`[data-testid='score-grid-total-${p2Id}']`),
     ).toHaveText("4");
 
-    // Wait for debounced save to land
-    await expect(page.locator("[data-testid='save-status']")).toHaveAttribute(
-      "data-status",
-      "saved",
+    // Wait for the debounced PATCH to land on the server. Replaces the
+    // old `[data-testid='save-status'] data-status="saved"` poll — the
+    // per-page SyncPill was removed in the local-first refactor; the
+    // network response is the authoritative gate now.
+    await page.waitForResponse(
+      (r) =>
+        /\/api\/matches\/[^/]+\/scores$/.test(r.url()) &&
+        r.request().method() === "PATCH" &&
+        r.ok(),
       { timeout: 5000 },
     );
 
@@ -213,9 +218,11 @@ test.describe("7 Wonders Duel — full flow", () => {
       names.p1,
     );
 
-    await expect(page.locator("[data-testid='save-status']")).toHaveAttribute(
-      "data-status",
-      "saved",
+    await page.waitForResponse(
+      (r) =>
+        /\/api\/matches\/[^/]+\/scores$/.test(r.url()) &&
+        r.request().method() === "PATCH" &&
+        r.ok(),
       { timeout: 5000 },
     );
     await page.click("[data-testid='complete-match']");
@@ -244,9 +251,11 @@ test.describe("7 Wonders Duel — full flow", () => {
       /Declare draw|Déclarer une égalité/,
     );
 
-    await expect(page.locator("[data-testid='save-status']")).toHaveAttribute(
-      "data-status",
-      "saved",
+    await page.waitForResponse(
+      (r) =>
+        /\/api\/matches\/[^/]+\/scores$/.test(r.url()) &&
+        r.request().method() === "PATCH" &&
+        r.ok(),
       { timeout: 5000 },
     );
     await page.click("[data-testid='complete-match']");

@@ -1,10 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, ApiError } from "../../../lib/api";
 import { authClient } from "../../../lib/auth-client";
-import { usePlayerSuggestions, persistPlayersToLocalProfiles } from "../../../hooks/usePlayerSuggestions";
+import { useGame } from "../../../hooks/data/useGame";
+import { createMatch } from "../../../lib/mutations";
+import type { LocalGame } from "../../../lib/db";
+import {
+  usePlayerSuggestions,
+  persistPlayersToLocalProfiles,
+} from "../../../hooks/usePlayerSuggestions";
 import { Header } from "../../../components/layout/Header";
 import { Pill } from "../../../components/ui/Pill";
 import { Button } from "../../../components/ui/Button";
@@ -14,18 +18,6 @@ import styles from "./$slug_.new.module.css";
 export const Route = createFileRoute("/_authenticated/games/$slug_/new")({
   component: NewMatchPage,
 });
-
-type Game = {
-  id: string;
-  slug: string;
-  name: string;
-  minPlayers: number;
-  maxPlayers: number;
-};
-
-type Match = {
-  id: string;
-};
 
 const AVATAR_CLASSES = [
   styles.avatarA,
@@ -41,67 +33,17 @@ const AVATAR_CLASSES = [
 function NewMatchPage() {
   const { slug } = Route.useParams();
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
-  const { data: game, isPending } = useQuery<Game>({
-    queryKey: ["games", slug],
-    queryFn: () => api<Game>(`/api/games/${slug}`),
-  });
-
-  const { data: suggestions = [] } = usePlayerSuggestions();
-
+  const { data: game, status: gameStatus } = useGame(slug);
   const { data: session } = authClient.useSession();
-  const myUserId = session?.user.id;
 
-  const [names, setNames] = useState<string[]>([]);
-  // Parallel array: when a slot was filled by clicking the "self"
-  // suggestion, store the user's id here so we can attribute the Player
-  // on submit. Typing the same name manually leaves this null — the
-  // server only attaches userId on explicit chip selection to avoid
-  // mis-linking friends who happen to share the user's name.
-  const [userIds, setUserIds] = useState<(string | null)[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (game && names.length === 0) {
-      const slots = game.minPlayers;
-      setNames(Array.from({ length: slots }, () => ""));
-      setUserIds(Array.from({ length: slots }, () => null));
-    }
-  }, [game, names.length]);
-
-  const createMatch = useMutation({
-    mutationFn: (input: {
-      gameId: string;
-      players: { name: string; userId: string | null }[];
-    }) =>
-      api<Match>("/api/matches", {
-        method: "POST",
-        body: JSON.stringify({
-          gameId: input.gameId,
-          players: input.players.map((p, i) => ({
-            name: p.name,
-            position: i,
-            ...(p.userId ? { userId: p.userId } : {}),
-          })),
-        }),
-      }),
-    onSuccess: (match, input) => {
-      void persistPlayersToLocalProfiles(input.players, myUserId ?? null);
-      // The cached `["matches", { gameId }]` lists need to refetch so the
-      // new match shows up in the game-detail history list (and stays in
-      // sync with the cache that gcTime: Infinity now keeps long-lived).
-      void queryClient.invalidateQueries({ queryKey: ["matches"] });
-      navigate({ to: "/matches/$id", params: { id: match.id } });
-    },
-    onError: (err: unknown) => {
-      setError(err instanceof ApiError ? err.message : "Unknown error");
-    },
-  });
-
-  if (isPending || !game) {
+  // Gate on session as well as game: the self-suggestion chip attaches
+  // the current user's id to userIds[i] at click time. If session is
+  // still loading when the user clicks, myUserId is undefined and the
+  // Player row gets created with userId=null — silently breaking the
+  // alias propagation flow downstream (refreshLocalAliases can't find
+  // a row with userId === null to update).
+  if (gameStatus === "loading" || !game || !session) {
     return (
       <>
         <Header back={{ to: "/games", label: t("nav.games") }} />
@@ -111,6 +53,43 @@ function NewMatchPage() {
       </>
     );
   }
+
+  // The form is extracted so its `useState` initializers run AFTER game
+  // is known — no useEffect race to populate `names`. Without this split,
+  // useLiveQuery re-emits during form interaction could re-trigger the
+  // init effect, and tests filling the third (added) slot intermittently
+  // saw it cleared between fill and submit.
+  return <NewMatchForm slug={slug} game={game} myUserId={session.user.id} />;
+}
+
+function NewMatchForm({
+  slug,
+  game,
+  myUserId,
+}: {
+  slug: string;
+  game: LocalGame;
+  myUserId: string;
+}) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  const { data: suggestions = [] } = usePlayerSuggestions();
+
+  const [submitting, setSubmitting] = useState(false);
+  const [names, setNames] = useState<string[]>(() =>
+    Array.from({ length: game.minPlayers }, () => ""),
+  );
+  // Parallel array: when a slot was filled by clicking the "self"
+  // suggestion, store the user's id here so we can attribute the Player
+  // on submit. Typing the same name manually leaves this null — the
+  // server only attaches userId on explicit chip selection to avoid
+  // mis-linking friends who happen to share the user's name.
+  const [userIds, setUserIds] = useState<(string | null)[]>(() =>
+    Array.from({ length: game.minPlayers }, () => null),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   const canRemove = names.length > game.minPlayers;
   const canAdd = names.length < game.maxPlayers;
@@ -128,7 +107,7 @@ function NewMatchPage() {
     setError(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -143,10 +122,23 @@ function NewMatchPage() {
       return;
     }
 
-    createMatch.mutate({
-      gameId: game.id,
-      players: trimmed.map((name, i) => ({ name, userId: userIds[i] ?? null })),
-    });
+    const players = trimmed.map((name, i) => ({
+      name,
+      userId: userIds[i] ?? null,
+    }));
+
+    setSubmitting(true);
+    try {
+      const { matchId } = await createMatch({
+        gameId: game.id,
+        players,
+      });
+      void persistPlayersToLocalProfiles(players, myUserId ?? null);
+      navigate({ to: "/matches/$id", params: { id: matchId } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -330,7 +322,7 @@ function NewMatchPage() {
 
           <Button
             type="submit"
-            disabled={createMatch.isPending}
+            disabled={submitting}
             data-testid="new-match-submit"
             variant="primary"
             size="lg"

@@ -8,9 +8,11 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
-import { usePrefetchGames } from "../hooks/usePrefetchGames";
+import { usePullOnAuth } from "../hooks/usePullOnAuth";
+import { usePullSyncBackground } from "../hooks/usePullSyncBackground";
 import { BottomNav } from "../components/layout/BottomNav";
 import { OfflineBanner } from "../components/layout/OfflineBanner";
+import { SyncStatus } from "../components/sync/SyncStatus";
 
 export const Route = createFileRoute("/_authenticated")({
   component: AuthenticatedLayout,
@@ -28,7 +30,8 @@ function AuthenticatedLayout() {
   const { t } = useTranslation();
   const { session, isPending } = useAuthSession();
   const { isOnline } = useOnlineStatus();
-  usePrefetchGames();
+  usePullOnAuth();
+  usePullSyncBackground();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const hideBottomNav = shouldHideBottomNav(pathname);
 
@@ -55,6 +58,7 @@ function AuthenticatedLayout() {
       className={`flex min-h-screen flex-col ${hideBottomNav ? "" : "pb-24"}`}
     >
       {!isOnline && <OfflineBanner />}
+      <SyncStatus />
       <Outlet />
       {!hideBottomNav && <BottomNav />}
     </div>

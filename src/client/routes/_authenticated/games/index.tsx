@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { api } from "../../../lib/api";
+import { useGames } from "../../../hooks/data/useGames";
+import type { LocalGame } from "../../../lib/db";
 import { Header } from "../../../components/layout/Header";
 import { Logo } from "../../../components/ui/Logo";
 import { Pill } from "../../../components/ui/Pill";
@@ -12,21 +12,10 @@ export const Route = createFileRoute("/_authenticated/games/")({
   component: GamesPage,
 });
 
-type Game = {
-  id: string;
-  slug: string;
-  name: string;
-  description: string;
-  minPlayers: number;
-  maxPlayers: number;
-};
-
 function GamesPage() {
   const { t } = useTranslation();
-  const { data: games, isPending } = useQuery<Game[]>({
-    queryKey: ["games"],
-    queryFn: () => api<Game[]>("/api/games"),
-  });
+  const { data: games, status: gamesStatus } = useGames();
+  const isPending = gamesStatus === "loading";
 
   return (
     <>
@@ -51,7 +40,7 @@ function GamesPage() {
   );
 }
 
-function GameCard({ game }: { game: Game }) {
+function GameCard({ game }: { game: LocalGame }) {
   const { t } = useTranslation();
   return (
     <Link

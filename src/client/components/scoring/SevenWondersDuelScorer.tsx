@@ -1,9 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, ApiError } from "../../lib/api";
-import { syncEngine } from "../../lib/sync";
+import { upsertScores, completeMatch } from "../../lib/mutations";
+import { buildScorePayload } from "../../lib/match-client/seven-wonders";
 import { HandMatchGrid } from "../match/HandMatchGrid";
 import type {
   ScoreGridValues,
@@ -11,29 +10,16 @@ import type {
 } from "../match/HandMatchGrid";
 import { WinnerBanner } from "../match/WinnerBanner";
 import { displayPlayerName } from "../../../shared/players";
-import type { SaveStatus } from "../ui/SyncPill";
 import { Button } from "../ui/Button";
 import {
   SEVEN_WONDERS_CATEGORY_KEYS,
   computeTotalsByPlayer,
   resolveScoreOutcome,
   type SevenWondersCategoryKey,
-  type SevenWondersVictoryType,
 } from "../../../shared/scoring/7-wonders-duel";
 import type { Match, Player, ScoreRow } from "../../types/match";
 
 const SAVE_DEBOUNCE_MS = 300;
-/** How long the "saved" badge lingers before reverting to the idle
- * (just the wifi icon) state. Matches the alias saved-badge timing. */
-const SAVED_INDICATOR_MS = 1500;
-
-type CompletedVictoryType = SevenWondersVictoryType | "draw";
-
-type ScorePayload = {
-  playerId: string;
-  category: SevenWondersCategoryKey;
-  value: number;
-};
 
 function buildValuesFromScores(
   players: Player[],
@@ -53,97 +39,49 @@ function buildValuesFromScores(
   return values;
 }
 
-function valuesToScores(values: ScoreGridValues): ScorePayload[] {
-  const out: ScorePayload[] = [];
-  for (const playerId of Object.keys(values)) {
-    for (const cat of SEVEN_WONDERS_CATEGORY_KEYS) {
-      const v = values[playerId]?.[cat];
-      if (v === undefined) continue;
-      out.push({ playerId, category: cat, value: v });
-    }
-  }
-  return out;
-}
-
 type Props = {
   match: Match;
-  /** Notifies the parent of save-status changes so it can render the
-   * sync pill inside the page Header (rather than inline in the scorer). */
-  onSaveStatusChange?: (status: SaveStatus) => void;
 };
 
-export function SevenWondersDuelScorer({ match, onSaveStatusChange }: Props) {
+export function SevenWondersDuelScorer({ match }: Props) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const matchId = match.id;
 
   const [values, setValues] = useState<ScoreGridValues>(() =>
     buildValuesFromScores(match.players, match.scores),
   );
   const [supremacy, setSupremacy] = useState<SupremacySelection>(null);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const savedRevertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef<Promise<unknown> | null>(null);
 
-  const clearSavedRevertTimer = () => {
-    if (savedRevertTimer.current) {
-      clearTimeout(savedRevertTimer.current);
-      savedRevertTimer.current = null;
-    }
-  };
-
-  const saveScores = useMutation({
-    mutationFn: (scores: ScorePayload[]) =>
-      api(`/api/matches/${matchId}/scores`, {
-        method: "PATCH",
-        body: JSON.stringify({ scores }),
-      }),
-    onMutate: () => {
-      clearSavedRevertTimer();
-      setSaveStatus("saving");
-    },
-    onSuccess: () => {
-      setSaveStatus("saved");
-      clearSavedRevertTimer();
-      // Briefly show "saved" then return to the idle (wifi-only) state
-      // so the header stays calm.
-      savedRevertTimer.current = setTimeout(() => {
-        setSaveStatus("idle");
-        savedRevertTimer.current = null;
-      }, SAVED_INDICATOR_MS);
-    },
-    onError: (err: unknown, scores: ScorePayload[]) => {
-      clearSavedRevertTimer();
-      // Network failure (not a server error) — queue for sync on reconnect.
-      if (!(err instanceof ApiError)) {
-        void syncEngine.enqueue("PATCH", `/api/matches/${matchId}/scores`, { scores });
-        setSaveStatus("offline");
-      } else {
-        setSaveStatus("error");
+  const persistValues = useCallback(
+    async (next: ScoreGridValues) => {
+      const scores = buildScorePayload(next);
+      if (scores.length === 0) return;
+      pendingSaveRef.current = upsertScores({ matchId, scores });
+      try {
+        await pendingSaveRef.current;
+      } finally {
+        pendingSaveRef.current = null;
       }
     },
-  });
+    [matchId],
+  );
 
   const flushPendingSave = useCallback(async () => {
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
       debounceTimer.current = null;
-      const scores = valuesToScores(values);
-      if (scores.length > 0) {
-        pendingSaveRef.current = saveScores.mutateAsync(scores);
-      }
+      await persistValues(values);
     }
     if (pendingSaveRef.current) {
       try {
         await pendingSaveRef.current;
       } catch {
-        /* surfaced via saveStatus */
-      } finally {
-        pendingSaveRef.current = null;
+        /* errors surface via SyncStatus */
       }
     }
-  }, [saveScores, values]);
+  }, [persistValues, values]);
 
   const handleScoreChange = useCallback(
     (playerId: string, category: SevenWondersCategoryKey, value: number) => {
@@ -156,74 +94,20 @@ export function SevenWondersDuelScorer({ match, onSaveStatusChange }: Props) {
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
         debounceTimer.current = setTimeout(() => {
           debounceTimer.current = null;
-          const scores = valuesToScores(next);
-          if (scores.length > 0) {
-            pendingSaveRef.current = saveScores.mutateAsync(scores);
-          }
+          void persistValues(next);
         }, SAVE_DEBOUNCE_MS);
 
         return next;
       });
     },
-    [saveScores],
+    [persistValues],
   );
 
   useEffect(() => {
     return () => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
-      if (savedRevertTimer.current) clearTimeout(savedRevertTimer.current);
     };
   }, []);
-
-  // Surface the save status to the parent (the route renders the
-  // SyncPill in the Header).
-  useEffect(() => {
-    onSaveStatusChange?.(saveStatus);
-  }, [saveStatus, onSaveStatusChange]);
-
-  const completeMatch = useMutation({
-    mutationFn: (input: {
-      victoryType: CompletedVictoryType;
-      winnerId: string | null;
-    }) =>
-      api<Match>(`/api/matches/${matchId}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          status: "COMPLETED",
-          victoryType: input.victoryType,
-          winnerId: input.winnerId,
-        }),
-      }),
-    onSuccess: (updated) => {
-      queryClient.setQueryData<Match>(["matches", matchId], (prev) =>
-        prev ? { ...prev, ...updated } : updated,
-      );
-      queryClient.invalidateQueries({ queryKey: ["matches"] });
-    },
-    onError: (
-      err: unknown,
-      input: { victoryType: CompletedVictoryType; winnerId: string | null },
-    ) => {
-      if (!(err instanceof ApiError)) {
-        // Offline — queue the completion and apply it optimistically.
-        void syncEngine.enqueue("PUT", `/api/matches/${matchId}`, {
-          status: "COMPLETED",
-          victoryType: input.victoryType,
-          winnerId: input.winnerId,
-        });
-        queryClient.setQueryData<Match>(["matches", matchId], (prev) =>
-          prev
-            ? {
-                ...prev,
-                status: "COMPLETED",
-                victoryType: input.victoryType,
-                winnerId: input.winnerId,
-              }
-            : prev,
-        );
-      }
-    },
-  });
 
   const totals = useMemo(() => {
     const flat = match.players.flatMap((p) =>
@@ -255,28 +139,38 @@ export function SevenWondersDuelScorer({ match, onSaveStatusChange }: Props) {
     ? displayPlayerName(supremacyPlayer)
     : "";
 
-  // Display-name-resolved players passed to the score grid. The grid
-  // doesn't need to know about User vs Player — we resolve at the edge.
   const displayPlayers = match.players.map((p) => ({
     id: p.id,
     name: displayPlayerName(p),
   }));
 
+  const [completing, setCompleting] = useState(false);
+
   const handleComplete = async () => {
     await flushPendingSave();
-    if (supremacy) {
-      completeMatch.mutate({
-        victoryType: supremacy.type,
-        winnerId: supremacy.playerId,
+    setCompleting(true);
+    try {
+      if (supremacy) {
+        await completeMatch({
+          matchId,
+          victoryType: supremacy.type,
+          winnerId: supremacy.playerId,
+        });
+        return;
+      }
+      if (outcome.kind === "empty") return;
+      if (outcome.kind === "draw") {
+        await completeMatch({ matchId, victoryType: "draw", winnerId: null });
+        return;
+      }
+      await completeMatch({
+        matchId,
+        victoryType: "score",
+        winnerId: outcome.winnerId,
       });
-      return;
+    } finally {
+      setCompleting(false);
     }
-    if (outcome.kind === "empty") return;
-    if (outcome.kind === "draw") {
-      completeMatch.mutate({ victoryType: "draw", winnerId: null });
-      return;
-    }
-    completeMatch.mutate({ victoryType: "score", winnerId: outcome.winnerId });
   };
 
   const winner = match.winnerId
@@ -342,11 +236,11 @@ export function SevenWondersDuelScorer({ match, onSaveStatusChange }: Props) {
       </div>
 
       {!isCompleted && (
-        <div className="mt-6">
+        <div className="mt-6 mb-6">
           <Button
             type="button"
             onClick={handleComplete}
-            disabled={completeMatch.isPending}
+            disabled={completing}
             data-testid="complete-match"
             data-outcome={completeOutcomeAttr}
             variant="primary"

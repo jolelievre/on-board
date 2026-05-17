@@ -11,11 +11,21 @@ async function startMatch(page: Page, names: string[]) {
   await page.click("[data-testid='new-match-button']");
   await page.waitForURL("**/games/skull-king/new");
 
+  // Wait for the form's initial render (game loaded → minPlayers slots
+  // exist). Without this, the i=0 count check below races the form's
+  // loading state and reports 0, triggering a spurious add-player click
+  // that leaves an extra blank slot at the bottom — fails validation at
+  // submit ("Each player must have a name.").
+  await expect(
+    page.locator("[data-testid='new-match-player-0']"),
+  ).toBeVisible();
+
   for (let i = 0; i < names.length; i++) {
     const input = page.locator(`[data-testid='new-match-player-${i}']`);
     if (await input.count() === 0) {
       // Add an extra slot if the form rendered with fewer than `names.length`.
       await page.click("[data-testid='new-match-add-player']");
+      await expect(input).toBeVisible();
     }
     await page.fill(`[data-testid='new-match-player-${i}']`, names[i]);
   }
