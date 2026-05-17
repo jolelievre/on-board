@@ -1,4 +1,14 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+/**
+ * Serialize the offline file. Most tests here toggle network state at
+ * the BrowserContext level and the cross-device test spawns two extra
+ * contexts; running them in parallel pushes the dev server past its
+ * throughput limit (waitForURL timeouts after the new-match submit
+ * because pullSync + Vite chunks + auth fire-hose the single Node
+ * process). The full-suite cost is ~2 min vs ~1 min parallel.
+ */
+test.describe.configure({ mode: "serial" });
 
 /**
  * Offline behavior — covers the local-first refactor (PR B).
@@ -13,6 +23,33 @@ import { test, expect } from "@playwright/test";
  * Network.emulateNetworkConditions, which matches Chrome DevTools'
  * "Offline" throttle. Reliable on Chromium; less so on WebKit.
  */
+
+/** Inline helpers — mirror the ones in seven-wonders.spec.ts. They're
+ * duplicated rather than imported because cross-spec imports would
+ * couple otherwise unrelated test files; the helpers are tiny and
+ * stable.
+ */
+async function resolvePlayerId(page: Page, name: string): Promise<string> {
+  return page
+    .locator(`[data-testid^='score-grid-player-'] >> text=${name}`)
+    .first()
+    .evaluate((el) =>
+      el.getAttribute("data-testid")!.replace("score-grid-player-", ""),
+    );
+}
+
+async function setScore(
+  page: Page,
+  playerId: string,
+  category: string,
+  value: number,
+): Promise<void> {
+  const input = page.locator(
+    `[data-testid='score-input-${playerId}-${category}']`,
+  );
+  await input.fill(String(value));
+  await input.blur();
+}
 test.describe("Offline (local-first)", () => {
   test.skip(
     ({ browserName }) => browserName !== "chromium",
@@ -155,6 +192,255 @@ test.describe("Offline (local-first)", () => {
     expect(apiRes.ok()).toBeTruthy();
     const apiMatch = (await apiRes.json()) as { id: string };
     expect(apiMatch.id).toBe(matchId);
+  });
+
+  test("full offline lifecycle: create → score → complete, all replay on reconnect", async ({
+    page,
+    context,
+  }) => {
+    // The full user journey: offline from before the match exists,
+    // through scoring two categories, through completion. On reconnect
+    // the queue replays POST → PATCH → PUT in order; each is
+    // idempotent / upsert-safe on the server. Combined into one test
+    // because the three operations form a single semantic unit (a
+    // played-offline match) and exercising them separately would
+    // require either pre-existing server state (fragile) or a more
+    // complex setup with intermediate online windows. Keeping the
+    // sequence intact also pins the queue's ordering contract — POST
+    // before PATCH before PUT — without an explicit assertion.
+    await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
+      page.waitForResponse(
+        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
+      page.goto("/games"),
+    ]);
+
+    await context.setOffline(true);
+
+    await page.click("text=7 Wonders Duel");
+    await page.click("[data-testid='new-match-button']");
+    await page.waitForURL("**/games/7-wonders-duel/new");
+    await page.fill("[data-testid='new-match-player-0']", "Alice");
+    await page.fill("[data-testid='new-match-player-1']", "Bob");
+    await page.click("[data-testid='new-match-submit']");
+    await page.waitForURL(/\/matches\/[a-z][a-z0-9]{19,}$/);
+    const matchId = page.url().split("/").pop()!;
+
+    const p1Id = await resolvePlayerId(page, "Alice");
+    const p2Id = await resolvePlayerId(page, "Bob");
+
+    // Score one decisive category for each player so completion picks
+    // a winner deterministically (not a draw). useLiveQuery surfaces
+    // the values immediately from Dexie — no network involved.
+    await setScore(page, p1Id, "civil", 12);
+    await setScore(page, p2Id, "wonders", 4);
+    await expect(
+      page.locator(`[data-testid='score-grid-total-${p1Id}']`),
+    ).toHaveText("12");
+    await expect(
+      page.locator(`[data-testid='score-grid-total-${p2Id}']`),
+    ).toHaveText("4");
+
+    // Complete the match offline — completeMatch sets status:
+    // "COMPLETED" + winnerId locally and enqueues the PUT.
+    await expect(page.locator("[data-testid='complete-match']")).toContainText(
+      "Alice",
+    );
+    await page.click("[data-testid='complete-match']");
+    await expect(page.locator("[data-testid='winner-banner']")).toContainText(
+      "Alice",
+    );
+    await expect(
+      page.locator(`[data-testid='score-input-${p1Id}-civil']`),
+    ).toBeDisabled();
+
+    // Reconnect — flush() drains the entire queue in createdAt order:
+    // POST /api/matches → PATCH /scores → PUT /api/matches/:id. We
+    // gate on the LAST one (the PUT) succeeding, which only happens
+    // after the POST has landed (server-side ownership check).
+    const completePut = page.waitForResponse(
+      (r) =>
+        /\/api\/matches\/[^/]+$/.test(r.url()) &&
+        r.request().method() === "PUT" &&
+        r.ok(),
+      { timeout: 15_000 },
+    );
+    await context.setOffline(false);
+    await completePut;
+
+    // Server-side verification of all three mutations in one shot.
+    const apiRes = await page.request.get(`/api/matches/${matchId}`);
+    expect(apiRes.ok()).toBeTruthy();
+    const apiMatch = (await apiRes.json()) as {
+      status: string;
+      winnerId: string | null;
+      victoryType: string | null;
+      completedAt: string | null;
+      scores: { playerId: string; category: string; value: number }[];
+    };
+    expect(apiMatch.status).toBe("COMPLETED");
+    expect(apiMatch.winnerId).toBe(p1Id);
+    expect(apiMatch.completedAt).not.toBeNull();
+    expect(apiMatch.victoryType).not.toBeNull();
+    const civil = apiMatch.scores.find(
+      (s) => s.playerId === p1Id && s.category === "civil",
+    );
+    const wonders = apiMatch.scores.find(
+      (s) => s.playerId === p2Id && s.category === "wonders",
+    );
+    expect(civil?.value).toBe(12);
+    expect(wonders?.value).toBe(4);
+  });
+
+  test("SyncStatus pill shows 'offline' while writes are queued and clears after reconnect", async ({
+    page,
+    context,
+  }) => {
+    // Idle state: indicator unmounts entirely. We assert count===0
+    // rather than not-visible because the SyncStatus component returns
+    // null when status==='idle', so it shouldn't be in the DOM at all.
+    await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
+      page.waitForResponse(
+        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
+      page.goto("/games"),
+    ]);
+    await expect(page.locator("[data-testid='sync-status']")).toHaveCount(0);
+
+    await context.setOffline(true);
+
+    // Create a match offline → useStatus() flips to "offline" since
+    // the engine is offline AND there's a pending queue entry.
+    await page.click("text=7 Wonders Duel");
+    await page.click("[data-testid='new-match-button']");
+    await page.waitForURL("**/games/7-wonders-duel/new");
+    await page.fill("[data-testid='new-match-player-0']", "Alice");
+    await page.fill("[data-testid='new-match-player-1']", "Bob");
+    await page.click("[data-testid='new-match-submit']");
+    await page.waitForURL(/\/matches\/[a-z][a-z0-9]{19,}$/);
+
+    // While offline + queued, the indicator must surface with the
+    // "offline" state attribute. We deliberately don't assert on the
+    // intermediate "saving" / "saved" transitions — saving is a
+    // network blink and saved is a 1.2 s linger, both vulnerable to
+    // CI clock jitter. The stable observable property is: pill exists
+    // and reads "offline" while disconnected with pending work.
+    await expect(
+      page.locator("[data-testid='sync-status']"),
+    ).toHaveAttribute("data-status", "offline", { timeout: 3000 });
+
+    // Reconnect — flush drains, pullSync runs, useStatus() eventually
+    // returns to "idle" and SyncStatus unmounts. The timeout window
+    // generously covers the 1.2 s saved-linger plus the queue replay.
+    await context.setOffline(false);
+    await expect(page.locator("[data-testid='sync-status']")).toHaveCount(0, {
+      timeout: 10_000,
+    });
+  });
+});
+
+/**
+ * Cross-device LWW merge — two independent BrowserContexts share the
+ * same auth identity (same `storageState` file) but have completely
+ * separate IndexedDB. This is the only way to exercise the actual
+ * pull-sync.ts merge path (LWW on `updatedAt`, child-row prune) end-
+ * to-end: a write in device A goes through the server, then device B
+ * has to pull it down into its own Dexie via `usePullOnAuth` on boot.
+ *
+ * Distinguishes from "Cross-tab live updates" above: that test shares
+ * one IndexedDB and exercises Dexie's BroadcastChannel reactivity.
+ * This one exercises the network round-trip.
+ */
+test.describe("Cross-device LWW merge (independent Dexie)", () => {
+  test.skip(
+    ({ browserName }) => browserName !== "chromium",
+    "BrowserContext.setOffline + CDP throttling is chromium-only",
+  );
+
+  test("match created on device A is pulled into device B on first boot", async ({
+    browser,
+  }) => {
+    const contextA = await browser.newContext({
+      storageState: "e2e/.auth/state.json",
+    });
+    const contextB = await browser.newContext({
+      storageState: "e2e/.auth/state.json",
+    });
+
+    try {
+      const pageA = await contextA.newPage();
+      const pageB = await contextB.newPage();
+
+      // Each context starts with an empty IndexedDB. Without this wipe
+      // a flake in a prior run could leave a non-empty Dexie that
+      // makes "new match appears" trivially true.
+      for (const p of [pageA, pageB]) {
+        await p.addInitScript(() => {
+          localStorage.removeItem("onboard_query_cache");
+          indexedDB.deleteDatabase("onboard");
+        });
+      }
+
+      // Device A: warm Dexie, then create a match via the offline-
+      // then-reconnect pattern (same flow as the combined-lifecycle
+      // test above). Creating offline + reconnecting goes through the
+      // sync queue's POST replay rather than a bare scheduleFlush
+      // chained off createMatch's resolution; under serial-test load
+      // the chained variant has been observed to stall before URL
+      // change, while the queue-replay path is reliable.
+      await Promise.all([
+        pageA.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
+        pageA.waitForResponse(
+          (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+        ),
+        pageA.goto("/games"),
+      ]);
+
+      await contextA.setOffline(true);
+
+      await pageA.click("text=7 Wonders Duel");
+      await pageA.click("[data-testid='new-match-button']");
+      await pageA.waitForURL("**/games/7-wonders-duel/new");
+      await pageA.fill("[data-testid='new-match-player-0']", "Alice");
+      await pageA.fill("[data-testid='new-match-player-1']", "Bob");
+      await pageA.click("[data-testid='new-match-submit']");
+      await pageA.waitForURL(/\/matches\/[a-z][a-z0-9]{19,}$/);
+      const matchId = pageA.url().split("/").pop()!;
+
+      // Bring A online — queued POST replays. Poll for the match on the
+      // server (rather than waitForResponse with `r.ok()`) so we absorb
+      // the pre-existing TOCTOU on POST /api/matches where the first
+      // attempt may return 500 and the second hits the idempotent path.
+      await contextA.setOffline(false);
+      await expect
+        .poll(
+          async () => {
+            const res = await pageA.request.get(`/api/matches/${matchId}`);
+            return res.status();
+          },
+          { timeout: 15_000, intervals: [300, 700, 1200, 2000] },
+        )
+        .toBe(200);
+
+      // Device B: boot for the first time. usePullOnAuth fires once
+      // when the session resolves; pullSync pulls /api/matches into B's
+      // Dexie. useLiveQuery then surfaces the new match in the history.
+      await Promise.all([
+        pageB.waitForResponse(
+          (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+        ),
+        pageB.goto("/games/7-wonders-duel"),
+      ]);
+
+      await expect(
+        pageB.locator(`[data-testid='match-history-row-${matchId}']`),
+      ).toBeVisible({ timeout: 5_000 });
+    } finally {
+      await contextA.close();
+      await contextB.close();
+    }
   });
 });
 
