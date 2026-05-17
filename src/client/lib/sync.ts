@@ -10,6 +10,12 @@ const MAX_RETRIES = 3;
  * confirmation, short enough that it doesn't feel sticky. */
 const SAVED_LINGER_MS = 1200;
 
+/** How often `useStatus` retries `flush()` while we believe we're
+ * online but the queue isn't draining. Covers the case where the
+ * browser's `online` event never fired (DevTools throttling release,
+ * captive portal, VPN reconnect) so the normal flush trigger is silent. */
+const PENDING_RETRY_MS = 10_000;
+
 export type SyncStatus = "idle" | "saving" | "offline" | "saved";
 
 export const syncEngine = {
@@ -95,6 +101,14 @@ export const syncEngine = {
    * - `offline` overrides everything when the browser is offline.
    * - `saving` while any pending entry remains.
    * - `saved` for SAVED_LINGER_MS after the queue drains, then `idle`.
+   *
+   * Self-heals on stuck "saving": when `navigator.onLine` is true but
+   * the queue isn't draining (e.g. user un-throttled DevTools without
+   * the browser firing an `online` event because navigator.onLine never
+   * transitioned), retry `flush()` every PENDING_RETRY_MS until the
+   * queue drains. This is the safety net for cases the `online` event
+   * doesn't cover — captive portal release, throttling toggle, VPN
+   * reconnect.
    */
   useStatus(): SyncStatus {
     const { isOnline } = useOnlineStatus();
@@ -123,6 +137,19 @@ export const syncEngine = {
       const t = window.setTimeout(() => force((n) => n + 1), remaining);
       return () => window.clearTimeout(t);
     }, [savedUntil]);
+
+    useEffect(() => {
+      if (!isOnline || pendingCount === 0) return;
+      // Fire once immediately on entering the "online + pending"
+      // condition (covers the boot-after-offline-refresh case where the
+      // online event never fired). The interval covers ongoing recovery
+      // attempts as long as the queue stays non-empty.
+      void syncEngine.flush();
+      const id = window.setInterval(() => {
+        void syncEngine.flush();
+      }, PENDING_RETRY_MS);
+      return () => window.clearInterval(id);
+    }, [isOnline, pendingCount]);
 
     if (!isOnline) return "offline";
     if (pendingCount > 0) return "saving";

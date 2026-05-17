@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useAuthSession } from "./useAuthSession";
 import { pullSync } from "../lib/pull-sync";
+import { syncEngine } from "../lib/sync";
 
 /**
  * Once per authenticated mount, pull the latest server state into
@@ -10,6 +11,13 @@ import { pullSync } from "../lib/pull-sync";
  * Replaces the old `usePrefetchGames` which prefetched every game and
  * match list into TanStack Query — that work is now subsumed by
  * pullSync (one round-trip for `/api/games`, one for `/api/matches`).
+ *
+ * Also kicks `syncEngine.flush()` on boot. The flush event chain is
+ * normally driven by `online` browser events, but those don't fire
+ * after a refresh-while-offline where `navigator.onLine` stays true
+ * (DevTools throttling, captive portal). Without this, queued writes
+ * from the previous session would sit stuck until the user happens to
+ * make a new mutation.
  */
 export function usePullOnAuth() {
   const { session, isPending } = useAuthSession();
@@ -19,6 +27,12 @@ export function usePullOnAuth() {
     void pullSync().catch(() => {
       // Offline or transient failure — UI keeps showing cached Dexie
       // data and the next online tick or flush will retry the pull.
+    });
+    // Independent of pullSync success: drain any leftover queue from
+    // a prior session. flush() short-circuits if navigator.onLine is
+    // false, so this is safe when actually offline.
+    void syncEngine.flush().catch(() => {
+      /* surfaced via syncQueue retries */
     });
   }, [session, isPending]);
 }
