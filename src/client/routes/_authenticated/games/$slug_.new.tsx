@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { authClient } from "../../../lib/auth-client";
 import { useGame } from "../../../hooks/data/useGame";
 import { createMatch } from "../../../lib/mutations";
-import type { GameRow } from "../../../lib/db";
+import type { LocalGame } from "../../../lib/db";
 import {
   usePlayerSuggestions,
   persistPlayersToLocalProfiles,
@@ -68,7 +68,7 @@ function NewMatchForm({
   myUserId,
 }: {
   slug: string;
-  game: GameRow;
+  game: LocalGame;
   myUserId: string;
 }) {
   const { t } = useTranslation();

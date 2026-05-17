@@ -1,57 +1,12 @@
 import { api } from "./api";
+import type { ApiGame, ApiMatch } from "./api-types";
 import {
   db,
-  type GameRow,
-  type MatchRow,
-  type PlayerRow,
-  type ScoreRow,
+  type LocalGame,
+  type LocalMatch,
+  type LocalPlayer,
+  type LocalScore,
 } from "./db";
-
-type ApiGame = {
-  id: string;
-  slug: string;
-  name: string;
-  description: string;
-  minPlayers: number;
-  maxPlayers: number;
-  iconUrl?: string | null;
-};
-
-type ApiPlayer = {
-  id: string;
-  matchId?: string;
-  userId?: string | null;
-  name: string;
-  position: number;
-  user?: { name: string; alias: string | null } | null;
-  updatedAt?: string | null;
-};
-
-type ApiScore = {
-  id: string;
-  matchId?: string;
-  playerId: string;
-  category: string;
-  value: number;
-  metadata?: Record<string, unknown>;
-  updatedAt?: string | null;
-};
-
-type ApiMatch = {
-  id: string;
-  gameId: string;
-  game?: { id: string; slug: string; name: string };
-  createdById?: string | null;
-  status: "IN_PROGRESS" | "COMPLETED";
-  victoryType?: string | null;
-  winnerId?: string | null;
-  metadata?: Record<string, unknown>;
-  startedAt: string;
-  completedAt?: string | null;
-  updatedAt: string;
-  players?: ApiPlayer[];
-  scores?: ApiScore[];
-};
 
 const SYNC_META_LAST_PULL = "lastPullAt";
 
@@ -130,7 +85,7 @@ export async function pullSync(): Promise<void> {
 }
 
 async function mergeGames(rows: ApiGame[]): Promise<void> {
-  const toPut: GameRow[] = rows.map((g) => ({
+  const toPut: LocalGame[] = rows.map((g) => ({
     id: g.id,
     slug: g.slug,
     name: g.name,
@@ -147,21 +102,25 @@ async function mergeMatches(rows: ApiMatch[]): Promise<void> {
 
   const incomingMatchIds = rows.map((m) => m.id);
   const existing = await db.matches.bulkGet(incomingMatchIds);
-  const existingById = new Map<string, MatchRow>();
+  const existingById = new Map<string, LocalMatch>();
   for (const m of existing) {
     if (m) existingById.set(m.id, m);
   }
 
-  const matchesToPut: MatchRow[] = [];
-  const playersToPut: PlayerRow[] = [];
-  const scoresToPut: ScoreRow[] = [];
+  const matchesToPut: LocalMatch[] = [];
+  const playersToPut: LocalPlayer[] = [];
+  const scoresToPut: LocalScore[] = [];
   const playerIdsToKeepByMatch = new Map<string, Set<string>>();
   const scoreIdsToKeepByMatch = new Map<string, Set<string>>();
   const matchesToReconcile: string[] = [];
 
   for (const m of rows) {
+    // `/api/matches` always returns updatedAt; the shared ApiMatch
+    // type widens it to optional/nullable for the legacy-cache
+    // hydration path, so we normalize once here.
+    const incomingUpdatedAt = m.updatedAt ?? m.startedAt;
     const local = existingById.get(m.id);
-    if (local && local.updatedAt >= m.updatedAt) {
+    if (local && local.updatedAt >= incomingUpdatedAt) {
       // Local copy wins or ties — skip, but still record incoming children
       // so we don't accidentally prune them below.
       const pIds = new Set<string>(local.id ? [] : []);
@@ -181,7 +140,7 @@ async function mergeMatches(rows: ApiMatch[]): Promise<void> {
       metadata: m.metadata ?? {},
       startedAt: m.startedAt,
       completedAt: m.completedAt ?? null,
-      updatedAt: m.updatedAt,
+      updatedAt: incomingUpdatedAt,
     });
     matchesToReconcile.push(m.id);
 
@@ -195,7 +154,7 @@ async function mergeMatches(rows: ApiMatch[]): Promise<void> {
         name: p.name,
         position: p.position,
         user: p.user ?? null,
-        updatedAt: p.updatedAt ?? m.updatedAt,
+        updatedAt: p.updatedAt ?? incomingUpdatedAt,
       });
     }
     playerIdsToKeepByMatch.set(m.id, pIds);
@@ -210,7 +169,7 @@ async function mergeMatches(rows: ApiMatch[]): Promise<void> {
         category: s.category,
         value: s.value,
         metadata: s.metadata ?? {},
-        updatedAt: s.updatedAt ?? m.updatedAt,
+        updatedAt: s.updatedAt ?? incomingUpdatedAt,
       });
     }
     scoreIdsToKeepByMatch.set(m.id, sIds);

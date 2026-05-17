@@ -1,9 +1,9 @@
 import { createId } from "@paralleldrive/cuid2";
 import {
   db,
-  type MatchRow,
-  type PlayerRow,
-  type ScoreRow,
+  type LocalMatch,
+  type LocalPlayer,
+  type LocalScore,
 } from "./db";
 import { syncEngine } from "./sync";
 
@@ -45,7 +45,7 @@ export async function createMatch(
   const matchId = input.id ?? createId();
   const ts = nowIso();
 
-  const players: PlayerRow[] = input.players.map((p, position) => ({
+  const players: LocalPlayer[] = input.players.map((p, position) => ({
     id: createId(),
     matchId,
     name: p.name,
@@ -54,7 +54,7 @@ export async function createMatch(
     updatedAt: ts,
   }));
 
-  const match: MatchRow = {
+  const match: LocalMatch = {
     id: matchId,
     gameId: input.gameId,
     status: "IN_PROGRESS",
@@ -117,7 +117,7 @@ export async function upsertScores(input: UpsertScoresInput): Promise<void> {
   const ts = nowIso();
 
   await db.transaction("rw", [db.scores, db.matches, db.syncQueue], async () => {
-    const toPut: ScoreRow[] = [];
+    const toPut: LocalScore[] = [];
     for (const s of input.scores) {
       const existing = await db.scores
         .where("[matchId+playerId+category]")
@@ -178,7 +178,7 @@ export async function patchMatch(input: PatchMatchInput): Promise<void> {
     async () => {
       const match = await db.matches.get(input.matchId);
       if (match) {
-        const next: MatchRow = {
+        const next: LocalMatch = {
           ...match,
           ...(input.metadata !== undefined
             ? { metadata: input.metadata }
@@ -186,6 +186,8 @@ export async function patchMatch(input: PatchMatchInput): Promise<void> {
           updatedAt: ts,
         };
         await db.matches.put(next);
+      } else {
+        warnMissingLocalMatch("patchMatch", input.matchId);
       }
 
       if (input.playerOrder) {
@@ -231,7 +233,7 @@ export async function completeMatch(input: CompleteMatchInput): Promise<void> {
   await db.transaction("rw", [db.matches, db.syncQueue], async () => {
     const match = await db.matches.get(input.matchId);
     if (match) {
-      const next: MatchRow = {
+      const next: LocalMatch = {
         ...match,
         status: "COMPLETED",
         victoryType: input.victoryType,
@@ -240,6 +242,8 @@ export async function completeMatch(input: CompleteMatchInput): Promise<void> {
         updatedAt: ts,
       };
       await db.matches.put(next);
+    } else {
+      warnMissingLocalMatch("completeMatch", input.matchId);
     }
 
     await db.syncQueue.add({
@@ -263,5 +267,20 @@ async function touchMatchUpdatedAt(matchId: string, ts: string): Promise<void> {
   const match = await db.matches.get(matchId);
   if (match) {
     await db.matches.update(matchId, { updatedAt: ts });
+  } else {
+    warnMissingLocalMatch("touchMatchUpdatedAt", matchId);
   }
+}
+
+/** Surface — without throwing — the rare case where a mutation runs for
+ * a match that isn't mirrored locally. Either pullSync hasn't caught up,
+ * the user navigated to a server-only match in a way the data hooks
+ * shouldn't allow, or Dexie was wiped mid-session. The queued network
+ * request still fires (server is authoritative), but a stale local view
+ * would be the only symptom — worth a log. */
+function warnMissingLocalMatch(op: string, matchId: string): void {
+  console.warn(
+    `[mutations.${op}] match ${matchId} not found in Dexie; ` +
+      `queueing server request without local mirror update.`,
+  );
 }

@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable, type Transaction } from "dexie";
+import type { ApiMatch } from "./api-types";
 
 export type LocalProfile = {
   /** Name used as the primary key (names are the identity for local profiles). */
@@ -23,7 +24,7 @@ export type SyncQueueEntry = {
   error?: string;
 };
 
-export type GameRow = {
+export type LocalGame = {
   id: string;
   slug: string;
   name: string;
@@ -33,7 +34,7 @@ export type GameRow = {
   iconUrl?: string | null;
 };
 
-export type MatchRow = {
+export type LocalMatch = {
   id: string;
   gameId: string;
   createdById?: string | null;
@@ -47,7 +48,7 @@ export type MatchRow = {
   updatedAt: string;
 };
 
-export type PlayerRow = {
+export type LocalPlayer = {
   id: string;
   matchId: string;
   userId?: string | null;
@@ -57,7 +58,7 @@ export type PlayerRow = {
   updatedAt: string;
 };
 
-export type ScoreRow = {
+export type LocalScore = {
   id: string;
   matchId: string;
   playerId: string;
@@ -67,7 +68,7 @@ export type ScoreRow = {
   updatedAt: string;
 };
 
-export type SyncMetaRow = {
+export type LocalSyncMeta = {
   key: string;
   value: string;
 };
@@ -75,11 +76,11 @@ export type SyncMetaRow = {
 class OnBoardDB extends Dexie {
   localProfiles!: EntityTable<LocalProfile, "name">;
   syncQueue!: EntityTable<SyncQueueEntry, "id">;
-  games!: EntityTable<GameRow, "id">;
-  matches!: EntityTable<MatchRow, "id">;
-  players!: EntityTable<PlayerRow, "id">;
-  scores!: EntityTable<ScoreRow, "id">;
-  syncMeta!: EntityTable<SyncMetaRow, "key">;
+  games!: EntityTable<LocalGame, "id">;
+  matches!: EntityTable<LocalMatch, "id">;
+  players!: EntityTable<LocalPlayer, "id">;
+  scores!: EntityTable<LocalScore, "id">;
+  syncMeta!: EntityTable<LocalSyncMeta, "key">;
 
   constructor() {
     super("onboard");
@@ -94,13 +95,15 @@ class OnBoardDB extends Dexie {
     // v2 — local-first refactor. Adds full row mirrors for games/matches/
     // players/scores, a syncMeta keystore, and adds a `status` index to the
     // sync queue so live-query predicates can count pending entries directly.
+    // The `userId` index on `players` is included from the start so
+    // refreshLocalAliases can use it without a full-table scan.
     this.version(2)
       .stores({
         localProfiles: "name, usedAt, linkedUserId",
         syncQueue: "++id, createdAt, status",
         games: "id, slug",
         matches: "id, gameId, status, startedAt, updatedAt, [createdById+startedAt]",
-        players: "id, matchId, [matchId+position]",
+        players: "id, matchId, userId, [matchId+position]",
         scores: "id, matchId, [matchId+playerId+category], updatedAt",
         syncMeta: "key",
         matchDrafts: null, // drop — PR #11 abandoned, never wrote to it in shipped code.
@@ -134,14 +137,6 @@ class OnBoardDB extends Dexie {
           // authoritative recovery path.
         }
       });
-
-    // v3 — adds `userId` to the players index so refreshLocalAliases
-    // can query `db.players.where("userId").equals(currentUserId)`
-    // without a full-table scan. No data migration needed; only the
-    // index is added.
-    this.version(3).stores({
-      players: "id, matchId, userId, [matchId+position]",
-    });
   }
 }
 
@@ -199,10 +194,10 @@ function pickQueriesArray(parsed: unknown): unknown[] | null {
 }
 
 function seedGames(tx: Transaction, rows: unknown[]): void {
-  const games: GameRow[] = [];
+  const games: LocalGame[] = [];
   for (const r of rows) {
     if (!r || typeof r !== "object") continue;
-    const g = r as Partial<GameRow>;
+    const g = r as Partial<LocalGame>;
     if (typeof g.id !== "string" || typeof g.slug !== "string") continue;
     games.push({
       id: g.id,
@@ -219,47 +214,10 @@ function seedGames(tx: Transaction, rows: unknown[]): void {
   }
 }
 
-type ApiMatch = {
-  id: string;
-  gameId: string;
-  game?: { id: string; slug: string; name: string };
-  createdById?: string | null;
-  status: "IN_PROGRESS" | "COMPLETED";
-  victoryType?: string | null;
-  winnerId?: string | null;
-  metadata?: Record<string, unknown>;
-  startedAt: string;
-  completedAt?: string | null;
-  updatedAt?: string | null;
-  players?: ApiPlayer[];
-  scores?: ApiScore[];
-};
-
-type ApiPlayer = {
-  id: string;
-  matchId?: string;
-  userId?: string | null;
-  name: string;
-  position: number;
-  user?: { name: string; alias: string | null } | null;
-  updatedAt?: string | null;
-};
-
-type ApiScore = {
-  id: string;
-  matchId?: string;
-  playerId: string;
-  category: string;
-  value: number;
-  metadata?: Record<string, unknown>;
-  updatedAt?: string | null;
-};
-
 function seedMatches(tx: Transaction, rows: unknown[]): void {
-  const matches: MatchRow[] = [];
-  const players: PlayerRow[] = [];
-  const scores: ScoreRow[] = [];
-  const games: GameRow[] = [];
+  const matches: LocalMatch[] = [];
+  const players: LocalPlayer[] = [];
+  const scores: LocalScore[] = [];
 
   for (const r of rows) {
     if (!r || typeof r !== "object") continue;
@@ -280,17 +238,11 @@ function seedMatches(tx: Transaction, rows: unknown[]): void {
       updatedAt: matchUpdatedAt,
     });
 
-    if (m.game && typeof m.game.id === "string") {
-      games.push({
-        id: m.game.id,
-        slug: m.game.slug,
-        name: m.game.name,
-        description: "",
-        minPlayers: 1,
-        maxPlayers: 8,
-        iconUrl: null,
-      });
-    }
+    // Intentionally do NOT seed `games` from the nested `match.game`
+    // join: we don't have minPlayers/maxPlayers there, and writing
+    // guessed values would clobber correct data already seeded via
+    // the ["games"] key (or written by a later pullSync). The next
+    // pullSync() will hydrate the catalogue authoritatively.
 
     for (const p of m.players ?? []) {
       if (!p || typeof p.id !== "string") continue;
@@ -321,8 +273,6 @@ function seedMatches(tx: Transaction, rows: unknown[]): void {
   if (matches.length > 0) void tx.table("matches").bulkPut(matches);
   if (players.length > 0) void tx.table("players").bulkPut(players);
   if (scores.length > 0) void tx.table("scores").bulkPut(scores);
-  // bulkPut on existing rows is an upsert; safe even if seedGames also ran.
-  if (games.length > 0) void tx.table("games").bulkPut(games);
 }
 
 export const db = new OnBoardDB();

@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useGames } from "../../../hooks/data/useGames";
-import type { GameRow } from "../../../lib/db";
+import type { LocalGame } from "../../../lib/db";
 import { Header } from "../../../components/layout/Header";
 import { Logo } from "../../../components/ui/Logo";
 import { Pill } from "../../../components/ui/Pill";
@@ -40,7 +40,7 @@ function GamesPage() {
   );
 }
 
-function GameCard({ game }: { game: GameRow }) {
+function GameCard({ game }: { game: LocalGame }) {
   const { t } = useTranslation();
   return (
     <Link
