@@ -144,6 +144,9 @@ export function SkullKingScorer({
   }, [skMeta.dealerStart]);
 
   const orderedPlayers = useMemo(() => {
+    // Project match.players through orderedIds. If any id is missing from
+    // orderedIds (drift between server and local state) fall back to the
+    // canonical match.players order rather than rendering a truncated list.
     const byId = new Map(match.players.map((p) => [p.id, p]));
     const out: Player[] = [];
     for (const id of orderedIds) {
@@ -159,6 +162,10 @@ export function SkullKingScorer({
     lastDoneRound + 1,
   );
 
+  // Resume from the persisted draft only when it belongs to the round we're
+  // about to play. A stale draft from a prior round is ignored — End-round
+  // normally clears it, but we guard anyway so divergent server state can't
+  // surface old values into the new round.
   const persistedDraft: SkDraft | null =
     skMeta.draft && skMeta.draft.round === currentRound ? skMeta.draft : null;
 
@@ -171,6 +178,9 @@ export function SkullKingScorer({
   }, [match.status, skMeta.startedAt, lastDoneRound, persistedDraft]);
 
   const [phase, setPhase] = useState<Phase>(initialPhase);
+  // Realign the phase when the match data changes (e.g. after a save round-
+  // trips). We only auto-advance forward — never backwards into match-start
+  // once the user has begun — to avoid clobbering an in-flight bidding screen.
   useEffect(() => {
     setPhase((prev) => {
       if (initialPhase === "completed") return "completed";
@@ -181,6 +191,8 @@ export function SkullKingScorer({
     });
   }, [initialPhase]);
 
+  // In-flight round state. Initialized from the persisted draft on mount;
+  // the round-change effect below resets it once the user advances rounds.
   const [bids, setBids] = useState<Record<string, number | undefined>>(
     () => persistedDraft?.bids ?? {},
   );
@@ -193,9 +205,16 @@ export function SkullKingScorer({
   const [activeResultIdx, setActiveResultIdx] = useState(
     () => persistedDraft?.activeResultIdx ?? 0,
   );
+  // Set when the user opens "Edit round N" from the round-transition screen.
+  // While non-null, the result screen renders for that round and End-round
+  // upserts back to its row instead of progressing to a new round.
   const [editingRound, setEditingRound] = useState<number | null>(null);
   const activeResultRound = editingRound ?? currentRound;
 
+  // When currentRound changes (server bumps lastDoneRound after End-round),
+  // clear in-memory state so the next round starts fresh. Skip the reset
+  // while editing a previous round — the round-change race after a re-save
+  // would otherwise clobber the user's still-in-flight edit.
   const previousRoundRef = useRef(currentRound);
   useEffect(() => {
     if (previousRoundRef.current === currentRound) return;
