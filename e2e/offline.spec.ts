@@ -13,8 +13,9 @@ test.describe.configure({ mode: "serial" });
 /**
  * Offline behavior — covers the local-first refactor (PR B).
  *
- * After login, `usePullOnAuth` populates Dexie with games + matches from
- * the server. All UI reads come from Dexie via `useLiveQuery`, so once
+ * After login, the boot-time `pullSync({ force: true })` in
+ * `_authenticated.tsx` populates Dexie with games + matches from the
+ * server. All UI reads come from Dexie via `useLiveQuery`, so once
  * Dexie has the rows the screens render offline. Mutations write to
  * Dexie + the sync queue locally and replay on reconnect; the server
  * accepts the client-generated CUIDs idempotently (PR A).
@@ -57,12 +58,9 @@ test.describe("Offline (local-first)", () => {
   );
 
   test.beforeEach(async ({ page }) => {
-    // Wipe both the legacy persisted-cache key (pre-v2 clients may still
-    // have it after rolling forward) and the Dexie database so each test
-    // starts from a clean slate. addInitScript runs before any page
-    // script so the v2 upgrader and pullSync rehydrate from scratch.
+    // Wipe Dexie so each test starts from a clean slate. addInitScript runs
+    // before any page script so pullSync rehydrates from scratch.
     await page.addInitScript(() => {
-      localStorage.removeItem("onboard_query_cache");
       // Best-effort: synchronous delete with no completion handler — Dexie
       // re-opens on next access. The deletion is fire-and-forget; pullSync
       // populates the empty DB shortly after.
@@ -347,7 +345,7 @@ test.describe("Offline (local-first)", () => {
  * separate IndexedDB. This is the only way to exercise the actual
  * pull-sync.ts merge path (LWW on `updatedAt`, child-row prune) end-
  * to-end: a write in device A goes through the server, then device B
- * has to pull it down into its own Dexie via `usePullOnAuth` on boot.
+ * has to pull it down into its own Dexie via the boot-time pullSync.
  *
  * Distinguishes from "Cross-tab live updates" above: that test shares
  * one IndexedDB and exercises Dexie's BroadcastChannel reactivity.
@@ -378,7 +376,6 @@ test.describe("Cross-device LWW merge (independent Dexie)", () => {
       // makes "new match appears" trivially true.
       for (const p of [pageA, pageB]) {
         await p.addInitScript(() => {
-          localStorage.removeItem("onboard_query_cache");
           indexedDB.deleteDatabase("onboard");
         });
       }
@@ -424,8 +421,8 @@ test.describe("Cross-device LWW merge (independent Dexie)", () => {
         )
         .toBe(200);
 
-      // Device B: boot for the first time. usePullOnAuth fires once
-      // when the session resolves; pullSync pulls /api/matches into B's
+      // Device B: boot for the first time. The boot-time pullSync fires
+      // once when the session resolves, pulling /api/matches into B's
       // Dexie. useLiveQuery then surfaces the new match in the history.
       await Promise.all([
         pageB.waitForResponse(
@@ -464,7 +461,6 @@ test.describe("Cross-tab live updates", () => {
   }) => {
     const tabA = await context.newPage();
     await tabA.addInitScript(() => {
-      localStorage.removeItem("onboard_query_cache");
       indexedDB.deleteDatabase("onboard");
     });
 
@@ -559,7 +555,6 @@ test.describe("pullSync triggers", () => {
 
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.removeItem("onboard_query_cache");
       indexedDB.deleteDatabase("onboard");
     });
     await page.goto("/");

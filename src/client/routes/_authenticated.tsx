@@ -8,8 +8,9 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
-import { usePullOnAuth } from "../hooks/usePullOnAuth";
 import { usePullSyncBackground } from "../hooks/usePullSyncBackground";
+import { pullSync } from "../lib/pull-sync";
+import { syncEngine } from "../lib/sync";
 import { BottomNav } from "../components/layout/BottomNav";
 import { OfflineBanner } from "../components/layout/OfflineBanner";
 import { SyncStatus } from "../components/sync/SyncStatus";
@@ -30,10 +31,26 @@ function AuthenticatedLayout() {
   const { t } = useTranslation();
   const { session, isPending } = useAuthSession();
   const { isOnline } = useOnlineStatus();
-  usePullOnAuth();
   usePullSyncBackground();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const hideBottomNav = shouldHideBottomNav(pathname);
+
+  // Boot-time pull + queue flush, once per authenticated mount.
+  // - Initial pull is forced so a fresh catalogue + match list lands even
+  //   if a throttled pull happened moments earlier in the same JS session.
+  // - flush() drains any queue left over from a prior session: the normal
+  //   trigger is the `online` event, which doesn't fire after a
+  //   refresh-while-offline where `navigator.onLine` stays true (DevTools
+  //   throttling, captive portal). flush() short-circuits when offline.
+  useEffect(() => {
+    if (isPending || !session) return;
+    void pullSync({ force: true }).catch(() => {
+      /* offline or transient — next online tick / flush retries */
+    });
+    void syncEngine.flush().catch(() => {
+      /* surfaced via syncQueue retries */
+    });
+  }, [session, isPending]);
 
   useEffect(() => {
     if (!isPending && !session) {

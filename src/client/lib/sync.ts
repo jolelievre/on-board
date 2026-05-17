@@ -45,8 +45,7 @@ export const syncEngine = {
    * Entries that exceed MAX_RETRIES are marked `status: "failed"`.
    *
    * After a successful flush, triggers `pullSync()` to merge any
-   * cross-device updates back into Dexie (replaces the previous
-   * `queryClient.invalidateQueries()` behaviour).
+   * cross-device updates back into Dexie.
    */
   async flush(): Promise<void> {
     if (!navigator.onLine) return;

@@ -4,8 +4,8 @@ import { pullSync } from "../lib/pull-sync";
 
 /**
  * Background pullSync triggers — the "passive freshness" layer that
- * sits alongside `usePullOnAuth` (boot) and `syncEngine.flush()`
- * (post-mutation).
+ * sits alongside the boot-time pull in `_authenticated.tsx` and
+ * `syncEngine.flush()` (post-mutation).
  *
  * Two triggers:
  *

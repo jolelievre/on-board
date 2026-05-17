@@ -1,29 +1,27 @@
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { api } from "../lib/api";
 import { authClient } from "../lib/auth-client";
-import { db } from "../lib/db";
+import { db, type LocalProfile } from "../lib/db";
 
 type PlayerSuggestion = { name: string; isSelf: boolean };
 
 /**
- * Suggestions are resolved from three sources, in priority order:
+ * Suggestions are resolved from two sources, in priority order:
  *
- *   1. Server response (`/api/players/suggestions`) — authoritative when
- *      available; its self entry already reflects the current alias.
- *   2. Synthesized self entry from the auth session — used only when no
- *      server response has landed (offline first install / first paint).
- *   3. Dexie localProfiles fallback for offline / network-error states.
+ *   1. The current auth session's `alias`/`name` — synthesises the self
+ *      entry so it stays in sync with `updateProfile()` without an extra
+ *      round-trip. Server's own self entry is intentionally ignored.
+ *   2. Dexie `localProfiles` (non-self rows), populated by a background
+ *      fetch of `/api/players/suggestions` on mount.
  *
- * The client never synthesizes the self chip when the server has answered:
- * `authClient.useSession()` can lag behind a recent `updateUser` call by a
- * tick or two, and its stale `alias` would otherwise resurrect the previous
- * value as a phantom self suggestion.
+ * `useLiveQuery` makes the Dexie read reactive: any write to
+ * `localProfiles` (mirroring after fetch, or `persistPlayersToLocalProfiles`
+ * after a new match) re-runs the predicate and re-renders consumers.
  *
- * Server results are mirrored into Dexie on success so the fallback stays
- * warm for future offline reads — but the self row is deliberately *not*
- * mirrored, since persisting `{name: previousAlias, isSelf: true}` would
- * leave a stale suggestion in Dexie after the alias changes.
+ * Self is *never* mirrored into Dexie: persisting `{name: previousAlias,
+ * isSelf: true}` would resurrect the previous alias as a phantom entry
+ * after the user renames themselves.
  */
 export function usePlayerSuggestions() {
   const { data: session } = authClient.useSession();
@@ -33,75 +31,57 @@ export function usePlayerSuggestions() {
   const selfName =
     sessionUser?.alias?.trim() || sessionUser?.name?.trim() || "";
 
-  const query = useQuery<PlayerSuggestion[]>({
-    queryKey: ["players", "suggestions"],
-    queryFn: () => api<PlayerSuggestion[]>("/api/players/suggestions"),
-    // Don't throw on network error — we'll fall back to Dexie + self synth.
-    retry: 0,
-  });
-
-  // Mirror non-self server entries into Dexie on every successful fetch.
-  // The self entry is intentionally skipped: see header comment.
+  // Background fetch + Dexie mirror. Self entry from the server response
+  // is dropped — we synthesise it from the session below.
   useEffect(() => {
-    if (!query.data) return;
-    const now = new Date().toISOString();
-    void Promise.all(
-      query.data
-        .filter((s) => !s.isSelf)
-        .map((s) =>
-          db.localProfiles.put({
-            name: s.name,
-            isSelf: false,
-            usedAt: now,
-          }),
-        ),
-    );
-  }, [query.data]);
+    let cancelled = false;
+    void api<PlayerSuggestion[]>("/api/players/suggestions")
+      .then(async (rows) => {
+        if (cancelled) return;
+        const now = new Date().toISOString();
+        await Promise.all(
+          rows
+            .filter((s) => !s.isSelf)
+            .map((s) =>
+              db.localProfiles.put({
+                name: s.name,
+                isSelf: false,
+                usedAt: now,
+              }),
+            ),
+        );
+      })
+      .catch(() => {
+        // Offline or transient failure — useLiveQuery still serves the
+        // last-known Dexie state.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  // Read local profiles for the offline / no-server fallback. Re-runs when
-  // the server data refreshes so the mirror stays in sync after flush.
-  const [localProfiles, setLocalProfiles] = useState<PlayerSuggestion[] | null>(
-    null,
+  const localProfiles = useLiveQuery<LocalProfile[], LocalProfile[]>(
+    () => db.localProfiles.orderBy("usedAt").reverse().toArray(),
+    [],
+    [],
   );
-  useEffect(() => {
-    void db.localProfiles
-      .orderBy("usedAt")
-      .reverse()
-      .toArray()
-      .then((rows) =>
-        setLocalProfiles(
-          rows.map((r) => ({ name: r.name, isSelf: !!r.isSelf })),
-        ),
-      );
-  }, [query.data, selfName]);
 
-  const suggestions = useMemo<PlayerSuggestion[]>(() => {
-    const seen = new Set<string>();
-    const out: PlayerSuggestion[] = [];
+  const seen = new Set<string>();
+  const data: PlayerSuggestion[] = [];
 
-    if (query.data) {
-      for (const s of query.data) {
-        const key = s.name.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push(s);
-      }
-    } else if (selfName) {
-      seen.add(selfName.toLowerCase());
-      out.push({ name: selfName, isSelf: true });
-    }
+  if (selfName) {
+    seen.add(selfName.toLowerCase());
+    data.push({ name: selfName, isSelf: true });
+  }
 
-    for (const s of localProfiles ?? []) {
-      const key = s.name.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ name: s.name, isSelf: false });
-    }
+  for (const row of localProfiles) {
+    const key = row.name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    data.push({ name: row.name, isSelf: false });
+  }
 
-    return out;
-  }, [selfName, query.data, localProfiles]);
-
-  return { ...query, data: suggestions };
+  return { data };
 }
 
 /**
