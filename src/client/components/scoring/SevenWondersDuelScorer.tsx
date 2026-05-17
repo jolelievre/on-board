@@ -236,7 +236,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
       </div>
 
       {!isCompleted && (
-        <div className="mt-6">
+        <div className="mt-6 mb-6">
           <Button
             type="button"
             onClick={handleComplete}
