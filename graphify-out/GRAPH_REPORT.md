@@ -1,13 +1,18 @@
-# Graph Report - .  (2026-05-17)
+# Graph Report - on-board  (2026-05-17)
 
 ## Corpus Check
-- 0 files · ~0 words
+- 149 files · ~434,348 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2193 nodes · 3259 edges · 180 communities (144 shown, 36 thin omitted)
+- 2195 nodes · 3270 edges · 204 communities (167 shown, 37 thin omitted)
 - Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 303 edges (avg confidence: 0.89)
 - Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `cc5b7564`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_Community 0|Community 0]]
@@ -172,6 +177,30 @@
 - [[_COMMUNITY_Community 177|Community 177]]
 - [[_COMMUNITY_Community 178|Community 178]]
 - [[_COMMUNITY_Community 179|Community 179]]
+- [[_COMMUNITY_Community 180|Community 180]]
+- [[_COMMUNITY_Community 181|Community 181]]
+- [[_COMMUNITY_Community 182|Community 182]]
+- [[_COMMUNITY_Community 183|Community 183]]
+- [[_COMMUNITY_Community 184|Community 184]]
+- [[_COMMUNITY_Community 185|Community 185]]
+- [[_COMMUNITY_Community 186|Community 186]]
+- [[_COMMUNITY_Community 187|Community 187]]
+- [[_COMMUNITY_Community 188|Community 188]]
+- [[_COMMUNITY_Community 189|Community 189]]
+- [[_COMMUNITY_Community 190|Community 190]]
+- [[_COMMUNITY_Community 191|Community 191]]
+- [[_COMMUNITY_Community 192|Community 192]]
+- [[_COMMUNITY_Community 193|Community 193]]
+- [[_COMMUNITY_Community 194|Community 194]]
+- [[_COMMUNITY_Community 195|Community 195]]
+- [[_COMMUNITY_Community 196|Community 196]]
+- [[_COMMUNITY_Community 197|Community 197]]
+- [[_COMMUNITY_Community 198|Community 198]]
+- [[_COMMUNITY_Community 199|Community 199]]
+- [[_COMMUNITY_Community 200|Community 200]]
+- [[_COMMUNITY_Community 201|Community 201]]
+- [[_COMMUNITY_Community 202|Community 202]]
+- [[_COMMUNITY_Community 203|Community 203]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `7 Wonders Duel` - 49 edges
@@ -192,10 +221,10 @@
   plan-assets/screenshots/07-match-completed-dark.png → src/client/components/scoring/skull-king/MatchStartScreen.tsx
 - `Skull King scoring module` --semantically_similar_to--> `7 Wonders Duel Scoring`  [INFERRED] [semantically similar]
   src/shared/scoring/skull-king.ts → plan-assets/skull-king-handoff/project/refs/07-match-completed-dark.png
-- `refreshLocalAliases()` --implements--> `Alias propagation special case (denormalization workaround)`  [INFERRED]
-  src/client/lib/pull-sync.ts → docs/offline-architecture.md
 - `useGame()` --implements--> `useLiveQuery reactive reads (no invalidation)`  [INFERRED]
   src/client/hooks/data/useGame.ts → docs/offline-architecture.md
+- `refreshLocalAliases()` --implements--> `Alias propagation special case (denormalization workaround)`  [INFERRED]
+  src/client/lib/pull-sync.ts → docs/offline-architecture.md
 
 ## Hyperedges (group relationships)
 - **Per-env PWA branding flow** — claudemd_per_env_pwa_branding, vite_config_pwa_manifest, index_html_spa_shell, package_json_scripts [EXTRACTED 1.00]
@@ -229,31 +258,31 @@
 - **Local-first write path: mutation -> Dexie + queue -> flush** — lib_mutations_creatematch, lib_db_db, lib_sync_syncengine [INFERRED 0.85]
 - **Pull sync merge into Dexie tables (games/matches/players/scores)** — lib_pull_sync_pullsync, lib_pull_sync_mergegames, lib_pull_sync_mergematches [EXTRACTED 1.00]
 
-## Communities (180 total, 36 thin omitted)
+## Communities (204 total, 37 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.05
-Nodes (82): Auto-save persistence state (SAVED indicator), Back to Game Link, 'SAVED' status badge with checkmark (top-right), Bottom navigation: Games (active) and Settings, 7 Wonders Duel scoring categories (blue civilian, green science, yellow commerce, purple guilds, triangle wonders, target military, coins, X penalties), Blue Civilian Buildings, Coins Input, Green Science (+74 more)
+Cohesion: 0.06
+Nodes (50): Auto-save persistence state (SAVED indicator), Back to Game Link, 'SAVED' status badge with checkmark (top-right), Bottom navigation: Games (active) and Settings, 7 Wonders Duel scoring categories (blue civilian, green science, yellow commerce, purple guilds, triangle wonders, target military, coins, X penalties), Blue Civilian Buildings, Coins Input, Green Science (+42 more)
 
 ### Community 1 - "Skull King UI Glyphs"
 Cohesion: 0.05
-Nodes (58): Completed Match Summary, Skull King theme CSS tokens (--sk-*), buildPersistDraftPatch(), buildScorePayload(), SkDraft, SkDraftPhase, computeMatchTotals(), dealerForRound() (+50 more)
+Nodes (63): Completed Match Summary, Match Completion / Final Score, Skull King theme CSS tokens (--sk-*), DataStatus, UseMatchResult, Player, buildPersistDraftPatch(), buildScorePayload() (+55 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.04
-Nodes (47): 10. Deliverables expected back, 1. Project at a glance, 2. Tone & feel — open direction, 3. Hard constraints, 4. Reference assets, 5. Brand identity asks, 6. Design system asks, 8. PWA asset checklist (+39 more)
+Cohesion: 0.15
+Nodes (12): 10. Deliverables expected back, 1. Project at a glance, 2. Tone & feel — open direction, 3. Hard constraints, 4. Reference assets, 6. Design system asks, 8. PWA asset checklist, 9. Out of scope for this design session (+4 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.04
-Nodes (43): hint, placeholder, saved, title, auth, defaultName, email, name (+35 more)
+Cohesion: 0.2
+Nodes (9): common, loading, offlineBanner, offlineNoCache, syncPending_one, syncPending_other, nav, games (+1 more)
 
 ### Community 4 - "NPM Dependencies"
 Cohesion: 0.07
-Nodes (34): Scoring Categories, ElementSize, useElementSize(), CategoryIconCell(), HandMatchGrid(), PlayerNameCell(), Props, rowTemplate() (+26 more)
+Nodes (37): Scoring Categories, ElementSize, useElementSize(), CategoryIconCell(), HandMatchGrid(), PlayerNameCell(), Props, rowTemplate() (+29 more)
 
 ### Community 5 - "Bottom Nav & Players"
-Cohesion: 0.05
-Nodes (41): Dev Workflow (Vite + Hono single process), Per-env PWA Branding, OnBoard Project Conventions, RESET_DB Coolify Deploy Toggle, TanStack Query Invalidation Mandatory After Mutations, code:markdown (## Summary), code:block2, Create Pull Request (+33 more)
+Cohesion: 0.15
+Nodes (17): OnBoard Project Conventions, RESET_DB Coolify Deploy Toggle, TanStack Query Invalidation Mandatory After Mutations, create-pr Skill (PR template), Code Style, code:bash (BASE_URL="https://on-board-preview.jolelievre.com" npm run t), Deployment, E2E (Playwright) (+9 more)
 
 ### Community 6 - "Design Handoff README"
 Cohesion: 0.05
@@ -268,24 +297,24 @@ Cohesion: 0.07
 Nodes (38): 7 Wonders Duel — rules (FR PDF), Skull King — rules (FR PDF), User alias retroactively rewrites linked player names in history, GET /api/auth/get-session, POST /api/auth/sign-up/email, /api/matches REST surface (CRUD, since cursor, idempotent client ids), /api/players/suggestions, Playwright storage state .auth/state.json (+30 more)
 
 ### Community 9 - "Local-First Architecture Notes"
-Cohesion: 0.1
-Nodes (36): Offline Architecture Document, Alias propagation special case, Cache invalidation rules, code:ts (syncEngine.enqueue(method, url, body?)   // add to queue (us), code:mermaid (flowchart TD), code:mermaid (flowchart TD), Conflict resolution, Historical: pre-PR #18 three-layer architecture (+28 more)
+Cohesion: 0.15
+Nodes (26): Offline Architecture Document, Alias propagation special case, Cache invalidation rules, Conflict resolution, Historical: pre-PR #18 three-layer architecture, Key files, Login when offline, Offline Architecture (+18 more)
 
 ### Community 10 - "SK Match-Start Translations"
-Cohesion: 0.06
-Nodes (36): empty, inProgress, resume, vs, matches, back, completeByScore, completeByTiebreaker (+28 more)
+Cohesion: 0.12
+Nodes (16): matches, back, completeByScore, completeByTiebreaker, completeMilitarySupremacy, completeScientificSupremacy, declareDraw, draw (+8 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.08
 Nodes (28): body, cursor, filtered, ids, list, matchId, matching, playerIds (+20 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.08
-Nodes (29): BidRecapScreen (Skull King), HandMatchGrid (7 Wonders Duel score grid), SevenWondersDuelScorer, WinnerBanner, Debounced score persistence (debounce + flush before complete), Offline mutations re-enqueued via syncEngine on ApiError-less failures, Save status lifted to parent for Header SyncPill, Seven Wonders Duel Scorer (+21 more)
+Cohesion: 0.17
+Nodes (16): BidRecapScreen (Skull King), HandMatchGrid (7 Wonders Duel score grid), SevenWondersDuelScorer, WinnerBanner, Debounced score persistence (debounce + flush before complete), Offline mutations re-enqueued via syncEngine on ApiError-less failures, Save status lifted to parent for Header SyncPill, Seven Wonders Duel Scorer (+8 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.13
-Nodes (27): OnBoard App, Dark Theme, Game Selection / Start New Match, Games List Screen, Mobile Viewport Layout, OnBoard Logo Header, Screen Title: Games, Subtitle: Pick a game start a new match (+19 more)
+Cohesion: 0.1
+Nodes (34): OnBoard App, Bottom navigation (Games/Settings), Bottom Navigation Bar, Bottom tab navigation (Games / Settings), Dark Theme, Game Selection / Start New Match, Games List Screen, Games Tab (Active) (+26 more)
 
 ### Community 14 - "Community 30"
 Cohesion: 0.1
@@ -293,59 +322,55 @@ Nodes (26): 7 Wonders Duel game configuration, Skull King game configuration (10
 
 ### Community 15 - "Community 12"
 Cohesion: 0.14
-Nodes (21): Pull cursor (lastPullAt syncMeta), Doc: pullSync trigger sources, Throttle, useAuthSession(), GameSummary, usePrefetchGames(), usePullOnAuth(), route-change throttled pull trigger (+13 more)
+Nodes (21): Pull cursor (lastPullAt syncMeta), Doc: pullSync trigger sources, Throttle, useAuthSession(), usePrefetchGames(), usePullOnAuth(), route-change throttled pull trigger, usePullSyncBackground() (+13 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.11
-Nodes (24): buildScorePayload(), ScoreGridValues, ScorePayload, ScoreGridValues, SupremacySelection, categoryToVictoryPoints(), computePlayerTotal(), computeScoreWinner() (+16 more)
+Cohesion: 0.13
+Nodes (20): buildScorePayload(), ScoreGridValues, ScorePayload, SupremacySelection, categoryToVictoryPoints(), computeScoreWinner(), computeTotalsByPlayer(), isSevenWondersCategory() (+12 more)
 
 ### Community 17 - "Login Screen Branding"
-Cohesion: 0.13
-Nodes (19): Doc: SyncStatus indicator (Header no longer renders SyncPill), useOnlineStatus(), BottomNav(), Tab, TABS, BackProp, Header(), Props (+11 more)
+Cohesion: 0.18
+Nodes (14): useMatch(), Doc: SyncStatus indicator (Header no longer renders SyncPill), useOnlineStatus(), BackProp, Header(), Props, Removed auto SyncPill to avoid duplicate pills with global SyncStatus, MatchPage() (+6 more)
 
 ### Community 18 - "Hand Match Grid"
 Cohesion: 0.12
-Nodes (26): Screenshot: 7 Wonders Duel game detail (empty state), Screenshot: 7 Wonders Duel game detail (dark, with one match), Mobile Viewport Layout, UX pattern: empty state with primary action above, Mobile PWA viewport, Game Detail Screen, Screenshot: Game Detail with Match History (Dark), Dark Theme (+18 more)
+Nodes (25): Mobile PWA Viewport, Screenshot: 7 Wonders Duel game detail (empty state), Screenshot: 7 Wonders Duel game detail (dark, with one match), Mobile Viewport Layout, UX pattern: empty state with primary action above, Mobile PWA viewport, Game Detail Screen, Screenshot: Game Detail with Match History (Dark) (+17 more)
 
 ### Community 19 - "Game Rules & Auth API"
 Cohesion: 0.13
 Nodes (22): captureAuthScreens(), captureLoginScreens(), captureScoringFlow(), captureAuthScreens(), captureLoginScreens(), captureScoringFlow(), clickPillOption(), clickPillOption() (+14 more)
 
 ### Community 20 - "Generated Router Tree"
-Cohesion: 0.16
-Nodes (15): prisma, AuthEnv, AuthSession, AuthUser, requireAuth, gamesRoutes, AuthEnv, matchesRoutes (+7 more)
+Cohesion: 0.15
+Nodes (17): Sign in with Google button, auth, prisma, AuthEnv, AuthSession, AuthUser, requireAuth, gamesRoutes (+9 more)
 
 ### Community 21 - "Match Completion UI"
-Cohesion: 0.11
-Nodes (23): Three-layer offline architecture (SW + TanStack persisted + Dexie queue), Bugs that prompted the rebuild (PR #11 device testing), E2E, Features, Follow-ups still on the radar, OnBoard - Development Plan, Phase 0: Project Bootstrap + Deployment ✅ DONE, Phase 2: 7 Wonders Duel — POC ✅ DONE (+15 more)
+Cohesion: 0.18
+Nodes (13): Three-layer offline architecture (SW + TanStack persisted + Dexie queue), OnBoard - Development Plan, Phase 0: Project Bootstrap + Deployment ✅ DONE, Phase 3: Claude Design — Branding + UX + Implementation, Phase 6: Polish + Distribution, Step 1: Prepare design brief, Step 2: Claude Design session, Step 3: Implementation (+5 more)
 
 ### Community 22 - "Game Cover Art"
-Cohesion: 0.09
-Nodes (20): AuthenticatedGamesIndexRoute, AuthenticatedGamesSlugNewRoute, AuthenticatedGamesSlugRoute, AuthenticatedMatchesIdRoute, AuthenticatedRoute, AuthenticatedRouteChildren, AuthenticatedRouteWithChildren, AuthenticatedSettingsRoute (+12 more)
+Cohesion: 0.1
+Nodes (19): Route, AuthenticatedGamesIndexRoute, AuthenticatedGamesSlugNewRoute, AuthenticatedGamesSlugRoute, AuthenticatedMatchesIdRoute, AuthenticatedRoute, AuthenticatedRouteChildren, AuthenticatedRouteWithChildren (+11 more)
 
 ### Community 23 - "App Shell Layout"
 Cohesion: 0.09
 Nodes (23): scripts, build, db:migrate, db:push, db:reset, db:seed, db:studio, db:test:reset (+15 more)
 
 ### Community 24 - "Community 24"
-Cohesion: 0.11
-Nodes (22): Offline sync queue + replay pattern, Fallback keyed on fetch error, not navigator.onLine (unreliable), gcTime: Infinity (setTimeout 24.8-day overflow workaround), Invalidate all queries after any successful sync flush, MAX_RETRIES = 3 for queued mutation replay, localStorage session cache prevents redirect-to-login while offline, offlineFirst networkMode for paused queries on no-cache miss, 1-hour prefetch staleness threshold for offline availability (+14 more)
+Cohesion: 0.2
+Nodes (11): gcTime: Infinity (setTimeout 24.8-day overflow workaround), Invalidate all queries after any successful sync flush, MAX_RETRIES = 3 for queued mutation replay, useOnlineStatus, updateProfile, queryClient (TanStack Query), syncEngine, computeSkullKingTotalsByPlayer (+3 more)
 
 ### Community 25 - "Community 10"
 Cohesion: 0.09
 Nodes (22): dependencies, better-auth, dexie, dexie-react-hooks, @fontsource/caveat, @fontsource/jetbrains-mono, @fontsource/patrick-hand, hono (+14 more)
-
-### Community 26 - "Community 26"
-Cohesion: 0.1
-Nodes (4): Match Record, Player: Bob, STR, Match History Card
 
 ### Community 27 - "Server Backend (Prisma + Auth)"
 Cohesion: 0.11
 Nodes (21): Bottom Nav - Games, Bottom Nav - Settings, Coins to VP Conversion (7 coins = 2 VP), Dark Theme, Defeat Indicator Row, Player Alice (24 pts), Player Bob (22 pts), Saved Status Badge (+13 more)
 
 ### Community 28 - "Game Descriptions & Icons"
-Cohesion: 0.14
-Nodes (20): Amber/Orange Accent Color, User avatar initial 'T', Chandelle Selected (active), Dark Theme (Chandelle), French (fr) UI locale, Handwritten Display Font, Page Title: Paramètres, Parchment/handwritten aesthetic theme (+12 more)
+Cohesion: 0.19
+Nodes (15): Amber/Orange Accent Color, User avatar initial 'T', French (fr) UI locale, Handwritten Display Font, Page Title: Paramètres, Parchment/handwritten aesthetic theme, Helper Text: Affiché dans l'application, Pseudo Input (placeholder: ex. Jo) (+7 more)
 
 ### Community 29 - "Community 29"
 Cohesion: 0.1
@@ -357,75 +382,75 @@ Nodes (20): caption, dealerBadge, rule14sLine, rule14sTitle, ruleBidNLine, ruleB
 
 ### Community 31 - "NPM Scripts"
 Cohesion: 0.13
-Nodes (20): Match Completion / Final Score, Win Condition: By Score, Screenshot: 7 Wonders Duel Match Completed, Screenshot: Match Completed (Dark), Notebook Paper Theme (cream background, hand-drawn), Back to game Link, Category: Blue (Civilian), Category: Coins (7 coins = 2 VP) (+12 more)
+Nodes (19): Win Condition: By Score, Screenshot: 7 Wonders Duel Match Completed, Screenshot: Match Completed (Dark), Notebook Paper Theme (cream background, hand-drawn), Back to game Link, Category: Blue (Civilian), Category: Coins (7 coins = 2 VP), Category: Green (Science) (+11 more)
 
 ### Community 32 - "Community 26"
 Cohesion: 0.13
 Nodes (16): clearDraftPromise, cta, enterBids(), enterResults(), focusBidRow(), history, names, pickBid() (+8 more)
 
 ### Community 33 - "Community 33"
-Cohesion: 0.15
-Nodes (14): AVATAR_CLASSES, Game, Match, NewMatchForm(), NewMatchPage(), Route, CachedSession, clearSessionCache() (+6 more)
+Cohesion: 0.25
+Nodes (9): AVATAR_CLASSES, Game, Match, NewMatchForm(), NewMatchPage(), Route, persistPlayersToLocalProfiles(), PlayerSuggestion (+1 more)
 
 ### Community 34 - "Community 13"
-Cohesion: 0.17
-Nodes (18): OnBoard wordmark logo, Google OAuth authentication, Handwritten Script Typography, Login screen, Meeple with cane and dice illustration, OnBoard wordmark logo, OR divider, Red pawn and teal board illustration (+10 more)
+Cohesion: 0.12
+Nodes (23): OnBoard wordmark logo, Sign in button (red primary), Games Heading with Subtitle, Google OAuth authentication, Handwritten Script Typography, Login screen, Meeple with cane and dice illustration, OnBoard wordmark logo (+15 more)
 
 ### Community 35 - "Theme & Language Settings"
 Cohesion: 0.19
-Nodes (15): Optimistic UI via Dexie transaction, Outbound sync queue, SyncQueueEntry, completeMatch(), CompleteMatchInput, CreateMatchInput, CreateMatchResult, nowIso() (+7 more)
+Nodes (18): Offline sync queue + replay pattern, Idempotent replay (client CUIDs), Optimistic UI via Dexie transaction, Outbound sync queue, SyncQueueEntry, completeMatch(), CompleteMatchInput, createMatch() (+10 more)
 
 ### Community 36 - "Project Plan: Phases"
 Cohesion: 0.18
 Nodes (18): ThemeProvider context (parchment/candlelit), Client Match/Player/ScoreRow types, Auth-agnostic field mapping (image -> avatarUrl), Display name priority: alias > user.name > player.name, Idempotent client-id create for offline sync, Pull-sync via ?since= timestamp, Two-phase player position swap to dodge unique constraint, better-auth instance with field mapping (+10 more)
 
 ### Community 37 - "Community 37"
-Cohesion: 0.17
-Nodes (17): Game Card: 7 Wonders Duel, 7 Wonders Duel Game Card, Game Card: Skull King, Game Description Text, Pyramid Icon (7 Wonders Duel), Skull Icon (Skull King), Hand-drawn Game Illustration, Games Heading with Subtitle (+9 more)
+Cohesion: 0.16
+Nodes (20): Game Card: 7 Wonders Duel, 7 Wonders Duel Game Card, Game Card: Skull King, Game Description Text, Pyramid Icon (7 Wonders Duel), Skull Icon (Skull King), Hand-drawn Game Illustration, Player Count Badge (+12 more)
 
 ### Community 38 - "Design Canvas Mocks"
 Cohesion: 0.12
 Nodes (16): compilerOptions, esModuleInterop, isolatedModules, jsx, lib, module, moduleResolution, noEmit (+8 more)
 
 ### Community 39 - "Community 39"
-Cohesion: 0.14
-Nodes (17): Dynamic bonus budget (bonuses <= tricks), Offline-first round draft persistence, Skull King draft persistence in match.metadata, Skull King phase state machine, BiddingScreen, MatchCompleteScreen, MatchStartScreen, CounterChip (RoundResult internal) (+9 more)
+Cohesion: 0.1
+Nodes (23): Dynamic bonus budget (bonuses <= tricks), Offline-first round draft persistence, Skull King draft persistence in match.metadata, Skull King phase state machine, BiddingScreen, MatchCompleteScreen, MatchStartScreen, CounterChip (RoundResult internal) (+15 more)
 
 ### Community 40 - "Community 1"
-Cohesion: 0.15
-Nodes (16): Email input field, Password input field, Login screen (dev, dark theme), Authentication/login screen purpose, Dark theme variant, Email input field, Grid pattern background, Handwritten/script typography style (+8 more)
+Cohesion: 0.1
+Nodes (25): Tagline: Board game score tracker, OR divider between auth methods, Dev/test-only Test User shortcut, Email input field, Password input field, Test User input (dev-only quick login), Color palette: cream background, red and teal accents, Login screen (dev environment) (+17 more)
 
 ### Community 41 - "Community 41"
-Cohesion: 0.12
-Nodes (16): matches, back, completeByScore, completeByTiebreaker, completeMilitarySupremacy, completeScientificSupremacy, declareDraw, draw (+8 more)
+Cohesion: 0.06
+Nodes (36): empty, inProgress, resume, vs, matches, back, completeByScore, completeByTiebreaker (+28 more)
 
 ### Community 42 - "Community 47"
 Cohesion: 0.17
 Nodes (16): bidPrompt, caption, playerBid, progress, scoreboardLabel, startRoundCta, scoring, skullKing (+8 more)
 
 ### Community 43 - "Legacy Cache Concepts"
-Cohesion: 0.15
-Nodes (9): useGames(), CoverArt(), Props, Game, GamesPage(), Route, Pill(), Props (+1 more)
+Cohesion: 0.12
+Nodes (12): useGames(), CoverArt(), Props, Game, GamesPage(), Route, Logo(), Phase (+4 more)
 
 ### Community 44 - "Community 44"
-Cohesion: 0.23
-Nodes (13): Last-Write-Wins (LWW) merge on updatedAt, Idempotent replay (client CUIDs), ApiGame, ApiMatch, ApiPlayer, ApiScore, LocalGame, LocalMatch (+5 more)
+Cohesion: 0.17
+Nodes (19): Last-Write-Wins (LWW) merge on updatedAt, Alias propagation special case (denormalization workaround), v1 to v2 Dexie upgrade, ApiGame, ApiMatch, ApiPlayer, ApiScore, hydrateFromPersistedCache() (+11 more)
 
 ### Community 45 - "TypeScript Config"
-Cohesion: 0.17
-Nodes (16): Dexie schema, Storage locations, v1 → v2 upgrade, Why two storage systems?, Architecture summary, code:block5 (games:        "id, slug"), Dexie schema (v2), Phase 5c: Local-first refactor (server + Dexie) (+8 more)
+Cohesion: 0.2
+Nodes (15): Dexie schema, v1 → v2 upgrade, Architecture summary, code:block5 (games:        "id, slug"), Dexie schema (v2), Phase 5c: Local-first refactor (server + Dexie), Phase 5c: Local-first refactor (server + Dexie) — **shipped**, Phasing — 3 PRs (+7 more)
 
 ### Community 46 - "Community 46"
 Cohesion: 0.16
 Nodes (15): Back navigation to Games list, Game cover art (pyramid illustration), Game Detail Screen, Games tab active state, Match count badge (1 MATCH), Match history entry (Apr 29, 2026, Alice 24 vs Bob 22, BY SCORE), Match history section, Mobile PWA viewport (+7 more)
 
 ### Community 47 - "Alias Field & Settings"
-Cohesion: 0.16
-Nodes (10): Route, Button, Props, Size, Variant, Input, Props, Logo() (+2 more)
+Cohesion: 0.22
+Nodes (7): Route, Button, Props, Size, Variant, Input, Props
 
 ### Community 48 - "Community 48"
-Cohesion: 0.16
-Nodes (12): DataStatus, UseGamesResult, DataStatus, MatchListItem, UseMatchListResult, v1 to v2 Dexie upgrade, hydrateFromPersistedCache(), LocalSyncMeta (+4 more)
+Cohesion: 0.24
+Nodes (18): Blue (civilian) buildings category, Coins (treasury) category, Date header (__/__/__), Green (science) cards category, Military conflict category, Paper score sheet layout, Player Count Constraint (2-2 players), 2-2 Players Indicator (+10 more)
 
 ### Community 49 - "Community 49"
 Cohesion: 0.13
@@ -444,16 +469,16 @@ Cohesion: 0.14
 Nodes (14): bidLabel, bidMade, bidMissed, bidZeroFailed, bidZeroMade, bonusesLabel, bonusInline, endRound (+6 more)
 
 ### Community 53 - "Community 53"
-Cohesion: 0.2
-Nodes (11): AliasInput(), Route, SettingsPage(), Alias propagation flow (settings -> Dexie player.user.alias), BeforeInstallPromptEvent, detectIOS(), isStandalone(), subscribers (+3 more)
+Cohesion: 0.38
+Nodes (6): SettingsPage(), BeforeInstallPromptEvent, detectIOS(), isStandalone(), subscribers, useInstallPrompt()
 
 ### Community 54 - "Community 54"
-Cohesion: 0.19
-Nodes (12): Local-first offline architecture, Local-first architecture (Dexie + sync queue), DataStatus, useGame(), UseGameResult, DataStatus, useMatch(), UseMatchResult (+4 more)
+Cohesion: 0.13
+Nodes (13): Local-first offline architecture, Local-first architecture (Dexie + sync queue), DataStatus, useGame(), UseGameResult, DataStatus, UseGamesResult, DataStatus (+5 more)
 
 ### Community 55 - "FR 7WD Category Translations"
-Cohesion: 0.15
-Nodes (14): code:block1 (┌─────────────────────────────────────────────────────────┐), `gcTime: Infinity` (don't change without reading this), Layer 2 hydration timing, The three layers (today), The two layers, Why a Dexie mirror instead of a query-cache, Architecture Overview, Backend: Hono + PostgreSQL + Prisma (+6 more)
+Cohesion: 0.29
+Nodes (8): code:block1 (┌─────────────────────────────────────────────────────────┐), `gcTime: Infinity` (don't change without reading this), Layer 2 hydration timing, The three layers (today), The two layers, Why a Dexie mirror instead of a query-cache, Architecture Overview, code:block1 (┌─────────────────────────────────────────────┐)
 
 ### Community 56 - "Project Plan: Architecture"
 Cohesion: 0.18
@@ -464,24 +489,24 @@ Cohesion: 0.14
 Nodes (14): Dark Mode Theme, Match Completed State, 7 Wonders Duel - Match Completed Screen (Dark), Back Link '7 Wonders Duel', Bottom Nav: Games, Bottom Nav: Settings, Blue Category Row (Civil): 8 / 4, Green Category Row (Commercial): 6 / 9 (+6 more)
 
 ### Community 58 - "Community 58"
-Cohesion: 0.21
-Nodes (13): Bottom navigation (Games/Settings), Bottom Navigation Bar, Bottom tab navigation (Games / Settings), Games Tab (Active), Games Tab (Active), Nav: Jeux, Nav: Paramètres (active), Settings Tab (+5 more)
+Cohesion: 0.32
+Nodes (13): Back Navigation Link, Bottom Tab Bar (Games / Settings), Edit Pencil Icon, Grid paper background, Handwritten Notebook Theme, New Match Setup Screen, Numbered Player Avatar Badge, Player Name Input Field (+5 more)
 
 ### Community 59 - "Community 59"
-Cohesion: 0.15
-Nodes (13): hint, placeholder, saved, title, settings, alias, language, profile (+5 more)
+Cohesion: 0.25
+Nodes (8): settings, language, profile, theme, title, candlelit, parchment, title
 
 ### Community 60 - "Theme Provider & Match Types"
-Cohesion: 0.18
-Nodes (12): userId only attached on explicit self-chip click, cleared on manual typing, isSelf determined by userId equality, never name equality, Three-tier suggestion resolution: server > session-synthesized self > Dexie fallback, Alias propagation special case (denormalization workaround), Dexie mirror as single source of truth, Per-row Last-Write-Wins on updatedAt, Local-first two-layer model, usePlayerSuggestions (+4 more)
+Cohesion: 0.09
+Nodes (26): userId only attached on explicit self-chip click, cleared on manual typing, Fallback keyed on fetch error, not navigator.onLine (unreliable), iOS Safari has no programmatic install API; manual Add-to-Home-Screen hint, isSelf determined by userId equality, never name equality, Module-scope beforeinstallprompt capture (fires once per page load), localStorage session cache prevents redirect-to-login while offline, offlineFirst networkMode for paused queries on no-cache miss, 1-hour prefetch staleness threshold for offline availability (+18 more)
 
 ### Community 61 - "Create-PR Skill Docs"
 Cohesion: 0.21
 Nodes (13): Offline-first updatedAt + ?since= sync filter, Add updatedAt to Match/Player/Score, Add User.alias migration, Add User.theme migration, Account table (auth), Game table, Match table, Player table (+5 more)
 
 ### Community 62 - "Community 44"
-Cohesion: 0.22
-Nodes (13): Data model, E2E, E2E, Phase 4: Skull King, Phase 7: Skull King — Rascal Variant, Scoring rules — Classic, Scoring rules — Rascal, Scoring rules — Rascal variant (+5 more)
+Cohesion: 0.39
+Nodes (8): Data model, E2E, Phase 4: Skull King, Scoring rules — Classic, Scoring rules — Rascal variant, Shared scoring logic, UX flow (from Claude Design), Phase 4 — Skull King
 
 ### Community 63 - "Community 58"
 Cohesion: 0.21
@@ -496,8 +521,8 @@ Cohesion: 0.17
 Nodes (12): currentRound, title, totalsRowLabel, trajectoryTitle, skullKing, closeScoreboard, header, openScoreboard (+4 more)
 
 ### Community 67 - "Community 67"
-Cohesion: 0.23
-Nodes (9): isTheme(), readStoredTheme(), Theme, ThemeContext, ThemeContextValue, THEMES, useTheme(), THEME_LABEL_KEYS (+1 more)
+Cohesion: 0.16
+Nodes (11): persister, Register, router, stored, routeTree, isTheme(), readStoredTheme(), ThemeContext (+3 more)
 
 ### Community 68 - "FR Match Completion Strings"
 Cohesion: 0.17
@@ -508,12 +533,12 @@ Cohesion: 0.17
 Nodes (3): DC, DCCtx, s
 
 ### Community 70 - "Community 70"
-Cohesion: 0.21
-Nodes (10): useMatchList(), computeMatchTotalsBySlug(), computeSkullKingTotalsByPlayer(), Game, GameDetailPage(), MatchHistoryRow(), MatchListItem, Player (+2 more)
+Cohesion: 0.23
+Nodes (10): useMatchList(), computeMatchTotalsBySlug(), computeSkullKingTotalsByPlayer(), Game, GameDetailPage(), MatchHistoryRow(), MatchListItem, ScoreRow (+2 more)
 
 ### Community 71 - "Community 71"
-Cohesion: 0.22
-Nodes (11): Sign in button (red primary), OR divider between auth methods, Dev/test-only Test User shortcut, Test User input (dev-only quick login), Color palette: cream background, red and teal accents, Email/password authentication pattern, Login screen, Login screen (dev environment) (+3 more)
+Cohesion: 0.18
+Nodes (10): code:markdown (## Summary), code:block2, Create Pull Request, PR Description Format, Pre-flight, Rules, Design Thinking, Frontend Aesthetics Guidelines (+2 more)
 
 ### Community 72 - "Brand Color Palette"
 Cohesion: 0.22
@@ -592,12 +617,12 @@ Cohesion: 0.25
 Nodes (3): RoundResultPhase(), ScoreBreakdown(), scoreSKRound()
 
 ### Community 94 - "Community 190"
-Cohesion: 0.25
-Nodes (7): persister, Register, router, stored, routeTree, ThemeProvider(), queryClient
+Cohesion: 0.28
+Nodes (7): Theme, useTheme(), Option, PillSwitch(), Props, THEME_LABEL_KEYS, ThemeToggle()
 
 ### Community 95 - "Community 95"
-Cohesion: 0.25
-Nodes (7): LangCode, LANGUAGES, LanguageSelector(), updateProfile(), Option, PillSwitch(), Props
+Cohesion: 0.16
+Nodes (13): AliasInput(), Alias propagation flow (settings -> Dexie player.user.alias), LangCode, LANGUAGES, LanguageSelector(), CachedSession, clearSessionCache(), readCache() (+5 more)
 
 ### Community 96 - "Community 96"
 Cohesion: 0.25
@@ -636,7 +661,7 @@ Cohesion: 0.32
 Nodes (8): Screenshot: 7 Wonders Duel scoring screen (empty, dark theme), Hand-drawn italic display typography, Back arrow header with game title, Scoring category icon column (blue, green, yellow, purple, triangle, target, coin, red X), Enter coins placeholder inputs, Two-player columns (Alice, Bob) with 0 pts, Empty score input cells per category and player, Sigma total row showing 0 / 0
 
 ### Community 108 - "Community 108"
-Cohesion: 0.29
+Cohesion: 0.25
 Nodes (6): app, name, tagline, nav, games, settings
 
 ### Community 109 - "Community 109"
@@ -652,8 +677,8 @@ Cohesion: 0.29
 Nodes (7): description, name, 7-wonders-duel, skull-king, catalog, description, name
 
 ### Community 114 - "Community 114"
-Cohesion: 0.29
-Nodes (7): Icon (stroke icon set), Pill, PillSwitch (segmented radio), SyncPill, saveStatusToSyncState, saveStatusToSyncState(), ThemeToggle
+Cohesion: 0.22
+Nodes (9): auth, defaultName, email, name, or, password, signIn, signInWithGoogle (+1 more)
 
 ### Community 115 - "FR New-Match Strings"
 Cohesion: 0.4
@@ -672,8 +697,8 @@ Cohesion: 0.53
 Nodes (6): Design intent (preserved from the 2026-05-07 conversation), Files likely affected, Open design questions to resolve at implementation time, Phase 5d: Users as first-class entities, Validation, Phase 5d — Users as first-class entities
 
 ### Community 119 - "FR Auth Form Strings"
-Cohesion: 0.47
-Nodes (6): E2E, Phase 5: Offline-first + PWA, Stack, Sync strategy (Last-Write-Wins), What this phase adds, Phase 5 — Offline-first + PWA
+Cohesion: 0.43
+Nodes (7): E2E, Key files, Phase 5: Offline-first + PWA, Stack, Sync strategy (Last-Write-Wins), What this phase adds, Phase 5 — Offline-first + PWA
 
 ### Community 120 - "SK Bonus & Rule Concepts"
 Cohesion: 0.4
@@ -684,24 +709,24 @@ Cohesion: 0.4
 Nodes (3): s, selfChip, userName
 
 ### Community 122 - "Community 122"
-Cohesion: 0.4
-Nodes (5): empty, inProgress, resume, vs, history
+Cohesion: 0.22
+Nodes (9): civil, commercial, guilds, military, scientific, scientific_progress, treasury, wonders (+1 more)
 
 ### Community 123 - "Community 123"
 Cohesion: 0.4
 Nodes (5): cta, hint, iosHint, title, install
 
 ### Community 124 - "Community 124"
-Cohesion: 0.4
-Nodes (5): victoryType, draw, military_supremacy, scientific_supremacy, score
+Cohesion: 0.31
+Nodes (6): BottomNav(), Tab, TABS, Icon(), IconName, Props
 
 ### Community 125 - "Community 125"
 Cohesion: 0.4
 Nodes (5): currentRound, title, totalsRowLabel, trajectoryTitle, scoreboard
 
 ### Community 126 - "FR Bid Recap Strings"
-Cohesion: 0.4
-Nodes (5): iOS Safari has no programmatic install API; manual Add-to-Home-Screen hint, Module-scope beforeinstallprompt capture (fires once per page load), clearSessionCache, useInstallPrompt, SettingsPage
+Cohesion: 0.22
+Nodes (8): 10. Out of scope, 11. Success criteria, 1. Project at a glance, 2. Reuse the existing design language — non-negotiable, 4. Hard constraints, 8. Reference materials, 9. Deliverables, OnBoard — Skull King Scoring Design Brief
 
 ### Community 127 - "Community 99"
 Cohesion: 0.4
@@ -735,23 +760,119 @@ Nodes (4): Hand-drawn sketch UI aesthetic, SketchCheckbox, SketchRect, SketchUnd
 Cohesion: 0.67
 Nodes (3): /api/games REST surface, api/games.spec.ts — Games API, smoke.spec.ts — Smoke tests
 
+### Community 180 - "Community 180"
+Cohesion: 0.25
+Nodes (8): code:ts (syncEngine.enqueue(method, url, body?)   // add to queue (us), code:mermaid (flowchart TD), code:mermaid (flowchart TD), Offline → Online, Online → Offline, Self-healing "saving" state, `SyncStatus` indicator, The sync engine and global indicator
+
+### Community 181 - "Community 181"
+Cohesion: 0.25
+Nodes (8): settings, language, profile, theme, title, candlelit, parchment, title
+
+### Community 182 - "Community 182"
+Cohesion: 0.29
+Nodes (7): Dev Workflow (Vite + Hono single process), Per-env PWA Branding, Pre-paint theme inline script (avoids FOUC), SPA Shell index.html, Vite Config (PWA + Hono dev plugin), honoDevServer Vite plugin, VitePWA Plugin + Per-env Manifest
+
+### Community 183 - "Community 183"
+Cohesion: 0.33
+Nodes (4): GameSummary, api(), ApiError, GamesPage route /games
+
+### Community 184 - "Community 184"
+Cohesion: 0.29
+Nodes (7): code:bash (cp .env.example .env), Commands, Dev workflow, Development, Port conflicts, Prerequisites, Setup
+
+### Community 185 - "Community 185"
+Cohesion: 0.29
+Nodes (7): 7. Screens to design, `/games` — Games list (home, authenticated), `/games/$slug` — Game detail + match history, `/games/$slug/new` — New match form, `/` — Login (unauthenticated), `/matches/$id` — Match scoring (7WD), `/settings`
+
+### Community 186 - "Community 186"
+Cohesion: 0.4
+Nodes (4): Hide TanStack Router Devtools under VITE_TEST_AUTH (E2E click-overlap fix), UpdateBanner(), RootLayout(), Route
+
+### Community 187 - "Community 187"
+Cohesion: 0.33
+Nodes (6): Backend: Hono + PostgreSQL + Prisma, Frontend: React 19 + Vite (SPA), Infrastructure & Deploy, PWA & Offline, Tech Stack & Rationale, Testing & Quality
+
+### Community 188 - "Community 188"
+Cohesion: 0.4
+Nodes (6): E2E, E2E, Phase 7: Skull King — Rascal Variant, Scoring rules — Rascal, What to build, Phase 7 — Skull King Rascal Variant
+
+### Community 189 - "Community 189"
+Cohesion: 0.33
+Nodes (6): 5. Critical UX problem #1 — Bid entry, one-handed, Accessibility & error tolerance, Approaches to consider (not prescribed — pick + propose alternatives), Out of scope (for this brief), The constraint, restated, The physical reality
+
+### Community 190 - "Community 190"
+Cohesion: 0.33
+Nodes (6): 6. Critical UX problem #2 — Round result entry, Bonus chip design, Live scoring feedback, Validation surface (helpful, never blocking), Visual approaches to consider, What the user enters per player, per round
+
+### Community 191 - "Community 191"
+Cohesion: 0.33
+Nodes (6): 7.1 Match start (variant pre-game), 7.2 Round transitions, 7.3 Live scoreboard (always reachable), 7.4 Match completion, 7.5 Sync indicator, 7. Other screens needed
+
+### Community 192 - "Community 192"
+Cohesion: 0.4
+Nodes (5): Chandelle Selected (active), Dark Theme (Chandelle), Parchemin theme selected (active), Thème Section, Theme Toggle (Parchemin / Chandelle)
+
+### Community 193 - "Community 193"
+Cohesion: 0.4
+Nodes (5): hint, placeholder, saved, title, alias
+
+### Community 194 - "Community 194"
+Cohesion: 0.4
+Nodes (5): hint, placeholder, saved, title, alias
+
+### Community 195 - "Community 195"
+Cohesion: 0.4
+Nodes (5): empty, inProgress, resume, vs, history
+
+### Community 196 - "Community 196"
+Cohesion: 0.4
+Nodes (5): cta, hint, iosHint, title, install
+
+### Community 197 - "Community 197"
+Cohesion: 0.4
+Nodes (5): victoryType, draw, military_supremacy, scientific_supremacy, score
+
+### Community 198 - "Community 198"
+Cohesion: 0.4
+Nodes (5): Bugs that prompted the rebuild (PR #11 device testing), Follow-ups still on the radar, Phase 5b: Complete offline-first, Scrapped from PR #11 (replaced by Phase 5c), Shipped via stabilize/cherry-picks (the parts that survived)
+
+### Community 199 - "Community 199"
+Cohesion: 0.5
+Nodes (5): E2E, Features, Phase 2: 7 Wonders Duel — POC ✅ DONE, Score categories (2 players), Phase 2 — 7 Wonders Duel POC
+
+### Community 200 - "Community 200"
+Cohesion: 0.4
+Nodes (5): 5. Brand identity asks, Color palette, Iconography, Logo / wordmark, Typography
+
+### Community 201 - "Community 201"
+Cohesion: 0.5
+Nodes (4): 3. What is Skull King?, Card-counting context (helpful for design intuition), Scoring rules — Classic (the only variant in this design pass), Worked example (from PDF, page 16)
+
+### Community 202 - "Community 202"
+Cohesion: 0.67
+Nodes (3): Match Record, Player: Bob, Match History Card
+
+### Community 203 - "Community 203"
+Cohesion: 0.67
+Nodes (3): Idempotent replay, Missing local rows, Writing data
+
 ## Knowledge Gaps
-- **1029 isolated node(s):** `command`, `args`, `COOLIFY_BASE_URL`, `COOLIFY_ACCESS_TOKEN`, `name` (+1024 more)
+- **1030 isolated node(s):** `command`, `args`, `COOLIFY_BASE_URL`, `COOLIFY_ACCESS_TOKEN`, `name` (+1025 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **36 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **37 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `7 Wonders Duel` connect `Community 0` to `Community 23`, `Skull King UI Glyphs`, `NPM Dependencies`, `Design Handoff README`, `Community 70`, `Community 137`, `SK Per-Round Cells`, `Community 12`, `Community 46`, `Community 16`, `Community 112`, `Hand Match Grid`, `NPM Scripts`?**
-  _High betweenness centrality (0.163) - this node is a cross-community bridge._
-- **Why does `Seven Wonders Duel Scorer` connect `Community 12` to `Community 0`, `Skull King UI Glyphs`, `Theme & Language Settings`, `NPM Dependencies`, `Community 70`, `Community 39`, `Community 47`, `Alias Field & Settings`, `Community 16`, `Login Screen Branding`, `Community 24`, `7WD Score UI Concepts`, `FR Skull King Result Strings`?**
-  _High betweenness centrality (0.141) - this node is a cross-community bridge._
-- **Why does `scoring` connect `Community 47` to `Community 3`, `Community 12`?**
-  _High betweenness centrality (0.118) - this node is a cross-community bridge._
-- **Are the 14 inferred relationships involving `7 Wonders Duel` (e.g. with `Military/supremacy checkbox rows (red X and green seal)` and `Coins Field with VP Conversion (7 coins = 2 VP)`) actually correct?**
+- **Why does `7 Wonders Duel` connect `Community 48` to `Community 23`, `Skull King UI Glyphs`, `Community 0`, `NPM Dependencies`, `Design Handoff README`, `Community 70`, `Community 137`, `SK Per-Round Cells`, `Community 12`, `Community 46`, `Community 16`, `Community 112`, `Hand Match Grid`, `Community 58`, `NPM Scripts`?**
+  _High betweenness centrality (0.165) - this node is a cross-community bridge._
+- **Why does `Seven Wonders Duel Scorer` connect `Community 12` to `7WD Score UI Concepts`, `Skull King UI Glyphs`, `Theme & Language Settings`, `NPM Dependencies`, `Community 70`, `Community 39`, `Community 47`, `Alias Field & Settings`, `Community 16`, `Login Screen Branding`, `Community 12`, `Community 48`, `Community 183`, `Community 24`, `FR Skull King Result Strings`, `Community 122`?**
+  _High betweenness centrality (0.128) - this node is a cross-community bridge._
+- **Why does `Interactions & Behavior` connect `Design Handoff README` to `Community 67`?**
+  _High betweenness centrality (0.117) - this node is a cross-community bridge._
+- **Are the 14 inferred relationships involving `7 Wonders Duel` (e.g. with `7 Wonders Duel paper score grid` and `Paper score sheet layout`) actually correct?**
   _`7 Wonders Duel` has 14 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 4 inferred relationships involving `Seven Wonders Duel Scorer` (e.g. with `7 Wonders Duel Completed Match Screen` and `SkullKingScorer`) actually correct?**
+- **Are the 4 inferred relationships involving `Seven Wonders Duel Scorer` (e.g. with `SkullKingScorer` and `7 Wonders Duel - Match Completed Screen (Dark)`) actually correct?**
   _`Seven Wonders Duel Scorer` has 4 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 4 inferred relationships involving `7 Wonders Duel - Match Completed Screen (Dark)` (e.g. with `Dark Mode Theme` and `7 Wonders Duel Scoring`) actually correct?**
   _`7 Wonders Duel - Match Completed Screen (Dark)` has 4 INFERRED edges - model-reasoned connections that need verification._
