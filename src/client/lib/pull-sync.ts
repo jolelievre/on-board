@@ -22,8 +22,8 @@ const MIN_PULL_INTERVAL_MS = 5_000;
 
 /** Module-scoped timestamp of the most recent `pullSync()` invocation.
  * Resets on page reload along with the rest of the JS module state;
- * `usePullOnAuth` always runs a forced pull on mount so the post-reload
- * cold cache is filled regardless. */
+ * the boot-time `pullSync({ force: true })` in `_authenticated.tsx`
+ * fills the post-reload cold cache regardless. */
 let lastPullStartedAt = 0;
 
 /** Patch the cached `player.user.alias` on every local Player linked

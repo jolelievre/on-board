@@ -75,9 +75,10 @@ test.describe("Alias — settings + propagation", () => {
     await page.waitForLoadState("domcontentloaded");
     await page.locator("[data-testid='settings-alias-input']").fill("");
     await page.locator("[data-testid='settings-alias-input']").blur();
-    // Wait for the PATCH to round-trip before navigating. The settings page
-    // invalidates ['players','suggestions'] on success; without this wait we
-    // race past the .then() that runs the invalidation.
+    // Wait for the PATCH to round-trip before navigating. The savedBadge
+    // means updateProfile resolved and refreshLocalAliases completed; the
+    // suggestion list's self chip reads from authClient.useSession(), which
+    // updates reactively after the PATCH.
     await expect(
       page.locator("[data-testid='settings-alias-saved']"),
     ).toBeVisible();
@@ -121,8 +122,8 @@ test.describe("Alias — settings + propagation", () => {
 
     // Create the match through the in-app UI flow rather than POSTing to
     // /api/matches directly. This way the test exercises the same code path
-    // a real user takes — including the `createMatch.onSuccess` invalidation
-    // that keeps the matches-list cache fresh — instead of bypassing it.
+    // a real user takes — including the Dexie write + sync-queue enqueue
+    // that mutations.createMatch performs — instead of bypassing it.
     // Clicking the self-suggestion chip is what attaches the player to the
     // User row (sends userId), so the alias propagation logic has something
     // to link to.
@@ -147,14 +148,9 @@ test.describe("Alias — settings + propagation", () => {
     ).toBeVisible();
 
     // Use client-side navigation (BottomNav → game card) instead of
-    // page.goto. A full reload rehydrates the query cache from
-    // localStorage, and `createSyncStoragePersister`'s throttle always
-    // schedules its write via `setTimeout(0)` (even with throttleTime: 0
-    // — the comment in main.tsx claiming sync flush is wishful), so the
-    // invalidation flag set by the alias commit races the navigation.
-    // On Safari that race is lost consistently; on Chrome it's flaky.
-    // Client-side routing preserves the in-memory cache, so the
-    // invalidated matches query refetches on GameDetailPage mount.
+    // page.goto so the in-memory React/Dexie state carries over. After
+    // refreshLocalAliases updates Dexie's player.user.alias rows, the
+    // game detail's useLiveQuery picks up the new alias on next render.
     await page.click("nav[aria-label='Primary'] a[href='/games']");
     await page.waitForURL("**/games");
     await page.click("a[href='/games/7-wonders-duel']");

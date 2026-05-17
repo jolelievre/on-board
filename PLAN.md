@@ -383,7 +383,9 @@ Each traces back to the three-layer architecture: TanStack Query's localStorage-
 
 ---
 
-## Phase 5c: Local-first refactor (server + Dexie)
+## Phase 5c: Local-first refactor (server + Dexie) — **shipped**
+
+**Status (2026-05-17)**: all three PRs merged. PR A (`feat/server-client-ids`, #16) shipped client-CUID idempotency. PR B (`feat/local-first-architecture`, #18) shipped the Dexie source-of-truth + `useLiveQuery` reads + push/pull sync. PR C (`chore/drop-tanstack-cache`, this PR) removed the persist deps, dropped `@tanstack/react-query` entirely (no app code consumed it after `usePlayerSuggestions` was migrated to `useLiveQuery`), inlined `usePullOnAuth` into `_authenticated.tsx`, and stripped the one-shot `onboard_query_cache` localStorage hydration that targeted users of the abandoned PR #11 branch (no production user ever wrote that key).
 
 **Goal**: Replace the failed three-layer architecture (server + TanStack Query cache + partial Dexie tables) with a two-layer **local-first** design: server is the cross-device source of truth, Dexie is the local source of truth, UI reads exclusively from Dexie via `useLiveQuery`, every user action writes to Dexie first and queues a server sync.
 

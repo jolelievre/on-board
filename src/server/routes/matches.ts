@@ -11,7 +11,7 @@ type AuthEnv = {
 
 // Permissive shape check covering both CUID v1 (Prisma's default, `c` + 24 chars)
 // and CUID v2 (variable length, alpha prefix). Rejects anything that isn't
-// lowercase alphanumeric — including the legacy `draft_…` prefix.
+// lowercase alphanumeric.
 const CUID_RE = /^[a-z][a-z0-9]{19,31}$/;
 
 const matchInclude = {

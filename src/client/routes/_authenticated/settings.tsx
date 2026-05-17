@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { authClient, updateProfile } from "../../lib/auth-client";
 import { refreshLocalAliases } from "../../lib/pull-sync";
@@ -138,7 +137,6 @@ function AliasInput({
   userId: string;
 }) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const [value, setValue] = useState(initialValue);
   const [persisted, setPersisted] = useState(initialValue);
   const [showSaved, setShowSaved] = useState(false);
@@ -160,11 +158,10 @@ function AliasInput({
         // user. pullSync alone is insufficient: alias edits don't bump
         // Match.updatedAt server-side, so the LWW merge would skip
         // every match and leave the cached `player.user.alias` stale.
-        // The saved badge means "everything in sync".
+        // The saved badge means "everything in sync". The suggestions
+        // list picks up the new alias via authClient.useSession() —
+        // no manual invalidation needed.
         await refreshLocalAliases(userId, trimmed === "" ? null : trimmed);
-        void queryClient.invalidateQueries({
-          queryKey: ["players", "suggestions"],
-        });
         setShowSaved(true);
         window.setTimeout(() => setShowSaved(false), 1500);
       })
