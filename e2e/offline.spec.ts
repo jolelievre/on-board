@@ -539,3 +539,146 @@ test.describe("Auth session error-driven fallback", () => {
     await expect(page.locator("h1")).toContainText("Games");
   });
 });
+
+/**
+ * pullSync trigger policy — pins the throttle + tab-regain behaviour
+ * added to address two real-world reports:
+ *
+ *  - Rapid mutations (each score input) were firing one /api/games +
+ *    one /api/matches?since= per save; with a 5 s throttle in
+ *    pullSync, repeated post-flush pulls within the window now no-op.
+ *  - A match created on one device wasn't visible on another browser
+ *    until manual refresh; a `visibilitychange` listener now forces a
+ *    fresh pull when the tab regains focus.
+ */
+test.describe("pullSync triggers", () => {
+  test.skip(
+    ({ browserName }) => browserName !== "chromium",
+    "BrowserContext.setOffline + CDP throttling is chromium-only",
+  );
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem("onboard_query_cache");
+      indexedDB.deleteDatabase("onboard");
+    });
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+  });
+
+  test("rapid route changes within the throttle window don't spam /api/games", async ({
+    page,
+  }) => {
+    // Warm Dexie.
+    await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
+      page.waitForResponse(
+        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
+      page.goto("/games"),
+    ]);
+
+    // From this point on, count any subsequent /api/games hits. The
+    // background hook fires a non-forced pullSync on every route
+    // change; the throttle (5 s minimum since the warm-up pull above)
+    // must dedup the next 4 rapid navigations to zero extra requests.
+    // We deliberately don't isolate "post-flush mutation pulls" here
+    // because that path requires online new-match creation, which has
+    // been observed to stall under serial-test load — exercising the
+    // same `pullSync({ force: false })` codepath via route changes
+    // covers the throttle equivalently.
+    let extraGamesPullCount = 0;
+    page.on("request", (req) => {
+      if (
+        req.method() === "GET" &&
+        req.url().endsWith("/api/games") &&
+        !req.url().includes("?")
+      ) {
+        extraGamesPullCount++;
+      }
+    });
+
+    // 4 SPA navigations in the span of <1 s. All within the 5 s
+    // throttle window from the warm-up pull, so the hook's per-
+    // pathname pullSync attempts should every one no-op.
+    await page.click("text=7 Wonders Duel");
+    await page.waitForURL("**/games/7-wonders-duel");
+    await page.click("header a[href='/games']");
+    await page.waitForURL("**/games");
+    await page.click("text=Skull King");
+    await page.waitForURL("**/games/skull-king");
+    await page.click("header a[href='/games']");
+    await page.waitForURL("**/games");
+
+    // Settle any in-flight responses.
+    await page.waitForTimeout(500);
+
+    // Loose bound: without the throttle this would be 4 (one per
+    // navigation). At most 1 means the throttle dedup'd ≥ 3 out of 4
+    // and is doing its job. The exact count depends on whether one of
+    // the 4 clicks happened to cross the 5 s boundary from the warm-
+    // up pull — under serial-test load on a slow dev server that
+    // boundary slips, so asserting strictly 0 here is fragile.
+    expect(extraGamesPullCount).toBeLessThanOrEqual(1);
+  });
+
+  test("dispatching visibilitychange while tab is visible forces a fresh pullSync", async ({
+    page,
+  }) => {
+    // Warm Dexie, then drain the throttle by waiting through the
+    // window. Future non-forced calls would no-op; only a forced
+    // trigger can pull again.
+    await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
+      page.waitForResponse(
+        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
+      page.goto("/games"),
+    ]);
+
+    // Wait briefly so the first pull settles. Crucially, *don't* wait
+    // 5 s — that would let a non-forced pull through too, and we want
+    // to assert specifically that visibilitychange forces past the
+    // throttle.
+    await page.waitForTimeout(500);
+
+    // Fire the event. Our hook reads `document.visibilityState` and
+    // ignores the event when hidden; Playwright pages are "visible"
+    // by default so dispatching the bare event is enough to enter the
+    // handler.
+    const forcedPull = page.waitForResponse(
+      (r) => r.url().endsWith("/api/games") && r.ok(),
+      { timeout: 5_000 },
+    );
+    await page.evaluate(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await forcedPull;
+  });
+
+  test("route navigation triggers a (throttled) pullSync after the window has elapsed", async ({
+    page,
+  }) => {
+    await Promise.all([
+      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
+      page.waitForResponse(
+        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
+      page.goto("/games"),
+    ]);
+
+    // Wait past the 5 s throttle so the next route change can pull.
+    // Cross-device scenarios this models: another device wrote a
+    // match, the user navigates somewhere in-app, and we surface the
+    // change without a manual refresh.
+    await page.waitForTimeout(5_500);
+
+    const routePull = page.waitForResponse(
+      (r) => r.url().endsWith("/api/games") && r.ok(),
+      { timeout: 5_000 },
+    );
+    await page.click("text=7 Wonders Duel");
+    await page.waitForURL("**/games/7-wonders-duel");
+    await routePull;
+  });
+});
