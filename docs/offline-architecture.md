@@ -122,10 +122,17 @@ Match ids, player ids, and score ids are client-generated CUIDs (`@paralleldrive
 
 `src/client/lib/pull-sync.ts` exports `pullSync()` — the read counterpart to `flush()`. It is called:
 
-- on app boot (`usePullOnAuth`, fired once when the auth session resolves)
-- after a successful `syncEngine.flush()` (cross-device updates)
-- on the browser `online` event
-- and could be on a timer (not currently wired)
+- on app boot (`usePullOnAuth`, fired once when the auth session resolves — passes `{ force: true }`)
+- after a successful `syncEngine.flush()` (post-mutation cross-device updates — throttled)
+- on the browser `online` event (via `useOnlineStatus`)
+- on tab regain (`usePullSyncBackground` listens to `visibilitychange` — passes `{ force: true }`)
+- on in-app route change (`usePullSyncBackground` watches `useRouterState` pathname — throttled)
+
+### Throttle
+
+`pullSync()` is throttled to a **5-second minimum interval** between attempts. This dedupes the post-flush wave that would otherwise fire on every score input — without it, four rapid `setScore` calls produce four full `/api/games` + `/api/matches?since=` round-trips in a span of about one second.
+
+The throttle is module-scoped (`lastPullStartedAt`), so a page reload resets it (which is fine — `usePullOnAuth` always runs a forced pull on mount). Explicit triggers — boot, `visibilitychange` — pass `{ force: true }` to bypass; throttle-respecting triggers — post-flush, route change — let the dedup apply.
 
 `pullSync()` does two things in one Dexie transaction:
 
@@ -168,6 +175,12 @@ After at least one success, `flush()` calls `pullSync()` (lazy-imported to break
 
 `src/client/components/sync/SyncStatus.tsx` is mounted once in `_authenticated.tsx` and reads `syncEngine.useStatus()`. It renders nothing when idle, a small "saving" pill while pending entries exist, a "saved" pill for 1.2 s after the queue drains (long enough to register, short enough not to feel sticky), and an "offline" pill while the network is down. There is no per-screen plumbing — every page gets the indicator for free.
 
+The `Header` component used to also auto-render an offline `SyncPill` on every authenticated screen; that fallback was removed once `SyncStatus` shipped — otherwise both pills would render and overlap.
+
+### Self-healing "saving" state
+
+`useStatus()` also drives a self-heal loop. When `navigator.onLine` is `true` and `pendingCount > 0`, it retries `syncEngine.flush()` every 10 s until the queue drains. This is the safety net for cases the browser's `online` event misses — DevTools throttling release, captive portal release, VPN reconnect, flaky mobile — where `navigator.onLine` stays `true` and no transition event fires, so the normal flush trigger is silent. Without it, a refresh-while-offline followed by going back online could leave the queue stuck on "Sauvegarde…" forever.
+
 ---
 
 ## What works offline
@@ -196,7 +209,8 @@ Offline-no-cache pages (a game/match that the user has never pulled and tries to
 |---|---|
 | `src/client/hooks/useAuthSession.ts` | Offline-safe session wrapper (cached-session fallback on better-auth error) |
 | `src/client/hooks/useOnlineStatus.ts` | Detects online/offline, triggers `syncEngine.flush()` on reconnect |
-| `src/client/hooks/usePullOnAuth.ts` | One `pullSync()` call on session ready |
+| `src/client/hooks/usePullOnAuth.ts` | One forced `pullSync()` + `syncEngine.flush()` on session ready |
+| `src/client/hooks/usePullSyncBackground.ts` | `visibilitychange` (forced) + route-change (throttled) pull triggers |
 | `src/client/hooks/usePlayerSuggestions.ts` | Three-tier suggestion resolution; syncs server suggestions to Dexie |
 | `src/client/hooks/data/{useGame,useGames,useMatch,useMatchList}.ts` | `useLiveQuery`-backed reactive reads |
 | `src/client/lib/db.ts` | Dexie schema (v2) + v1→v2 upgrade callback |
@@ -312,10 +326,12 @@ flowchart TD
     L -- no --> N
 
     J --> O{"anySuccess?"}
-    O -- yes --> P["pullSync()\nLWW merge /api/games + /api/matches?since=lastPullAt\ninto Dexie"]
-    O -- no --> Q["No pull"]
+    O -- yes --> P{"5 s since last pullSync?"}
+    P -- yes --> Q["pullSync()\nLWW merge /api/games + /api/matches?since=lastPullAt\ninto Dexie"]
+    P -- no --> R["Skip (throttled — next trigger retries)"]
+    O -- no --> R
 
-    P --> R["useLiveQuery re-renders affected components\nSyncStatus cycles saving → saved → idle"]
+    Q --> S["useLiveQuery re-renders affected components\nSyncStatus cycles saving → saved → idle"]
 ```
 
 The "saved" pill stays visible for 1.2 s after the queue drains, then `useStatus()` returns `"idle"` and `SyncStatus` renders nothing.

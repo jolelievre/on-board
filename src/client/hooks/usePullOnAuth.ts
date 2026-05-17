@@ -24,7 +24,11 @@ export function usePullOnAuth() {
 
   useEffect(() => {
     if (isPending || !session) return;
-    void pullSync().catch(() => {
+    // Initial pull is forced — we want a fresh catalog + match list on
+    // first authenticated mount even if a throttled pull happened
+    // moments earlier in the same JS session (e.g. an earlier
+    // unauthenticated probe).
+    void pullSync({ force: true }).catch(() => {
       // Offline or transient failure — UI keeps showing cached Dexie
       // data and the next online tick or flush will retry the pull.
     });

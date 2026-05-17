@@ -10,6 +10,22 @@ import {
 
 const SYNC_META_LAST_PULL = "lastPullAt";
 
+/** Minimum interval between successive `pullSync()` attempts (forceable
+ * via `{ force: true }`). Without throttling, the post-flush pullSync
+ * chained off every mutation would re-fetch `/api/games` and
+ * `/api/matches?since=` on every score input — observable as a wave of
+ * duplicate GETs in the network tab. 5 s is short enough that cross-
+ * device freshness stays reasonable, long enough that rapid in-app
+ * mutations don't spam the server. Explicit triggers (initial mount,
+ * tab regain via `visibilitychange`) bypass the throttle with `force`. */
+const MIN_PULL_INTERVAL_MS = 5_000;
+
+/** Module-scoped timestamp of the most recent `pullSync()` invocation.
+ * Resets on page reload along with the rest of the JS module state;
+ * `usePullOnAuth` always runs a forced pull on mount so the post-reload
+ * cold cache is filled regardless. */
+let lastPullStartedAt = 0;
+
 /** Patch the cached `player.user.alias` on every local Player linked
  * to the given user id.
  *
@@ -49,17 +65,27 @@ export async function setSyncMeta(key: string, value: string): Promise<void> {
 
 /**
  * Pull updates from the server into Dexie. Idempotent. Safe to call from
- * multiple triggers: app boot, post-flush, `online` event, periodic.
+ * multiple triggers: app boot, post-flush, `online` event, route change,
+ * tab regain (`visibilitychange`).
  *
  * - Always re-pulls the games catalogue (small, rarely changes).
  * - Pulls matches since the last successful pull cursor; falls back to a
  *   full pull on first call. Per-row Last-Write-Wins on `updatedAt`.
+ * - Throttled to `MIN_PULL_INTERVAL_MS` between attempts. Pass
+ *   `{ force: true }` to bypass — used by initial mount and tab-regain
+ *   triggers where freshness matters more than dedup.
  *
  * Network failures are surfaced as thrown errors so callers can decide
  * whether to log/ignore; offline calls short-circuit silently.
  */
-export async function pullSync(): Promise<void> {
+export async function pullSync(
+  { force = false }: { force?: boolean } = {},
+): Promise<void> {
   if (!navigator.onLine) return;
+
+  const now = Date.now();
+  if (!force && now - lastPullStartedAt < MIN_PULL_INTERVAL_MS) return;
+  lastPullStartedAt = now;
 
   const since = await getSyncMeta(SYNC_META_LAST_PULL);
   const pulledAt = new Date().toISOString();
