@@ -6,6 +6,7 @@ import { gamesRoutes } from "./routes/games.js";
 import { matchesRoutes } from "./routes/matches.js";
 import { scoresRoutes } from "./routes/scores.js";
 import { playersRoutes } from "./routes/players.js";
+import { profilesRoutes } from "./routes/profiles.js";
 
 const app = new Hono().basePath("/api");
 
@@ -24,6 +25,9 @@ app.route("/matches", scoresRoutes);
 
 app.use("/players/*", requireAuth);
 app.route("/players", playersRoutes);
+
+app.use("/profiles/*", requireAuth);
+app.route("/profiles", profilesRoutes);
 
 app.get("/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });

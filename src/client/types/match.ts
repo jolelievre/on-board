@@ -2,8 +2,24 @@ export type Player = {
   id: string;
   name: string;
   position: number;
-  /** Linked user (when the Player was attributed via the self chip).
-   * Preferred display name = user.alias ?? user.name ?? player.name. */
+  /** Phase 6-A: the Profile this player participation row resolves to.
+   * Nullable for legacy cached rows that pre-date 6-A. */
+  profileId?: string | null;
+  /** Phase 6-A: denormalized Profile join used by `displayPlayerName`
+   * to render the canonical alias retroactively across past matches.
+   * Populated by `useMatch` / `useMatchList`; null when the linked
+   * Profile hasn't been pulled yet. */
+  profile?: {
+    alias: string;
+    linkedUserId: string | null;
+    linkedUser: {
+      name: string;
+      alias: string | null;
+    } | null;
+  } | null;
+  /** Legacy linked user (set when the player is the match creator).
+   * Kept for backward compatibility with the old display path; new code
+   * should prefer `displayProfileName(profile, viewerId)`. */
   user?: {
     name: string;
     alias: string | null;

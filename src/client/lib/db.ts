@@ -1,5 +1,8 @@
-import Dexie, { type EntityTable } from "dexie";
+import Dexie, { type EntityTable, type Table } from "dexie";
 
+/** Legacy v1/v2 Dexie table. Dropped at v3 in favour of the server-mirrored
+ * `profiles` table. Kept as a type only so the v2→v3 upgrader can read
+ * the rows during migration. */
 export type LocalProfile = {
   /** Name used as the primary key (names are the identity for local profiles). */
   name: string;
@@ -9,6 +12,46 @@ export type LocalProfile = {
   /** ISO timestamp of last time this name was used — used for sorting suggestions. */
   usedAt: string;
   isSelf?: boolean;
+};
+
+export type LocalProfileLinkedUser = {
+  id: string;
+  name: string;
+  alias: string | null;
+  avatarUrl: string | null;
+};
+
+/** Server-mirrored Profile row (Phase 6-A). One per person the user knows.
+ * Owned by the user when unclaimed; visible to both owner and linked user
+ * once `linkedUserId` is set. UI reads through this table exclusively. */
+export type LocalProfile3 = {
+  id: string;
+  ownerId: string;
+  linkedUserId: string | null;
+  alias: string;
+  customAvatarUrl: string | null;
+  useLinkedAvatar: boolean;
+  /** ISO timestamp — drives suggestion ordering. */
+  usedAt: string;
+  createdAt: string;
+  /** ISO timestamp — LWW key for pull-sync merge. */
+  updatedAt: string;
+  /** Denormalized linked-user projection. Null when unclaimed. */
+  linkedUser: LocalProfileLinkedUser | null;
+};
+
+export type LocalProfileGroup = {
+  id: string;
+  ownerId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type LocalProfileGroupMember = {
+  groupId: string;
+  profileId: string;
+  position: number;
 };
 
 export type SyncQueueEntry = {
@@ -50,6 +93,9 @@ export type LocalMatch = {
 export type LocalPlayer = {
   id: string;
   matchId: string;
+  /** Phase 6-A: every Player resolves to a Profile. Nullable for legacy
+   * cached rows that pre-date 6-A; display code falls back to `name`. */
+  profileId?: string | null;
   userId?: string | null;
   name: string;
   position: number;
@@ -73,12 +119,16 @@ export type LocalSyncMeta = {
 };
 
 class OnBoardDB extends Dexie {
-  localProfiles!: EntityTable<LocalProfile, "name">;
   syncQueue!: EntityTable<SyncQueueEntry, "id">;
   games!: EntityTable<LocalGame, "id">;
   matches!: EntityTable<LocalMatch, "id">;
   players!: EntityTable<LocalPlayer, "id">;
   scores!: EntityTable<LocalScore, "id">;
+  profiles!: EntityTable<LocalProfile3, "id">;
+  profileGroups!: EntityTable<LocalProfileGroup, "id">;
+  // Compound primary key (`[groupId+profileId]`) doesn't fit Dexie's
+  // `EntityTable` keyof-T type, so we drop to the plain `Table` form.
+  profileGroupMembers!: Table<LocalProfileGroupMember, [string, string]>;
   syncMeta!: EntityTable<LocalSyncMeta, "key">;
 
   constructor() {
@@ -119,6 +169,26 @@ class OnBoardDB extends Dexie {
             row.status = row.error ? "failed" : "pending";
           });
       });
+
+    // v3 — Phase 6-A: introduce the Profile entity as the domain person
+    // and drop the name-keyed `localProfiles` table that v2 used for
+    // autocomplete suggestions. `profiles` and `profileGroup*` mirror
+    // their server tables; player rows gain a `profileId` index so we
+    // can look up "who is this player" without scanning. `localProfiles`
+    // is dropped — the next pullSync repopulates `profiles` from the
+    // server (which the migration has already backfilled).
+    this.version(3).stores({
+      localProfiles: null, // drop — replaced by the server-mirrored profiles table.
+      syncQueue: "++id, createdAt, status",
+      games: "id, slug",
+      matches: "id, gameId, status, startedAt, updatedAt, [createdById+startedAt]",
+      players: "id, matchId, userId, profileId, [matchId+position]",
+      scores: "id, matchId, [matchId+playerId+category], updatedAt",
+      profiles: "id, ownerId, linkedUserId, usedAt, updatedAt",
+      profileGroups: "id, ownerId, updatedAt",
+      profileGroupMembers: "[groupId+profileId], groupId, profileId",
+      syncMeta: "key",
+    });
   }
 }
 

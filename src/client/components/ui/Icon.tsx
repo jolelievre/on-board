@@ -5,6 +5,7 @@ export type IconName =
   | "check"
   | "globe"
   | "user"
+  | "users"
   | "logout"
   | "cog"
   | "history"
@@ -18,7 +19,8 @@ export type IconName =
   | "sparkle"
   | "pencil"
   | "x"
-  | "play";
+  | "play"
+  | "link";
 
 type Props = {
   name: IconName;
@@ -201,6 +203,24 @@ export function Icon({ name, size = 20, stroke = 1.6, className, title }: Props)
         <svg {...props}>
           {titleEl}
           <path d="M6 4l14 8-14 8z" fill="currentColor" />
+        </svg>
+      );
+    case "users":
+      return (
+        <svg {...props}>
+          {titleEl}
+          <circle cx="9" cy="8" r="3.5" />
+          <path d="M2 21c0-3.5 3-6 7-6s7 2.5 7 6" />
+          <circle cx="17" cy="6.5" r="2.5" />
+          <path d="M16 13.2c3.2.4 5 2.5 5 5.3" />
+        </svg>
+      );
+    case "link":
+      return (
+        <svg {...props}>
+          {titleEl}
+          <path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7L11 7" />
+          <path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7L13 17" />
         </svg>
       );
   }

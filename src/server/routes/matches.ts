@@ -1,6 +1,7 @@
 import { Hono } from "hono";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { resolvePlayerProfileId } from "../lib/match-profiles.js";
 import type { AuthUser } from "../middleware/auth.js";
 
 type AuthEnv = {
@@ -108,25 +109,69 @@ export const matchesRoutes = new Hono<AuthEnv>()
       }
     }
 
-    const match = await prisma.match.create({
-      data: {
-        ...(clientMatchId ? { id: clientMatchId } : {}),
-        gameId,
-        createdById: user.id,
-        ...(metadata
-          ? { metadata: metadata as Prisma.InputJsonValue }
-          : {}),
-        players: {
-          create: players.map((p) => ({
-            ...(p.id ? { id: p.id } : {}),
-            name: p.name.trim(),
-            position: p.position,
-            userId: p.userId || null,
-          })),
-        },
-      },
-      include: matchInclude,
-    });
+    // Phase 6-A: every Player gets a Profile alongside the legacy fields.
+    // Resolve each player to a Profile owned by the match creator BEFORE
+    // creating the Match so we can write `profileId` in the same insert.
+    // Wrapped in a transaction so a per-player resolution failure can't
+    // leave orphan Profile rows.
+    let match: Prisma.MatchGetPayload<{ include: typeof matchInclude }>;
+    try {
+      match = await prisma.$transaction(async (tx) => {
+        const playersWithProfile = await Promise.all(
+          players.map(async (p) => {
+            const profileId = await resolvePlayerProfileId(tx, {
+              creatorId: user.id,
+              playerName: p.name,
+              playerUserId: p.userId ?? null,
+            });
+            return {
+              ...(p.id ? { id: p.id } : {}),
+              name: p.name.trim(),
+              position: p.position,
+              userId: p.userId || null,
+              profileId,
+            };
+          }),
+        );
+
+        return tx.match.create({
+          data: {
+            ...(clientMatchId ? { id: clientMatchId } : {}),
+            gameId,
+            createdById: user.id,
+            ...(metadata
+              ? { metadata: metadata as Prisma.InputJsonValue }
+              : {}),
+            players: {
+              create: playersWithProfile,
+            },
+          },
+          include: matchInclude,
+        });
+      });
+    } catch (err) {
+      // Idempotency race: when two replays of the same queued POST
+      // arrive concurrently, both can pass the `findUnique` check above
+      // before either commits, and the second `match.create` trips the
+      // unique-id constraint. We treat that exactly like a successful
+      // idempotent replay — re-fetch the row that the racing request
+      // just wrote and return it as 200. Without this catch the second
+      // caller would see a 500 and the noise would mask real issues.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2002" &&
+        clientMatchId
+      ) {
+        const winner = await prisma.match.findUnique({
+          where: { id: clientMatchId },
+          include: matchInclude,
+        });
+        if (winner && winner.createdById === user.id) {
+          return c.json(winner, 200);
+        }
+      }
+      throw err;
+    }
 
     return c.json(match, 201);
   })

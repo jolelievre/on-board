@@ -5,6 +5,7 @@
   },
   "nav": {
     "games": "Jeux",
+    "players": "Joueurs",
     "settings": "Paramètres"
   },
   "auth": {
@@ -222,6 +223,32 @@
         "skByMermaidLabel": "RDP par sirène",
         "skByMermaidHint": "+40"
       }
+    }
+  },
+  "players": {
+    "title": "Joueurs",
+    "subtitle": "Les personnes avec qui vous avez joué",
+    "empty": "Aucun ami pour l'instant — démarrez une partie et les joueurs ajoutés apparaîtront ici.",
+    "notFound": "Joueur introuvable.",
+    "you": "Vous",
+    "linked": "Lié",
+    "unclaimed": "Sans compte",
+    "alias": {
+      "title": "Nom affiché",
+      "placeholder": "ex. Jo",
+      "saved": "Enregistré"
+    },
+    "stats": {
+      "title": "Statistiques",
+      "empty": "Aucune partie pour l'instant.",
+      "matches": "Parties",
+      "wins": "Victoires",
+      "winRate": "Taux de victoire",
+      "perGameLine": "{{matches}} parties · {{wins}}V · {{losses}}D · {{draws}}N"
+    },
+    "recent": {
+      "title": "Parties récentes",
+      "win": "Victoire"
     }
   },
   "common": {

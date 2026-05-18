@@ -28,6 +28,14 @@ model User {
   sessions       Session[]
   createdMatches Match[]   @relation("MatchCreator")
   players        Player[]
+
+  // Profiles owned by this user (i.e. people they've added).
+  ownedProfiles  Profile[]      @relation("ProfileOwner")
+  // The Profile linked to this auth account (1:1). Null until either the
+  // user signs in for the first time (auto-created self-Profile) or a
+  // friend links one of their owned profiles via QR (Phase 6-C).
+  linkedProfile  Profile?       @relation("ProfileLinked")
+  ownedGroups    ProfileGroup[] @relation("ProfileGroupOwner")
 }
 
 /// An OAuth provider link. One User can have multiple Accounts
@@ -110,21 +118,91 @@ model Match {
   scores  Score[]
 }
 
-/// A participant in a match. Can optionally be linked to a User account.
-/// Friends without accounts are just a name (userId is null).
+/// A participant in a match.
+/// Post-Phase 6-A, every Player points to a Profile (the domain entity for
+/// "the person who played"). The legacy `userId` and `name` fields are kept
+/// alongside as dormant columns for backward compatibility with older
+/// clients; they're populated server-side on every create. PR 6-E drops
+/// them after the soak window.
 model Player {
-  id       String  @id @default(cuid())
-  matchId  String
-  match    Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  userId   String? /// Linked User account (null for unregistered friends)
-  user     User?   @relation(fields: [userId], references: [id])
-  name     String  /// Display name for this match
-  position Int     /// Seat/turn order (0-indexed)
+  id        String   @id @default(cuid())
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  profileId String?  /// The person who played. Nullable until 6-E.
+  profile   Profile? @relation(fields: [profileId], references: [id])
+  userId    String?  /// Legacy: linked User account (kept dormant until 6-E)
+  user      User?    @relation(fields: [userId], references: [id])
+  name      String   /// Legacy: display-name snapshot (kept dormant until 6-E)
+  position  Int      /// Seat/turn order (0-indexed)
   updatedAt DateTime @updatedAt
 
   scores Score[]
 
   @@unique([matchId, position])
+  @@index([profileId])
+}
+
+// ─── Phase 6: Profile entities ───
+//
+// Profile is the **domain person** as the app sees them, decoupled from
+// the auth User row. Profiles can be:
+//   - **unclaimed** (`linkedUserId IS NULL`): owner-only visibility, owner
+//     edits name + avatar freely.
+//   - **linked** (`linkedUserId IS NOT NULL`): visible to both the owner
+//     and the linked auth user. Owner still edits display fields; the
+//     linked user's own `User.avatarUrl` / `User.name` remain authoritative
+//     when `useLinkedAvatar` is true.
+// A self-Profile is auto-created on first login (ownerId = linkedUserId =
+// self.id) so the user appears in their own suggestions list.
+
+/// A person as the app sees them. Always owned by a User; optionally
+/// linked to an auth account (which makes matches mutually visible).
+model Profile {
+  id              String   @id @default(cuid())
+  ownerId         String   /// The User who created this Profile.
+  linkedUserId    String?  @unique /// Set when bound to an auth account (1:1).
+  alias           String   /// Primary display name. Owner-editable even when linked.
+  customAvatarUrl String?  /// Owner-uploaded avatar (ships in 6-B).
+  useLinkedAvatar Boolean  @default(true) /// When linked: prefer linkedUser.avatarUrl over customAvatarUrl.
+  usedAt          DateTime @default(now()) /// Bumped on each match create; drives suggestion ordering.
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  owner        User                 @relation("ProfileOwner",  fields: [ownerId],      references: [id], onDelete: Cascade)
+  linkedUser   User?                @relation("ProfileLinked", fields: [linkedUserId], references: [id], onDelete: SetNull)
+  players      Player[]
+  groupMembers ProfileGroupMember[]
+
+  @@index([ownerId])
+  @@index([linkedUserId])
+}
+
+/// A named, ordered group of Profiles (e.g. "Wednesday Skull King crew").
+/// Tables exist in 6-A but stay empty until PR 6-D ships the management UI.
+model ProfileGroup {
+  id        String   @id @default(cuid())
+  ownerId   String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner   User                 @relation("ProfileGroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members ProfileGroupMember[]
+
+  @@index([ownerId])
+}
+
+/// Junction row: a Profile's position within a ProfileGroup.
+model ProfileGroupMember {
+  groupId   String
+  profileId String
+  position  Int
+
+  group   ProfileGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  profile Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, profileId])
+  @@index([profileId])
 }
 
 /// A single score entry for a player in a match.

@@ -82,6 +82,12 @@ test.describe("Offline (local-first)", () => {
       page.waitForResponse(
         (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
       ),
+      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
+      // so the offline window can't catch an in-flight request and
+      // leave Dexie's profile mirror partly populated.
+      page.waitForResponse(
+        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
+      ),
       page.goto("/games"),
     ]);
     await expect(page.locator("h1")).toContainText("Games");
@@ -111,6 +117,12 @@ test.describe("Offline (local-first)", () => {
       page.waitForResponse(
         (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
       ),
+      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
+      // so the offline window can't catch an in-flight request and
+      // leave Dexie's profile mirror partly populated.
+      page.waitForResponse(
+        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
+      ),
       page.goto("/games"),
     ]);
 
@@ -131,6 +143,12 @@ test.describe("Offline (local-first)", () => {
       page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
       page.waitForResponse(
         (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
+      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
+      // so the offline window can't catch an in-flight request and
+      // leave Dexie's profile mirror partly populated.
+      page.waitForResponse(
+        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
       ),
       page.goto("/games"),
     ]);
@@ -210,6 +228,12 @@ test.describe("Offline (local-first)", () => {
       page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
       page.waitForResponse(
         (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
+      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
+      // so the offline window can't catch an in-flight request and
+      // leave Dexie's profile mirror partly populated.
+      page.waitForResponse(
+        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
       ),
       page.goto("/games"),
     ]);
@@ -302,6 +326,12 @@ test.describe("Offline (local-first)", () => {
       page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
       page.waitForResponse(
         (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
+      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
+      // so the offline window can't catch an in-flight request and
+      // leave Dexie's profile mirror partly populated.
+      page.waitForResponse(
+        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
       ),
       page.goto("/games"),
     ]);
@@ -570,6 +600,12 @@ test.describe("pullSync triggers", () => {
       page.waitForResponse(
         (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
       ),
+      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
+      // so the offline window can't catch an in-flight request and
+      // leave Dexie's profile mirror partly populated.
+      page.waitForResponse(
+        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
+      ),
       page.goto("/games"),
     ]);
 
@@ -628,6 +664,12 @@ test.describe("pullSync triggers", () => {
       page.waitForResponse(
         (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
       ),
+      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
+      // so the offline window can't catch an in-flight request and
+      // leave Dexie's profile mirror partly populated.
+      page.waitForResponse(
+        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
+      ),
       page.goto("/games"),
     ]);
 
@@ -658,6 +700,12 @@ test.describe("pullSync triggers", () => {
       page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
       page.waitForResponse(
         (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+      ),
+      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
+      // so the offline window can't catch an in-flight request and
+      // leave Dexie's profile mirror partly populated.
+      page.waitForResponse(
+        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
       ),
       page.goto("/games"),
     ]);

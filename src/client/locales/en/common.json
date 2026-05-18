@@ -5,6 +5,7 @@
   },
   "nav": {
     "games": "Games",
+    "players": "Players",
     "settings": "Settings"
   },
   "auth": {
@@ -222,6 +223,32 @@
         "skByMermaidLabel": "SK by mermaid",
         "skByMermaidHint": "+40"
       }
+    }
+  },
+  "players": {
+    "title": "Players",
+    "subtitle": "People you've played with",
+    "empty": "No friends yet — start a match and the players you add will show up here.",
+    "notFound": "Player not found.",
+    "you": "You",
+    "linked": "Linked",
+    "unclaimed": "Unclaimed",
+    "alias": {
+      "title": "Display name",
+      "placeholder": "e.g. Jo",
+      "saved": "Saved"
+    },
+    "stats": {
+      "title": "Stats",
+      "empty": "No matches yet.",
+      "matches": "Matches",
+      "wins": "Wins",
+      "winRate": "Win rate",
+      "perGameLine": "{{matches}} played · {{wins}}W · {{losses}}L · {{draws}}D"
+    },
+    "recent": {
+      "title": "Recent matches",
+      "win": "Win"
     }
   },
   "common": {

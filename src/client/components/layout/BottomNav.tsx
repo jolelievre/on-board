@@ -23,6 +23,14 @@ const TABS: Tab[] = [
     match: (p) => p === "/games" || p.startsWith("/games/") || p.startsWith("/matches/"),
   },
   {
+    id: "players",
+    to: "/players",
+    iconName: "users",
+    labelKey: "nav.players",
+    defaultLabel: "Players",
+    match: (p) => p === "/players" || p.startsWith("/players/"),
+  },
+  {
     id: "settings",
     to: "/settings",
     iconName: "cog",
