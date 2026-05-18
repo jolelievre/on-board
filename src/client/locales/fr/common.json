@@ -80,6 +80,7 @@
       "draw": "Égalité"
     },
     "back": "Retour au jeu",
+    "rematch": "Revanche →",
     "notFound": "Partie introuvable.",
     "scoringNotSupported": "Le suivi de score pour {{game}} n'est pas encore disponible.",
     "newMatch": {

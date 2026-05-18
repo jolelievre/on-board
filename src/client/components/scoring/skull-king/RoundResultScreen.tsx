@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./RoundResultScreen.module.css";
@@ -18,6 +19,14 @@ import {
   type SkullKingRoundEntry,
 } from "../../../../shared/scoring/skull-king";
 import type { Player } from "../../../types/match";
+
+const BONUS_KEYS: SkullKingBonusKey[] = [
+  "color14",
+  "black14",
+  "mermaidByPirate",
+  "pirateBySK",
+  "skByMermaid",
+];
 
 type Props = {
   round: number;
@@ -48,7 +57,42 @@ export function RoundResultScreen({
   onSubmit,
 }: Props) {
   const { t } = useTranslation();
-  const active = players[activeIndex];
+  const active = players[activeIndex] as Player | undefined;
+
+  // Budget rule: the active seat's tricks must fit between the remaining
+  // budget given the seats BEFORE it (`max = round - earlierSum`) and, for
+  // the last seat, the same value (which is the only legal pick). Counting
+  // only earlier seats — not all-others — is what makes back-navigation
+  // editable: when the user steps back to an earlier row after the last
+  // seat absorbed the leftover, the active row's budget reopens to its
+  // original range. Later seats get re-clamped as the user advances forward
+  // again (this same effect fires when they become active).
+  useEffect(() => {
+    if (!active) return;
+    const earlierSum = players
+      .slice(0, activeIndex)
+      .reduce((sum, p) => sum + (entries[p.id]?.tricks ?? 0), 0);
+    const isLastSeat = activeIndex === players.length - 1;
+    const maxTricks = Math.max(0, round - earlierSum);
+    const minTricks = isLastSeat ? maxTricks : 0;
+    const current = entries[active.id] ?? EMPTY_SK_ROUND;
+    const clamped = Math.min(maxTricks, Math.max(minTricks, current.tricks));
+    if (clamped === current.tricks) return;
+    let next: SkullKingRoundEntry = { ...current, tricks: clamped };
+    const nextBonusSum = BONUS_KEYS.reduce((s, k) => s + next[k], 0);
+    if (nextBonusSum > next.tricks * players.length) {
+      next = {
+        ...next,
+        color14: 0,
+        black14: 0,
+        mermaidByPirate: 0,
+        pirateBySK: 0,
+        skByMermaid: 0,
+      };
+    }
+    onChange(active.id, next);
+  }, [active, activeIndex, players, entries, round, onChange]);
+
   if (!active) return null;
 
   const entry = entries[active.id] ?? EMPTY_SK_ROUND;
@@ -68,13 +112,6 @@ export function RoundResultScreen({
   //      bonuses already counted (each won trick carries playerCount cards)
   // Once a counter reaches its dynamic max, the next click loops back to 0,
   // which frees budget for the siblings to become tappable again.
-  const BONUS_KEYS: SkullKingBonusKey[] = [
-    "color14",
-    "black14",
-    "mermaidByPirate",
-    "pirateBySK",
-    "skByMermaid",
-  ];
   const totalBonuses = BONUS_KEYS.reduce((sum, k) => sum + entry[k], 0);
   const playerCount = players.length;
 
@@ -129,15 +166,20 @@ export function RoundResultScreen({
     return entry[key] === 0 && dynamicMaxFor(key) === 0;
   };
 
-  // Tricks digit-grid cap: the active player can claim at most "round
-  // minus the tricks already entered for the other players". The current
-  // player's own tricks count toward the budget but the max-allowed is
-  // expressed relative to the OTHERS so the active row stays tappable.
-  const otherPlayersTricks = players.reduce(
-    (sum, p) => (p.id === active.id ? sum : sum + (entries[p.id]?.tricks ?? 0)),
-    0,
-  );
-  const tricksMaxAllowed = Math.max(0, round - otherPlayersTricks);
+  // Tricks digit-grid cap: only the seats BEFORE the active row eat into
+  // the budget. Counting later seats too would lock back-navigation after
+  // the last seat auto-filled (its value would freeze the earlier row's
+  // remaining budget). The effect above re-clamps later seats when the
+  // user advances forward.
+  const earlierPlayersTricks = players
+    .slice(0, activeIndex)
+    .reduce((sum, p) => sum + (entries[p.id]?.tricks ?? 0), 0);
+  const tricksMaxAllowed = Math.max(0, round - earlierPlayersTricks);
+  // Last-player lower bound: the auto-preselect effect forces this seat's
+  // tricks to the remaining budget — surface that as a digit-grid minimum
+  // so every other digit visibly renders disabled.
+  const isLast = activeIndex === players.length - 1;
+  const tricksMinAllowed = isLast ? tricksMaxAllowed : 0;
 
   const score = scoreSkullKingRound(round, entry);
   const cum = (cumulativeBefore[active.id] ?? 0) + score.total;
@@ -154,7 +196,6 @@ export function RoundResultScreen({
       : t("scoring.skullKing.result.bidMissed", { bid, score: sign(score.base) });
   })();
 
-  const isLast = activeIndex === players.length - 1;
   const nextPlayer = !isLast ? players[activeIndex + 1] : null;
 
   return (
@@ -180,6 +221,7 @@ export function RoundResultScreen({
           <DigitGrid
             max={round}
             maxAllowed={tricksMaxAllowed}
+            minAllowed={tricksMinAllowed}
             selected={entry.tricks}
             onPick={(n) => update({ tricks: n })}
             data-testid="sk-result-tricks"

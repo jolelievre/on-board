@@ -279,4 +279,34 @@ test.describe("7 Wonders Duel — full flow", () => {
       page.locator(`[data-testid='score-grid-total-${p1Id}']`),
     ).toHaveText("6");
   });
+
+  test("rematch: prefills players from the just-finished match", async ({
+    page,
+  }) => {
+    const names = uniqueNames();
+    await startMatch(page, names);
+
+    const p1Id = await resolvePlayerId(page, names.p1);
+    await setScore(page, p1Id, "civil", 5);
+    await page.waitForResponse(
+      (r) =>
+        /\/api\/matches\/[^/]+\/scores$/.test(r.url()) &&
+        r.request().method() === "PATCH" &&
+        r.ok(),
+      { timeout: 5000 },
+    );
+    await page.click("[data-testid='complete-match']");
+    await expect(page.locator("[data-testid='winner-banner']")).toBeVisible();
+
+    await page.click("[data-testid='swd-rematch']");
+    await page.waitForURL(/\/games\/7-wonders-duel\/new\?rematchOf=/);
+
+    // Same players, same seating order.
+    await expect(
+      page.locator("[data-testid='new-match-player-0']"),
+    ).toHaveValue(names.p1);
+    await expect(
+      page.locator("[data-testid='new-match-player-1']"),
+    ).toHaveValue(names.p2);
+  });
 });

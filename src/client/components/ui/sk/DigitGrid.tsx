@@ -13,6 +13,10 @@ type Props = {
    * Used by the tricks-won input to cap the active player at the round's
    * remaining trick budget. */
   maxAllowed?: number;
+  /** When set, digits strictly less than this value render disabled. Used
+   * by the tricks-won input to force the LAST player to absorb the round's
+   * remaining trick budget (sum across players must equal `round`). */
+  minAllowed?: number;
   /** When true, cells render at the larger size used in the bid bottom sheet. */
   big?: boolean;
   /** Optional test id used by E2E tests to scope queries. */
@@ -29,6 +33,7 @@ export function DigitGrid({
   onPick,
   disabled,
   maxAllowed,
+  minAllowed,
   big,
   "data-testid": testId,
 }: Props) {
@@ -48,7 +53,9 @@ export function DigitGrid({
         const isSelected = n === selected;
         const overBudget =
           maxAllowed !== undefined && n > maxAllowed && n !== selected;
-        const isDisabled = disabled || overBudget;
+        const underBudget =
+          minAllowed !== undefined && n < minAllowed && n !== selected;
+        const isDisabled = disabled || overBudget || underBudget;
         return (
           <button
             key={n}

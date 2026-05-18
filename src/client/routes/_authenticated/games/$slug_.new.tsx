@@ -1,10 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../../lib/auth-client";
 import { useGame } from "../../../hooks/data/useGame";
 import { createMatch } from "../../../lib/mutations";
-import type { LocalGame } from "../../../lib/db";
+import { db, type LocalGame } from "../../../lib/db";
+import { SKULL_KING_TOTAL_ROUNDS } from "../../../../shared/scoring/skull-king";
 import {
   usePlayerSuggestions,
   persistPlayersToLocalProfiles,
@@ -15,9 +17,64 @@ import { Button } from "../../../components/ui/Button";
 import { Icon } from "../../../components/ui/Icon";
 import styles from "./$slug_.new.module.css";
 
+type NewMatchSearch = { rematchOf?: string };
+
 export const Route = createFileRoute("/_authenticated/games/$slug_/new")({
   component: NewMatchPage,
+  validateSearch: (search: Record<string, unknown>): NewMatchSearch => {
+    const raw = search.rematchOf;
+    return {
+      rematchOf: typeof raw === "string" && raw.length > 0 ? raw : undefined,
+    };
+  },
 });
+
+function buildInitialNames(
+  game: LocalGame,
+  source: RematchSource | null,
+): string[] {
+  if (!source) return Array.from({ length: game.minPlayers }, () => "");
+  // Players were sorted by `position` in the rematch loader — same
+  // seating order as the just-finished match. Clamp to the game's
+  // player range in case the previous match had different bounds.
+  const cap = Math.min(source.players.length, game.maxPlayers);
+  const seeded = source.players.slice(0, cap).map((p) => p.name);
+  while (seeded.length < game.minPlayers) seeded.push("");
+  return seeded;
+}
+
+function buildInitialUserIds(
+  game: LocalGame,
+  source: RematchSource | null,
+): (string | null)[] {
+  if (!source) return Array.from({ length: game.minPlayers }, () => null);
+  const cap = Math.min(source.players.length, game.maxPlayers);
+  const seeded = source.players.slice(0, cap).map((p) => p.userId);
+  while (seeded.length < game.minPlayers) seeded.push(null);
+  return seeded;
+}
+
+/**
+ * Skull King dealer rotates one seat per round (see
+ * `dealerForRound`). After a 10-round match, the player who *would*
+ * have dealt round 11 — i.e. the seat one past the round-10 dealer —
+ * should deal round 1 of the rematch.
+ *
+ * `dealerForRound(1, newDealerStart, n) = newDealerStart`, so we set
+ * `newDealerStart = (TOTAL_ROUNDS + prevDealerStart) % n`. Player
+ * order is preserved across the rematch, so the indexing is consistent.
+ */
+function rematchSkullKingDealerStart(
+  source: RematchSource,
+  playerCount: number,
+): number {
+  const prev = (source.metadata as { skullKing?: { dealerStart?: number } } | null)
+    ?.skullKing;
+  const prevDealerStart =
+    typeof prev?.dealerStart === "number" ? prev.dealerStart : 0;
+  if (playerCount <= 0) return 0;
+  return (SKULL_KING_TOTAL_ROUNDS + prevDealerStart) % playerCount;
+}
 
 const AVATAR_CLASSES = [
   styles.avatarA,
@@ -30,12 +87,45 @@ const AVATAR_CLASSES = [
   styles.avatarH,
 ];
 
+/** Slim view of the previous match used by the rematch prefill. We read
+ * Dexie directly here (rather than `useMatch`) so we can keep each
+ * Player's `userId` — the cross-component `Match` type drops it. */
+type RematchSource = {
+  gameId: string;
+  players: { name: string; userId: string | null }[];
+  metadata: Record<string, unknown> | null;
+};
+
 function NewMatchPage() {
   const { slug } = Route.useParams();
+  const { rematchOf } = Route.useSearch();
   const { t } = useTranslation();
 
   const { data: game, status: gameStatus } = useGame(slug);
   const { data: session } = authClient.useSession();
+
+  // `undefined` while loading, `null` once we know there's nothing to
+  // prefill (no rematchOf, missing row, or a row from a different game).
+  const rematchSource = useLiveQuery<RematchSource | null>(
+    async () => {
+      if (!rematchOf) return null;
+      const match = await db.matches.get(rematchOf);
+      if (!match) return null;
+      const players = await db.players
+        .where("matchId")
+        .equals(rematchOf)
+        .sortBy("position");
+      return {
+        gameId: match.gameId,
+        players: players.map((p) => ({
+          name: p.name,
+          userId: p.userId ?? null,
+        })),
+        metadata: (match.metadata ?? null) as Record<string, unknown> | null,
+      };
+    },
+    [rematchOf],
+  );
 
   // Gate on session as well as game: the self-suggestion chip attaches
   // the current user's id to userIds[i] at click time. If session is
@@ -43,7 +133,9 @@ function NewMatchPage() {
   // Player row gets created with userId=null — silently breaking the
   // alias propagation flow downstream (refreshLocalAliases can't find
   // a row with userId === null to update).
-  if (gameStatus === "loading" || !game || !session) {
+  const waitingForPrevious =
+    rematchOf !== undefined && rematchSource === undefined;
+  if (gameStatus === "loading" || !game || !session || waitingForPrevious) {
     return (
       <>
         <Header back={{ to: "/games", label: t("nav.games") }} />
@@ -54,22 +146,36 @@ function NewMatchPage() {
     );
   }
 
+  // Only use the previous match when its game matches the current one —
+  // a stale `rematchOf` from a different game would prefill nonsense.
+  const validRematchSource =
+    rematchSource && rematchSource.gameId === game.id ? rematchSource : null;
+
   // The form is extracted so its `useState` initializers run AFTER game
   // is known — no useEffect race to populate `names`. Without this split,
   // useLiveQuery re-emits during form interaction could re-trigger the
   // init effect, and tests filling the third (added) slot intermittently
   // saw it cleared between fill and submit.
-  return <NewMatchForm slug={slug} game={game} myUserId={session.user.id} />;
+  return (
+    <NewMatchForm
+      slug={slug}
+      game={game}
+      myUserId={session.user.id}
+      rematchSource={validRematchSource}
+    />
+  );
 }
 
 function NewMatchForm({
   slug,
   game,
   myUserId,
+  rematchSource,
 }: {
   slug: string;
   game: LocalGame;
   myUserId: string;
+  rematchSource: RematchSource | null;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -78,7 +184,7 @@ function NewMatchForm({
 
   const [submitting, setSubmitting] = useState(false);
   const [names, setNames] = useState<string[]>(() =>
-    Array.from({ length: game.minPlayers }, () => ""),
+    buildInitialNames(game, rematchSource),
   );
   // Parallel array: when a slot was filled by clicking the "self"
   // suggestion, store the user's id here so we can attribute the Player
@@ -86,7 +192,7 @@ function NewMatchForm({
   // server only attaches userId on explicit chip selection to avoid
   // mis-linking friends who happen to share the user's name.
   const [userIds, setUserIds] = useState<(string | null)[]>(() =>
-    Array.from({ length: game.minPlayers }, () => null),
+    buildInitialUserIds(game, rematchSource),
   );
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -127,11 +233,28 @@ function NewMatchForm({
       userId: userIds[i] ?? null,
     }));
 
+    // Skull King rematch: seed the new match's dealerStart so round 1's
+    // dealer is the seat one past round 10's dealer in the previous match.
+    // MatchStartScreen reads metadata.skullKing.dealerStart on mount and
+    // still lets the user override it before kicking off.
+    const metadata =
+      rematchSource && game.slug === "skull-king"
+        ? {
+            skullKing: {
+              dealerStart: rematchSkullKingDealerStart(
+                rematchSource,
+                players.length,
+              ),
+            },
+          }
+        : undefined;
+
     setSubmitting(true);
     try {
       const { matchId } = await createMatch({
         gameId: game.id,
         players,
+        ...(metadata ? { metadata } : {}),
       });
       void persistPlayersToLocalProfiles(players, myUserId ?? null);
       navigate({ to: "/matches/$id", params: { id: matchId } });
