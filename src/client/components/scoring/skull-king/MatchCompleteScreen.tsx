@@ -15,6 +15,9 @@ type Props = {
   isDraw: boolean;
   /** Game slug used by the back link (e.g. "skull-king"). */
   gameSlug: string;
+  /** Id of the just-finished match. Forwarded to the new-match form as
+   * `?rematchOf=` so it can prefill players + dealer for the rematch. */
+  matchId: string;
   roundsPlayed: number;
   /** Opens the round-by-round scoreboard overlay. Same component as the
    * in-match toggle. */
@@ -27,6 +30,7 @@ export function MatchCompleteScreen({
   winner,
   isDraw,
   gameSlug,
+  matchId,
   roundsPlayed,
   onOpenScoreboard,
 }: Props) {
@@ -119,6 +123,7 @@ export function MatchCompleteScreen({
         <Link
           to="/games/$slug/new"
           params={{ slug: gameSlug }}
+          search={{ rematchOf: matchId }}
           className={shared.btnPrimary}
           style={{ textDecoration: "none", textAlign: "center" }}
           data-testid="sk-rematch"

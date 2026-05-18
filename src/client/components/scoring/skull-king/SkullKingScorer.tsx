@@ -524,6 +524,7 @@ export function SkullKingScorer({
         winner={winner}
         isDraw={outcome.kind === "draw"}
         gameSlug={match.game.slug}
+        matchId={match.id}
         roundsPlayed={lastDoneRound}
         onOpenScoreboard={onScoreboardOpen}
       />

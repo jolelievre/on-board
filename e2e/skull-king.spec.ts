@@ -771,4 +771,56 @@ test.describe("Skull King — Classic flow", () => {
     await expect(totalCells.nth(1)).toContainText("#2");
     await expect(totalCells.nth(2)).toContainText("#3");
   });
+
+  test("rematch: prefills players + dealer = next seat after round 10's", async ({
+    page,
+  }) => {
+    const names = uniqueNames(3);
+    await startMatchAndDeal(page, names);
+
+    // First match keeps the default dealer (seat 0). With dealer rotating
+    // one seat per round, the player who *would* deal round 11 is seat
+    // (10 + 0) % 3 = 1 — and that's the dealer the rematch should pick.
+    for (let r = 1; r <= 10; r++) {
+      await enterBids(page, [0, 0, 0]);
+      await enterResults(page, [0, 0, 0]);
+      if (r < 10) {
+        await expect(
+          page.locator("[data-testid='sk-transition']"),
+        ).toBeVisible();
+        await page.click("[data-testid='sk-transition-continue']");
+      }
+    }
+    await expect(
+      page.locator("[data-testid='sk-match-complete']"),
+    ).toBeVisible();
+
+    await page.click("[data-testid='sk-rematch']");
+    await page.waitForURL(/\/games\/skull-king\/new\?rematchOf=/);
+
+    // Same players, same seating order.
+    for (let i = 0; i < names.length; i++) {
+      await expect(
+        page.locator(`[data-testid='new-match-player-${i}']`),
+      ).toHaveValue(names[i]);
+    }
+
+    await page.click("[data-testid='new-match-submit']");
+    await page.waitForURL(/\/matches\/[a-z0-9-]+/i);
+    await expect(page.locator("[data-testid='sk-match-start']")).toBeVisible();
+
+    // Round-1 dealer of the rematch = "round 11" of the previous match.
+    await expect(page.locator("[data-testid='sk-seat-1']")).toHaveAttribute(
+      "data-dealer",
+      "true",
+    );
+    await expect(page.locator("[data-testid='sk-seat-0']")).not.toHaveAttribute(
+      "data-dealer",
+      "true",
+    );
+    await expect(page.locator("[data-testid='sk-seat-2']")).not.toHaveAttribute(
+      "data-dealer",
+      "true",
+    );
+  });
 });

@@ -11,6 +11,7 @@ import type {
 import { WinnerBanner } from "../match/WinnerBanner";
 import { displayPlayerName } from "../../../shared/players";
 import { Button } from "../ui/Button";
+import buttonStyles from "../ui/Button.module.css";
 import {
   SEVEN_WONDERS_CATEGORY_KEYS,
   computeTotalsByPlayer,
@@ -253,15 +254,27 @@ export function SevenWondersDuelScorer({ match }: Props) {
       )}
 
       {isCompleted && (
-        <Link
-          to="/games/$slug"
-          params={{ slug: match.game.slug }}
-          className="mt-6 block text-center text-sm"
-          style={{ color: "var(--color-primary)" }}
-          data-testid="back-to-game"
-        >
-          {t("matches.back")}
-        </Link>
+        <>
+          <Link
+            to="/games/$slug/new"
+            params={{ slug: match.game.slug }}
+            search={{ rematchOf: match.id }}
+            data-testid="swd-rematch"
+            className={`mt-6 ${buttonStyles.base} ${buttonStyles.primary} ${buttonStyles.lg} ${buttonStyles.full}`}
+            style={{ textDecoration: "none" }}
+          >
+            {t("matches.rematch")}
+          </Link>
+          <Link
+            to="/games/$slug"
+            params={{ slug: match.game.slug }}
+            className="mt-3 block text-center text-sm"
+            style={{ color: "var(--color-primary)" }}
+            data-testid="back-to-game"
+          >
+            {t("matches.back")}
+          </Link>
+        </>
       )}
     </>
   );
