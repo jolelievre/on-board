@@ -507,76 +507,431 @@ Each row mirrors the corresponding server payload (`Match`, `Player`, `Score` fr
 
 ---
 
-## Phase 5d: Users as first-class entities
+## Phase 6: Profiles, Players tab, Avatars, Link-to-account
 
-**Goal**: Replace name-based unregistered-player references with proper `User` entities, owned by their creator until linked to an auth account.
+**Goal**: Replace name-based player references with a real domain entity (`Profile`), add a top-level "Players" section in the bottom nav to manage friends, ship avatar upload + display everywhere people are shown, deliver the QR-based account-linking flow, and land the small extras that ride on Profile (played-with suggestions, favorite groups, profile detail with basic stats, unlink, profile merge).
 
-**Position in the roadmap**: lands **after** Phase 5c (Local-first refactor) completes. The refactor simplifies 5d by removing the need for sync-engine id substitution; everything else in 5d remains in scope.
+**Position in the roadmap**: lands **after** Phase 5c (Local-first refactor). Phase 5c removed the sync-engine id substitution problem, so the per-record creation flow here is straightforward (two queued POSTs with client-generated CUIDs).
 
-**Why before more games or features**:
-- Today's name-only matching is unstable (case/typo collisions, same-name friends)
-- The link-friend-account feature in Phase 6 needs a stable cross-match reference
-- Phase 7 (Skull King Rascal) and future games add complexity to the per-game data layer; better to lock the user model first
+**Why bundle 5d-style refactor with the linkable parts of the old Phase 6**:
+- Today's name-only matching is unstable (case/typo collisions, same-name friends).
+- The link-friend-account feature needs a stable cross-match reference; shipping it without a Profile entity isn't possible.
+- Shipping Profiles without the link feature wastes the refactor's most interesting payoff.
+- Skull King Rascal (Phase 8) and future games add complexity to the per-game data layer; better to lock the person model first.
 
-### Design intent (preserved from the 2026-05-07 conversation)
+This phase is the first user-visible "social" layer of the app: a friend list, retroactive history-sharing on link, and avatars as a fun + functional identification cue.
 
-- The `Player` table becomes an association of Match to Users; `userId` is no longer optional, all players are actual Users.
-- For local-only Users: created by the app owner, saved in the **local AND server DB** (so they can be refetched on other devices). They remain unidentified Users as long as no Account is connected to them.
-- As long as no actual Account is linked to them, they are only known by the User who created them.
-- They can now be used to find matches where one User was involved (more stable than name matching).
-- We will be able to list our own users and reuse them for future matches, avoiding name duplication that doesn't guarantee we're talking about the same person.
-- They will be the reference point for the future feature to match "My users" to "Existing user" (Phase 6 link-to-account).
+### Entity map
 
-### Open design questions to resolve at implementation time
+| Entity | Role after this phase | Notes |
+|---|---|---|
+| **`User`** | **Unchanged.** Auth account owned by better-auth (`email` unique non-null, OAuth tokens via `Account`). | Internal — never directly referenced from `Player` after this phase. |
+| **`Account`, `Session`, `Verification`** | Unchanged better-auth plumbing. | Hidden from users. |
+| **`Profile`** *(new)* | The **person** as the app sees them. Every Player participation, every avatar, every player suggestion goes through Profile. | Single domain entity for "Jonathan", whether or not he has signed in to OnBoard. |
+| **`Player`** | Match participation row only: `id, matchId, profileId, position, updatedAt`. `userId` and `name` snapshot are **removed**. | Display name resolves through `Profile`. |
+| **`LocalProfile`** (Dexie) | **Removed.** Replaced by a `profiles` Dexie table mirroring the server. | Drop on Dexie v3 upgrade. |
+| **`ProfileGroup`, `ProfileGroupMember`** *(new)* | Saved player groupings (e.g. "Wednesday Skull King crew"). | One-tap fills new-match form. |
 
-1. **Schema shape**: extend the existing `User` table with `ownerId String?` + nullable `email` + a `claimed Boolean`, OR introduce a separate `Profile` / `UnclaimedUser` table that linked Users reference. Better-auth wants `email` unique + non-null on `User` — both options have implications for the auth flow and migrations.
-2. **Server visibility boundary**: an unclaimed user is visible only to its `ownerId`. When linked to a real auth account, ownership is dropped and they become globally addressable subject to the privacy model. The `/api/players/suggestions` endpoint becomes `/api/users` filtered by `ownerId = me OR user appears in any match I created`.
-3. **Offline creation of unclaimed users** — *simplified by Phase 5c*: with client-generated CUIDs across the board, creating an unclaimed user offline becomes two enqueued writes (POST `/api/users` then POST `/api/matches`), both referencing the same client CUID. No sync-engine id substitution map is needed. If the `/api/matches` POST fires before the `/api/users` POST has succeeded server-side, the server returns 404; the entry stays in the queue and resolves on the next flush.
-4. **Migration**: every existing Player without `userId` → create a User per `(creator, distinct case-insensitive name)` tuple, attribute `Player.userId`, retain the original name on Player as a migration audit trail (or move it to `User.alias`). Reversibility via the audit trail.
-5. **Auth integration / claiming**: how does an unclaimed User become claimed? Options: (a) on Google sign-in, if email matches an unclaimed User any creator owns, prompt the new auth user to claim it; (b) the creator explicitly invites via email link; (c) deferred to Phase 6.
-6. **First-launch UX**: a brand-new authenticated user has no owned-users pool. The "self" entry in suggestions is them; the next entries come from creating new owned users inline as they type names in the new-match form.
-7. **Offline reads of the user list** — *simplified by Phase 5c*: users become another Dexie-mirrored table with `useLiveQuery`-backed reads, just like matches/players/scores. No separate persisted-cache concern.
+### `Profile` schema (Prisma)
 
-### Files likely affected
+```
+Profile
+  id              String   @id @default(cuid())
+  ownerId         String                              // always set; the User who created this Profile
+  linkedUserId    String?  @unique                    // set when bound to an auth account
+  alias           String                              // primary display name in the app
+  customAvatarUrl String?                             // owner-uploaded avatar
+  useLinkedAvatar Boolean  @default(true)             // when linked: prefer linkedUser.avatarUrl over customAvatarUrl
+  usedAt          DateTime @default(now())            // denormalized; bumped on each match create
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-- `prisma/schema.prisma` — schema change + migration
-- `src/server/routes/users.ts` (new) — list/create/patch + suggestions filter
-- `src/server/routes/matches.ts` — Player creation now references existing User; reject names without matching User
-- `src/server/routes/players.ts` — collapsed into users or removed
-- `src/client/lib/mutations.ts` — add `createUser`, `patchUser` (slots into the Phase 5c mutations module)
-- `src/client/hooks/data/useUser.ts` (new) — `useLiveQuery` over `db.users`
-- `src/client/hooks/usePlayerSuggestions.ts` → `useUserSuggestions` or `useOwnedUsers`, reads from `db.users`
-- `src/client/routes/_authenticated/games/$slug_.new.tsx` — autocomplete from owned users; "create new user" inline
-- `src/client/routes/_authenticated/users/` (new section?) — manage owned users
-- `src/client/lib/db.ts` — add `users` Dexie table; revisit `localProfiles`
+  owner       User      @relation("ProfileOwner",  fields: [ownerId],      references: [id], onDelete: Cascade)
+  linkedUser  User?     @relation("ProfileLinked", fields: [linkedUserId], references: [id], onDelete: SetNull)
+  players     Player[]
+  groups      ProfileGroupMember[]
+
+  @@index([ownerId])
+  @@index([linkedUserId])
+```
+
+`linkedUserId` is `@unique` to enforce one Profile per (owner, linked user) pair at the row level — collisions during a link attempt are resolved by merging (see below), not by rejection.
+
+### State machine
+
+- **Unclaimed**: `ownerId` set, `linkedUserId = null`. Visible to owner only. Owner edits alias/avatar freely.
+- **Linked**: `ownerId` set, `linkedUserId` set. Visible to **both** owner and linked user. `ownerId` is preserved (no transfer-on-link). Owner still edits the *display* fields (`alias`, `customAvatarUrl`, `useLinkedAvatar`); the linked friend's own `User.avatarUrl` / `User.name` remain untouchable by the owner.
+- **Self**: every authenticated User auto-gets a Profile with `ownerId = self.id, linkedUserId = self.id`. That's how "you" appear in suggestion lists.
+- **Unlink** (either side): clears `linkedUserId`; Profile reverts to unclaimed under the original owner.
+
+### Avatar resolution
+
+For a viewer V looking at Profile P:
+1. If V is the **linked user** (`linkedUserId = V`): show `linkedUser.avatarUrl` (canonical, owned by the friend).
+2. Else if V is the **owner** (`ownerId = V`):
+   - If `linkedUserId` is set and `useLinkedAvatar` is true: show `linkedUser.avatarUrl`.
+   - Else if `customAvatarUrl` is set: show owner's upload.
+   - Else: initial-letter fallback (existing `AVATAR_CLASSES` palette).
+3. Else (third-party viewer, future): show `linkedUser.avatarUrl` if linked, else initial fallback.
+
+Toggling `useLinkedAvatar` doesn't delete `customAvatarUrl`. Explicit "delete custom avatar" is a separate action.
+
+### `Player` row evolution
+
+```
+Player
+  id         String   @id @default(cuid())
+  matchId    String
+  profileId  String?                         // NEW: nullable initially; backfilled and populated for all rows
+  userId     String?                         // legacy, kept dormant; populated alongside profileId
+  name       String                          // legacy, kept dormant; populated alongside profileId
+  position   Int
+  updatedAt  DateTime @updatedAt
+  // @@unique([matchId, position]) preserved
+```
+
+`Player.userId` and `Player.name` are **kept** as dormant legacy columns throughout this phase — the server writes them alongside `Player.profileId` on every create, and clients fall back to `Player.name` for display when `profileId` is unexpectedly null. This makes every PR in the phase independently shippable without a backward-incompatibility window. The optional cleanup PR 6-E drops them after a soak period.
+
+The 6-A migration creates a Profile per `(createdById, lower(trim(name)))` tuple; creates a linked Profile when `Player.userId` was set; creates one self-Profile per User; backfills `Player.profileId` for every existing row.
+
+### QR link/unlink workflow
+
+**Direction**: friend shows QR, owner scans. The friend authoritatively proves "I am this Google account"; the owner authoritatively decides which of their local profiles maps to this person.
+
+**Flow** (owner = A, friend = B):
+
+1. A opens Players tab → taps Profile P (currently unclaimed) → "Link to a Google account".
+2. A's app opens the camera (reusing the `useCamera` hook). Scanner mode.
+3. B, on their phone (logged into OnBoard), opens Settings → "Show my link code" (or Players tab → tap their own self-Profile → "Generate link code").
+4. B's app POSTs `/api/profiles/link-token` → server returns a short-lived signed token (HMAC-SHA256 of `{userId, exp}` with `BETTER_AUTH_SECRET`, ~60s TTL). Token rendered as QR (`qrcode` lib).
+5. A's app scans → POSTs `/api/profiles/:profileId/link` with `{ token }`. Server:
+   - Verifies HMAC + expiry.
+   - Looks up `existing = Profile WHERE ownerId = A AND linkedUserId = token.userId` (excluding the target Profile P itself).
+   - **No `existing`** → sets `Profile.linkedUserId = token.userId`, bumps `updatedAt`, returns `{ status: "linked", profile }`.
+   - **`existing` found** → returns `{ status: "merge_required", existing: { id, alias }, target: { id, alias } }` (HTTP 200, not 409 — this is a normal branch of the flow, not an error). No mutation performed.
+6. **Merge branch**: A's app shows a confirmation dialog: *"You already have a profile linked to this friend named «existing.alias». Merge «target.alias» into «existing.alias»? All matches where «target.alias» played will move to «existing.alias»."* On confirm, app calls `POST /api/profiles/:existingId/merge { sourceProfileId: P.id, token }`. Server:
+   - Re-verifies token.
+   - In one Postgres transaction: rewrite `Player.profileId` from `P.id` to `existingId`; copy `P.customAvatarUrl` to `existing` only if `existing.customAvatarUrl` is null (don't overwrite owner choices); rewrite `ProfileGroupMember.profileId`; delete `P`.
+   - Returns the merged Profile.
+7. A's app shows confirmation; `pullSync()` runs.
+8. B's next `pullSync` brings down every Match where the linked Profile is a Player. Server visibility filter: `Match WHERE createdById = me OR id IN (SELECT matchId FROM Player WHERE profileId IN (SELECT id FROM Profile WHERE ownerId = me OR linkedUserId = me))`.
+
+**Unlink** (either side):
+- A unlinks from the Players tab: `linkedUserId → null`. B loses read access on next pull.
+- B unlinks from their settings ("Linked profiles" list): same effect.
+
+**Library choices**: [`qr-scanner`](https://github.com/nimiq/qr-scanner) (~13KB, MediaDevices wrapper) for scanning; [`qrcode`](https://www.npmjs.com/package/qrcode) for rendering. No third-party SDK, no cloud round-trip.
+
+### Profile merge — also exposed standalone
+
+The merge primitive is also available from the Players tab as a manual action ("Merge this profile into another…"), useful when the owner realizes two unclaimed profiles are the same person, or wants to clean up after an import. Endpoint: `POST /api/profiles/:targetId/merge { sourceProfileId }` (no token required when both profiles are owned by the caller and unclaimed; required when either is linked). Same atomic rewrite as the link-time merge. UI always confirms before submitting.
+
+### Avatars
+
+- **Frontend**: copy `useCamera` (`src/hooks/useCamera.ts`) and `CameraCapture` (`src/components/profile/CameraCapture.tsx`) verbatim from `/Users/jonathanlelievre/www/birthday-party`. Drop the retro styling; restyle with Tailwind to match OnBoard's design tokens. Both files are framework-agnostic (no Next.js coupling). Output is a `Blob`.
+- **Backend**: new Hono endpoint `POST /api/profiles/:id/avatar` accepts the Blob as form-data, uses `sharp` (new dep) to produce a 400×400 JPEG (90% quality) + 100×100 thumbnail (80% quality), writes both to `/uploads/avatars/{profileId}.{v}.jpg`, persists URL in `Profile.customAvatarUrl`. Authorization: caller must be `Profile.ownerId`.
+- **Storage**: local filesystem (same pattern as birthday-party). Coolify volume mount under `/uploads`. Document in CLAUDE.md.
+- **`<Avatar>` component** (new, `src/client/components/ui/Avatar.tsx`): size variants (sm/md/lg), reactive to the viewer (the resolution logic above). Used everywhere a person is rendered.
+
+### Players tab
+
+- New bottom-nav item between Games and Settings: icon `users` (extend the custom Icon component), label key `nav.players` (`Players` / `Joueurs`).
+- Route: `src/client/routes/_authenticated/players/index.tsx` — list of Profiles where `ownerId = me OR linkedUserId = me`. Self-Profile pinned at top.
+- Route: `src/client/routes/_authenticated/players/$profileId.tsx` — detail page.
+- Route: `src/client/routes/_authenticated/players/groups.tsx` — favorite groups manager.
+
+**Profile detail page contents**:
+- Avatar with edit button (camera or upload, reusing `CameraCapture`).
+- Alias edit (debounced save).
+- Link/unlink section:
+  - Unclaimed: "Link to a Google account" → opens scanner.
+  - Linked: shows linked friend's name + email + Google avatar; "Use linked friend's photo" toggle (`useLinkedAvatar`); "Unlink" with confirm.
+- "Merge into another profile…" action — opens a picker among the owner's other profiles, confirms, calls the merge endpoint.
+- "Played together" stats: total matches, your wins / their wins / draws, win rate per game. Reads from Dexie via `useLiveQuery`.
+- Recent matches list (last 10), tappable to match detail.
+
+**Favorite groups**:
+- `ProfileGroup { id, ownerId, name, createdAt, updatedAt }` + `ProfileGroupMember { groupId, profileId, position }`.
+- Manage in `/players/groups`: list groups, create/edit (name + profile pickers).
+- Used in `games/$slug_.new.tsx`: chip row above the player inputs — tapping a group fills the slots in order.
+
+**"Played with" suggestions**:
+- New-match form: above the empty-state autocomplete, show the **most recent 3 distinct groupings** of profiles from past matches of the same game. One-tap fills slots.
+- Source: `useLiveQuery` over Dexie `matches` + `players` grouped by `players.profileId[]` signature.
+
+### Server API surface (new + changed)
+
+**New**:
+- `GET    /api/profiles` — list profiles visible to me (`ownerId = me OR linkedUserId = me`). Supports `?since=` for pull-sync.
+- `POST   /api/profiles` — create an unclaimed Profile owned by me. Accepts client-generated CUID.
+- `PATCH  /api/profiles/:id` — owner edits alias / `useLinkedAvatar`.
+- `POST   /api/profiles/:id/avatar` — owner uploads avatar (multipart).
+- `DELETE /api/profiles/:id/avatar` — owner clears custom upload.
+- `POST   /api/profiles/link-token` — caller requests a signed token for *their own* User. Returns `{ token, expiresAt }`.
+- `POST   /api/profiles/:id/link` — owner submits `{ token }` to bind their Profile. Returns `{ status: "linked", profile }` or `{ status: "merge_required", existing, target }`.
+- `POST   /api/profiles/:targetId/merge` — `{ sourceProfileId, token? }`. Atomically rewrites all `Player.profileId` + `ProfileGroupMember.profileId` references from source to target, then deletes source. Token required iff either profile is linked.
+- `POST   /api/profiles/:id/unlink` — owner OR linked user clears `linkedUserId`.
+- `GET    /api/profile-groups`, `POST`, `PATCH /:id`, `DELETE /:id` — favorite groups CRUD.
+
+**Changed**:
+- `POST /api/matches` — `players[]` payload becomes `{ id, profileId, position }`. The server no longer accepts inline player names. Frontend creates a Profile (or reuses one) before submitting the match.
+- `GET /api/matches[*]` — Player rows return `{ id, profileId, position }`; client joins to Dexie `profiles` for display.
+- `/api/players/suggestions` — **removed**. Replaced by `useProfileSuggestions()` reading from Dexie `profiles` ranked by `usedAt`.
+
+### Dexie schema (v3)
+
+```
+games:         "id, slug"
+matches:       "id, gameId, status, startedAt, updatedAt, [createdById+startedAt]"
+players:       "id, matchId, profileId, [matchId+position]"
+scores:        "id, matchId, [matchId+playerId+category], updatedAt"
+profiles:      "id, ownerId, linkedUserId, usedAt, updatedAt"   // NEW
+profileGroups: "id, ownerId, updatedAt"                          // NEW
+profileGroupMembers: "[groupId+profileId], groupId, profileId"   // NEW
+syncQueue:     "++id, createdAt, status"
+syncMeta:      "key"
+```
+
+`localProfiles` dropped in the v2→v3 upgrader. Migration recovers data from server pull on first load (zero-loss because the server-side migration creates Profiles for every historical Player).
+
+### Phasing — 3 vertical slices (+ optional cleanup)
+
+Each PR is sized to land in one Claude session, ships an end-to-end testable change to the app, and is safe to deploy independently to integration/production. **Backward-compatibility strategy**: `Player.userId` and `Player.name` are kept as dormant legacy columns across the whole phase — they get populated by the server alongside `Player.profileId`, and are never dropped. This removes the migration-audit ceremony entirely.
+
+#### PR 6-A — Profile MVP + Players tab (`feat/profiles-mvp`, ~2 days)
+
+**Goal**: ship the Profile entity and the Players tab as a read + rename experience. App stays fully usable; match-creation UX untouched.
+
+**Schema**:
+- Add `Profile`, `ProfileGroup`, `ProfileGroupMember` tables.
+- Add `Player.profileId String?` (nullable for now; backfilled for all existing rows; new rows get it set server-side; never marked `NOT NULL` in this PR).
+- Keep `Player.userId` and `Player.name`. They remain authoritative for match-creation input throughout this PR.
+
+**Migration**:
+1. Create one Profile per `(createdById, lower(trim(name)))` tuple from existing `Player` rows where `userId` is null. `alias = original Player.name`.
+2. Create one linked Profile per existing `Player.userId` (one per `userId`), `linkedUserId = userId`, `ownerId = createdById` of the earliest match.
+3. Create one self-Profile per `User` not yet covered (`ownerId = linkedUserId = userId`, `alias = user.alias || user.name`).
+4. Populate `Player.profileId` for every existing row.
+5. Add a Prisma post-create hook (or `Profile` upsert in better-auth's user-created callback) so every newly authenticated User gets a self-Profile.
+
+**Server**:
+- `GET /api/profiles` — visibility filter `ownerId = me OR linkedUserId = me`. Supports `?since=` for pull-sync.
+- `POST /api/profiles` — create unclaimed Profile owned by me (client CUID accepted).
+- `PATCH /api/profiles/:id` — owner edits `alias`, `useLinkedAvatar`.
+- `/api/matches` POST **unchanged shape** (still accepts inline `players[].name`), but the handler now resolves each name → existing-or-new Profile owned by the creator, and writes both `Player.name` (legacy) and `Player.profileId` (new) on each row.
+- `/api/matches` GET response includes `Player.profileId` alongside the existing fields (client falls back to `Player.name` when `profileId` is unexpectedly null).
+- Visibility helper in `src/server/lib/profile-scope.ts`.
+
+**Client**:
+- Dexie v3: add `profiles`, `profileGroups`, `profileGroupMembers` tables. v2→v3 upgrader drops `localProfiles`, repopulates `profiles` from `pullSync`.
+- `src/client/lib/pull-sync.ts`: extend with `/api/profiles` pull.
+- `src/client/lib/mutations.ts`: add `createProfile`, `patchProfile`.
+- New hooks: `useProfile(id)`, `useProfileList()`, `useProfileStats(id)`.
+- New `src/client/components/ui/Avatar.tsx` — viewer-aware resolution; this PR only displays Google photo / initial-letter fallback (no upload yet).
+- New routes: `players/index.tsx` (profile list), `players/$profileId.tsx` (detail: avatar, alias edit, basic per-game stats, recent matches).
+- `BottomNav.tsx`: add Players tab (icon `users`, label `nav.players`).
+- Match history + scorer screens: replace `displayPlayerName()` with `displayProfileName(profile, viewerId)` reading from Dexie `profiles` via join. Fall back to `Player.name` when `profileId` is null.
+- i18n: `players.*` namespace + `nav.players` in both `en/common.json` and `fr/common.json`.
+
+**Acceptance** (manual, in the app):
+- Open Players tab → see yourself pinned at top and every friend from past matches listed.
+- Rename "Jonathan" → "Jo" in Players tab → every past match where he was scored now displays "Jo".
+- Create a new match the old way (typing names) → match completes normally; on `psql`, `Player.profileId` is populated.
+- Two-tab same-user: rename in tab A → tab B's match history updates within seconds (pullSync).
+- Offline-created match works (no profileId on the offline row; falls back to `Player.name`; on sync, server populates profileId, client receives via pullSync).
+
+#### PR 6-B — Profile-aware match creation + avatars + stats (`feat/profiles-match-flow`, ~2.5 days)
+
+**Goal**: switch the new-match form to a profile picker, add the avatar upload pipeline, ship played-with chips and the enriched profile detail page. Favorite groups are out — they live in 6-D after the link feature.
+
+**Requires**: PR 6-A merged and deployed to integration.
+
+**Schema**: no change.
+
+**Server**:
+- `POST /api/profiles/:id/avatar` — multipart upload, `sharp` pipeline → 400×400 JPEG + 100×100 thumbnail under `/uploads/avatars/{profileId}.{v}.jpg`. Authorization: caller is `Profile.ownerId`.
+- `DELETE /api/profiles/:id/avatar` — owner clears custom upload.
+- `POST /api/profiles/:targetId/merge` — **unclaimed-only variant** for now: rejects if either profile has `linkedUserId` set. Atomic transaction rewrites `Player.profileId` (and `Player.name` to match the kept profile's alias) + `ProfileGroupMember.profileId` (no-op until 6-D populates the table, but written defensively so groups don't need to revisit merge logic), then deletes source. Caller must own both. Token-required variant ships in 6-C.
+- `/api/matches` POST: accepts `players[].profileId` (preferred) or `players[].name` (legacy fallback, behavior unchanged from 6-A).
+- `sharp` becomes a server dep.
+- Dockerfile / `scripts/entrypoint.sh` ensure `/uploads/avatars` exists. Document Coolify volume mount in `CLAUDE.md`.
+
+**Client**:
+- `qr-scanner` is **not** in this PR (deferred to 6-C). Camera plumbing for avatars is via `useCamera` only.
+- Port `useCamera` (`src/client/hooks/useCamera.ts`) and `CameraCapture` → `src/client/components/profiles/AvatarUploader.tsx`. Logic verbatim from birthday-party, retro styling dropped, Tailwind-restyle.
+- `src/client/lib/mutations.ts`: add `uploadAvatar`, `clearCustomAvatar`, `mergeProfile` (unclaimed-only client-side). Merge mutation updates Dexie `players.profileId` for every affected row before deleting the source row.
+- `src/client/lib/pull-sync.ts`: detect server-side merges (Profile id locally that's missing from a fresh pull → confirm + delete locally).
+- New hooks: `useProfileSuggestions()`, `usePlayedWith(gameId)`.
+- New components: `src/client/components/profiles/{ProfileEditor, MergeDialog}.tsx`.
+- Profile detail page enriched: "Played together" stats panel (head-to-head record, per-game win rates), "Merge into another profile…" action.
+- `games/$slug_.new.tsx`: switch from name inputs to profile-picker autocomplete (typing creates a new Profile inline via `mutations.createProfile`, then references its id in the match payload). "Played with" chips above the player slots — 3 most recent groupings from past matches of this game, one-tap fill.
+- i18n keys for `merge.*` and avatar-related strings.
+
+**Acceptance** (manual, in the app):
+- Upload a photo for "Alice" via camera path → resized JPEG written under `/uploads/avatars/`. Avatar appears in scorer, history list, Players tab.
+- Upload a photo via gallery upload path → same behavior.
+- Create a new match: type "Bob" → no existing profile → inline create → match completed; profile now in Players tab.
+- Pick an existing profile from the autocomplete → match references that profile id directly.
+- "Played with" chip: tap the last-Wednesday crew → all 4 slots fill in their previous order.
+- Profile detail page shows correct head-to-head: wins, losses, win rate per game.
+- Standalone merge: create a second unclaimed profile "Ali" by mistake → use "Merge into another profile…" → all match references collapse onto "Alice".
+
+#### PR 6-C — Link-to-account via QR + merge-on-collision (`feat/profiles-link-qr`, ~1.5 days)
+
+**Goal**: deliver the full link-to-account flow with merge fallback.
+
+**Requires**: PR 6-B merged.
+
+**Schema**: no change (`linkedUserId` already exists since 6-A).
+
+**Server**:
+- HMAC token helpers in `src/server/lib/link-tokens.ts` (reuse `BETTER_AUTH_SECRET` as signing key, 60s expiry).
+- `POST /api/profiles/link-token` — caller requests a signed token for *their own* User. Returns `{ token, expiresAt }`.
+- `POST /api/profiles/:id/link` — owner submits `{ token }`. Returns `{ status: "linked", profile }` or `{ status: "merge_required", existing: { id, alias }, target: { id, alias } }` (HTTP 200 in both branches).
+- `POST /api/profiles/:targetId/merge` — extended to accept `{ sourceProfileId, token }`. Token required (and verified) when either profile has `linkedUserId` set; reuses unclaimed-only path from 6-B when both are unclaimed.
+- `POST /api/profiles/:id/unlink` — owner OR linked user clears `linkedUserId`.
+
+**Client**:
+- Add `qr-scanner` (~13KB) and `qrcode` deps.
+- `src/client/lib/mutations.ts`: add `requestLinkToken`, `linkProfile`, `unlinkProfile`. Extend `mergeProfile` to forward a token for linked-side merges.
+- New components: `src/client/components/profiles/{LinkScanner, LinkCodeDisplay}.tsx`. `LinkScanner` integrates `qr-scanner` reusing the `useCamera` stream from 6-B. On `status: "merge_required"`, opens the `MergeDialog` from 6-B.
+- `settings.tsx`: add "Show my link code" entry.
+- Profile detail page: "Link to a Google account" button (unclaimed) / linked-friend card + "Unlink" button (linked) / "Use linked friend's photo" toggle.
+- E2E: `e2e/link-qr.spec.ts` with a test-only injected-token bypass for the scan step (Playwright can't easily render+rescan a real QR, so the test exercises the API flow directly while the UI mounts the scanner). Cover both the happy path and the merge-required branch.
+
+**Acceptance** (manual, two real devices):
+- Friend logs in on their phone → opens "Show my link code" → QR rendered with 60s countdown.
+- Owner on their phone → Players tab → tap profile "Alice" → "Link to a Google account" → camera opens → scans friend's QR → confirmation.
+- Friend's next `pullSync` brings down every Match where "Alice" is a Player.
+- Owner toggles "Use linked friend's photo" → avatar swaps to Google photo; previously uploaded custom retained.
+- Owner attempts to link "Alice2" to the same friend → merge-required prompt → confirm → "Alice2" matches collapse onto "Alice".
+- Either side unlinks → friend loses read access on next pull.
+- Token expiry: friend's QR stale after 60s → owner scan fails with clear error.
+
+#### PR 6-D — Favorite player groups (`feat/profiles-groups`, ~1 day)
+
+**Goal**: ship saved player groupings ("Wednesday Skull King crew") so a recurring crew is one tap away on the new-match form. Independent of everything before — `ProfileGroup` and `ProfileGroupMember` tables already exist (added in 6-A) but stay empty until this PR.
+
+**Requires**: PR 6-C merged (purely ordering — no hard dependency on link/QR; this lands last because it's the least interesting slice).
+
+**Schema**: no change (`ProfileGroup`, `ProfileGroupMember` already shipped in 6-A's migration).
+
+**Server**:
+- `GET /api/profile-groups` — list groups owned by me (with members ordered by `position`). Supports `?since=` for pull-sync.
+- `POST /api/profile-groups` — create a group (client CUID accepted). Body includes ordered `profileIds[]`.
+- `PATCH /api/profile-groups/:id` — rename group, replace members.
+- `DELETE /api/profile-groups/:id` — delete group + cascade members.
+- Integration tests for every route.
+
+**Client**:
+- `src/client/lib/mutations.ts`: add `createProfileGroup`, `patchProfileGroup`, `deleteProfileGroup`.
+- `src/client/lib/pull-sync.ts`: extend with `/api/profile-groups` pull.
+- New hooks: `useProfileGroups()`, `useProfileGroup(id)`.
+- New components: `src/client/components/profiles/{GroupEditor, GroupPicker}.tsx`.
+- New route: `players/groups.tsx` (favorite groups manager — list, create, edit, delete).
+- Entry point into the groups route from the Players tab header.
+- `games/$slug_.new.tsx`: add group chips row above the player slots (alongside the existing "played with" chips from 6-B). Tapping a group fills slots in saved order.
+- i18n keys under `groups.*` namespace.
+
+**Acceptance** (manual, in the app):
+- Players tab → "Groups" → create "Wednesday crew" with 4 profiles in chosen order.
+- Open new-match form → tap "Wednesday crew" chip → 4 slots populate in order.
+- Edit the group (rename, reorder, swap a member) → new chip behavior reflects the edit.
+- Delete the group → chip disappears from new-match form.
+- Offline: create group → reload → group persists; reconnect → server has it with the client CUID.
+
+#### PR 6-E (optional, hold) — Schema cleanup (`chore/drop-player-legacy-columns`, ~half day)
+
+After 6-A → 6-D have soaked in production and analytics confirm no client is writing the legacy fields:
+- Mark `Player.profileId` `NOT NULL`.
+- Drop `Player.userId`, `Player.name`.
+- Remove `/api/players/suggestions` (already unused after 6-A).
+- Tighten client types now that `Player.name` is gone.
+
+**Hold this PR unless cleanup matters more than the small risk of a soak-window regression** — dead columns are cheap; the work above is mostly aesthetic.
+
+### Critical files
+
+| File | Action |
+|---|---|
+| `prisma/schema.prisma` | Add Profile/ProfileGroup; modify Player |
+| `src/server/routes/profiles.ts` | New |
+| `src/server/routes/profile-groups.ts` | New |
+| `src/server/routes/matches.ts` | Adapt to profileId payload |
+| `src/server/routes/players.ts` | Delete suggestions endpoint; file likely removed |
+| `src/server/lib/link-tokens.ts` | New (HMAC helpers) |
+| `src/server/lib/profile-scope.ts` | New (visibility helper) |
+| `src/server/lib/profile-merge.ts` | New (transactional merge) |
+| `src/server/lib/avatar-storage.ts` | New (sharp pipeline) |
+| `src/client/lib/db.ts` | v3 schema |
+| `src/client/lib/mutations.ts` | Add profile/group/merge mutations |
+| `src/client/lib/pull-sync.ts` | Pull profiles + groups; detect merges |
+| `src/client/lib/displayPlayerName.ts` | Rename to `displayProfileName.ts`, viewer-aware |
+| `src/client/hooks/data/useProfile*.ts` | New |
+| `src/client/hooks/usePlayerSuggestions.ts` | Replaced by `useProfileSuggestions` |
+| `src/client/components/ui/Avatar.tsx` | New |
+| `src/client/components/profiles/*` | New (Editor, Uploader, Scanner, CodeDisplay, GroupEditor, GroupPicker, MergeDialog) |
+| `src/client/components/layout/BottomNav.tsx` | Add Players tab |
+| `src/client/routes/_authenticated/players/*` | New routes |
+| `src/client/routes/_authenticated/settings.tsx` | Add "Show my link code" entry; alias edit writes to self-Profile |
+| `src/client/routes/_authenticated/games/$slug_.new.tsx` | Group chips, played-with chips, profile autocomplete |
+| `src/client/components/scoring/**` | Replace name reads with Profile resolver |
+| `src/client/locales/{en,fr}/common.json` | New `players.*`, `groups.*`, `link.*`, `merge.*` keys + `nav.players` |
+| `Dockerfile` / `scripts/entrypoint.sh` | Ensure `/uploads/avatars` exists |
+| `CLAUDE.md` | Document Coolify `/uploads` volume mount |
+
+### Reused, not rewritten
+
+- `useCamera`, `CameraCapture` — from `/Users/jonathanlelievre/www/birthday-party/src/hooks/useCamera.ts` and `.../src/components/profile/CameraCapture.tsx` (logic copied verbatim, retro styling dropped, Tailwind restyled).
+- Avatar resize pipeline pattern from `birthday-party`'s `/api/upload/route.ts` (translated to Hono).
+- `Group`, `Header`, `Button`, `Input`, `Icon` UI atoms — existing.
+- `AVATAR_CLASSES` palette from `$slug_.new.tsx` — moved to `Avatar.tsx` as the initial-letter fallback.
+- `useLiveQuery` reactive read pattern from Phase 5c.
+- Sync engine push/pull plumbing — unchanged from Phase 5c.
 
 ### Validation
 
-- Existing match flows (create, score, complete) keep working with the new model
-- A friend with the same name as the logged-in user no longer collides on suggestions
-- Migration is reversible for at least one rollback window
-- Offline-created user → match references that user → flush replays both POSTs in order, server creates both with the client-supplied CUIDs
+- `npm run db:migrate && npm run db:seed && npm run db:test:reset` — schema migration clean both ways.
+- `npm test` — full E2E suite green on Mobile Chrome + Mobile Safari.
+- Local manual:
+  1. Fresh login → self-Profile auto-created → visible in Players tab → editing alias propagates to every past match.
+  2. Create unclaimed Profile "Alice" → use her in a new match → her avatar (initial fallback) shows in scorer + history.
+  3. Upload custom avatar for "Alice" → both camera + upload paths work → resized JPEG written under `/uploads/avatars/`.
+  4. Friend logs in on second device → opens link-code screen → owner scans → link succeeds → friend's pull brings down all past Alice matches.
+  5. Create a second unclaimed profile "Ali" by mistake → use the standalone merge action to consolidate into "Alice" → all match references point to "Alice", "Ali" gone.
+  6. Owner attempts to link "Alice" to friend B → friend B is already linked to a separate profile "Aleece" the owner created earlier → merge-required prompt → confirm → "Alice" and "Aleece" consolidate; matches under both names now under one profile.
+  7. Owner toggles "Use linked friend's photo" → avatar swaps to Google photo; custom upload retained.
+  8. Either side unlinks → friend loses read access on next pull.
+  9. Favorite group "Wednesday crew" created → tapping the chip on new-match form fills 4 players in saved order.
+  10. Offline: create Profile + match referencing it → DevTools IndexedDB shows both rows + 2 queue entries → reconnect → both flush in order → server has both with the client CUIDs.
+
+### Out of scope (deferred to later phases)
+
+- Per-profile private notes (cheap; pushed out to keep this phase focused).
+- Per-match privacy toggles ("hide this match from a linked friend").
+- Achievements / badges.
+- Public sharing of match results outside the app.
+- Friend-to-friend match invitations / push notifications.
+- Profile search across all users (intentional — link only via QR, not by search).
 
 ---
 
-## Phase 6: Polish + Distribution
+## Phase 7: Polish + Distribution
 
 **Goal**: Smooth experience, ready to share with friends.
 
 - Real-time sync indicator in UI (synced / pending / error)
-- Player autocomplete from local profiles + linked online profiles
-- Match history filters (by game, player, date)
-- Basic statistics (win rates, average scores per game)
+- Match history filters (by game, profile, date)
+- Basic statistics (win rates, average scores per game) — aggregate dashboards beyond the per-profile stats already shipped in Phase 6
 - Lighthouse PWA audit (must pass all PWA criteria)
 - Installation help page (accessible without auth, explains how to install on Android/iOS)
-- Link-to-account feature: link local profiles to friends' Google accounts
 - v1.0.0 release → production deploy
 
 **Validation**: Lighthouse PWA score 100, friends can install and use the app.
 
 ---
 
-## Phase 7: Skull King — Rascal Variant
+## Phase 8: Skull King — Rascal Variant
 
 **Goal**: Complete the Phase 4 scope by adding the Rascal variant alongside Classic.
 
