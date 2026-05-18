@@ -310,9 +310,10 @@ test.describe("Skull King — Classic flow", () => {
     const names = uniqueNames(2);
     await startMatchAndDeal(page, names);
 
-    // Run round 1 → +10 each player (both bid 0, both take 0).
+    // Run round 1: bids 0/0, P2 absorbs the lone trick (forced last-seat
+    // value). Scores end up P1 +10 (bid 0 made), P2 -10 (bid 0 missed).
     await enterBids(page, [0, 0]);
-    await enterResults(page, [0, 0]);
+    await enterResults(page, [0, 1]);
 
     // We're on the round transition; open the scoreboard.
     await expect(page.locator("[data-testid='sk-transition']")).toBeVisible();
@@ -461,11 +462,12 @@ test.describe("Skull King — Classic flow", () => {
     const names = uniqueNames(2);
     await startMatchAndDeal(page, names);
 
-    // Bid + result phases (both bid 0, both take 0).
+    // Bid + result phases: both bid 0; P1 takes 0, P2 absorbs the lone
+    // trick (forced last-seat value).
     await enterBids(page, [0, 0]);
     await pickTricks(page, 0);
     await page.click("[data-testid='sk-result-next']");
-    await pickTricks(page, 0);
+    await pickTricks(page, 1);
 
     // Set up the response listener BEFORE clicking End-round so we don't
     // miss the clear-draft PATCH that fires right after.
@@ -546,9 +548,9 @@ test.describe("Skull King — Classic flow", () => {
     const names = uniqueNames(3);
     await startMatchAndDeal(page, names);
 
-    // Finish round 1.
+    // Finish round 1. P3 absorbs the lone trick (forced last-seat value).
     await enterBids(page, [0, 0, 0]);
-    await enterResults(page, [0, 0, 0]);
+    await enterResults(page, [0, 0, 1]);
     const transition = page.locator("[data-testid='sk-transition']");
     await expect(transition).toBeVisible();
     // Caption should mention the round we *just finished* (round 1).
@@ -588,7 +590,9 @@ test.describe("Skull King — Classic flow", () => {
     );
     await page.click("[data-testid='sk-result-next']");
 
-    // P2 stays at 0 (already 0 from initial entry).
+    // P2 is the last seat: now that P1 dropped from 1 trick to 0, the round
+    // has an unaccounted trick that P2 must absorb. The forced last-seat
+    // value auto-updates P2's tricks from 0 → 1 → bid 0 missed → -10.
     await page.click("[data-testid='sk-result-end-round']");
 
     // Bounced back to the transition recap with the corrected round-1 total.
@@ -599,7 +603,7 @@ test.describe("Skull King — Classic flow", () => {
     );
     const totalsTexts = await totals.allTextContents();
     expect(totalsTexts[0]).toContain("-10");
-    expect(totalsTexts[1]).toContain("10");
+    expect(totalsTexts[1]).toContain("-10");
   });
 
   test("result: bonuses disabled when tricks=0 and clear when tricks drop to 0", async ({
@@ -664,6 +668,69 @@ test.describe("Skull King — Classic flow", () => {
     ).toBeDisabled();
   });
 
+  test("tricks floor: last seat auto-absorbs remaining tricks and reflows on edit", async ({
+    page,
+  }) => {
+    const names = uniqueNames(3);
+    await startMatchAndDeal(page, names);
+
+    // Round 1 is just a stepping stone to reach round 2, where the digit
+    // grid has enough room to demonstrate both bounds at once.
+    await enterBids(page, [0, 0, 0]);
+    await enterResults(page, [0, 0, 1]);
+    await expect(page.locator("[data-testid='sk-transition']")).toBeVisible();
+    await page.click("[data-testid='sk-transition-continue']");
+
+    // Round 2: 2 tricks among 3 players.
+    await enterBids(page, [0, 0, 0]);
+
+    // P1 takes 1 trick.
+    await pickTricks(page, 1);
+    await page.click("[data-testid='sk-result-next']");
+
+    // P2: upper bound = round - P1.tricks = 1. Digit 2 must be disabled.
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='2']"),
+    ).toBeDisabled();
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='0']"),
+    ).toBeEnabled();
+
+    await pickTricks(page, 0);
+    await page.click("[data-testid='sk-result-next']");
+
+    // P3 is the last seat: only the forced value (= 1) should be enabled
+    // and it should be auto-preselected on arrival.
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='1']"),
+    ).toHaveAttribute("data-selected", "true");
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='0']"),
+    ).toBeDisabled();
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='2']"),
+    ).toBeDisabled();
+
+    // Edit-back ripple: walk back to P1, drop their tricks to 0. The
+    // remaining trick budget for P3 should grow to 2 by the time we
+    // re-arrive at the last seat.
+    await page.click("[data-testid='sk-result-prev']");
+    await page.click("[data-testid='sk-result-prev']");
+    await pickTricks(page, 0);
+    await page.click("[data-testid='sk-result-next']");
+    await page.click("[data-testid='sk-result-next']");
+
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='2']"),
+    ).toHaveAttribute("data-selected", "true");
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='0']"),
+    ).toBeDisabled();
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='1']"),
+    ).toBeDisabled();
+  });
+
   test("match history: 3-player match renders one row per player with rank, sorted by score", async ({
     page,
   }) => {
@@ -715,13 +782,15 @@ test.describe("Skull King — Classic flow", () => {
     const names = uniqueNames(2);
     await startMatchAndDeal(page, names);
 
-    // Play through all 10 rounds with bid=0 / tricks=0 (both made) to land
-    // on the match-complete screen quickly.
+    // Play through all 10 rounds quickly: both bid 0, P1 takes 0, P2
+    // absorbs all `r` tricks (forced last-seat value). Bid 0 missed scores
+    // -10 × round for P2 — totals don't matter here, the test only needs
+    // to reach the match-complete screen.
     for (let r = 1; r <= 10; r++) {
       await enterBids(page, [0, 0]);
       await pickTricks(page, 0);
       await page.click("[data-testid='sk-result-next']");
-      await pickTricks(page, 0);
+      await pickTricks(page, r);
       await page.click("[data-testid='sk-result-end-round']");
       if (r < 10) {
         await expect(
@@ -782,8 +851,11 @@ test.describe("Skull King — Classic flow", () => {
     // one seat per round, the player who *would* deal round 11 is seat
     // (10 + 0) % 3 = 1 — and that's the dealer the rematch should pick.
     for (let r = 1; r <= 10; r++) {
+      // P3 (last seat) absorbs all `r` tricks via the forced last-seat
+      // value. Bid 0 missed scoring doesn't matter here — only reaching
+      // the complete screen does.
       await enterBids(page, [0, 0, 0]);
-      await enterResults(page, [0, 0, 0]);
+      await enterResults(page, [0, 0, r]);
       if (r < 10) {
         await expect(
           page.locator("[data-testid='sk-transition']"),
