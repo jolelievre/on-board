@@ -668,6 +668,51 @@ test.describe("Skull King — Classic flow", () => {
     ).toBeDisabled();
   });
 
+  test("tricks floor: returning to an earlier seat after the last seat keeps it editable", async ({
+    page,
+  }) => {
+    const names = uniqueNames(3);
+    await startMatchAndDeal(page, names);
+
+    // Round 1 is just a stepping stone to round 2 (2 tricks, more headroom).
+    await enterBids(page, [0, 0, 0]);
+    await enterResults(page, [0, 0, 1]);
+    await expect(page.locator("[data-testid='sk-transition']")).toBeVisible();
+    await page.click("[data-testid='sk-transition-continue']");
+
+    // Round 2: P1 = 1, P2 = 0, P3 (last) auto-absorbs the remaining 1 trick.
+    await enterBids(page, [0, 0, 0]);
+    await pickTricks(page, 1);
+    await page.click("[data-testid='sk-result-next']");
+    await pickTricks(page, 0);
+    await page.click("[data-testid='sk-result-next']");
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='1']"),
+    ).toHaveAttribute("data-selected", "true");
+
+    // Bug regression: before the fix, going back to P2 used to lock the
+    // grid because P2's max counted P3's auto-set value (1 + 1 = 2), so the
+    // remaining budget collapsed to 0. Now P2's budget only counts P1 → 1
+    // trick still available.
+    await page.click("[data-testid='sk-result-prev']");
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='1']"),
+    ).toBeEnabled();
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='2']"),
+    ).toBeDisabled();
+
+    // Pick P2 = 1. Move forward → P3's auto-set tricks reflow from 1 → 0.
+    await pickTricks(page, 1);
+    await page.click("[data-testid='sk-result-next']");
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='0']"),
+    ).toHaveAttribute("data-selected", "true");
+    await expect(
+      page.locator("[data-testid='sk-result-tricks'] [data-value='1']"),
+    ).toBeDisabled();
+  });
+
   test("tricks floor: last seat auto-absorbs remaining tricks and reflows on edit", async ({
     page,
   }) => {
