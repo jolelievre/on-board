@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useTranslation } from "react-i18next";
-import { authClient } from "../../../lib/auth-client";
+import { useAuthSession } from "../../../hooks/useAuthSession";
 import { useGame } from "../../../hooks/data/useGame";
 import { createMatch } from "../../../lib/mutations";
 import { db, type LocalGame } from "../../../lib/db";
@@ -102,7 +102,15 @@ function NewMatchPage() {
   const { t } = useTranslation();
 
   const { data: game, status: gameStatus } = useGame(slug);
-  const { data: session } = authClient.useSession();
+  // Use the offline-aware wrapper rather than `authClient.useSession()`
+  // directly. The raw hook can transiently return `undefined` during a
+  // background refresh — if that happens mid-click on Start match, the
+  // `!session` guard below unmounts NewMatchForm, taking the
+  // `submitting` state and pending mutation with it. Symptom: the
+  // offline-mode E2E suite reproducibly times out at `waitForURL` after
+  // submit; passes 100% in isolation. The wrapper falls back to the
+  // cached session keyed on the fetch `error`, eliminating the race.
+  const { session } = useAuthSession();
 
   // `undefined` while loading, `null` once we know there's nothing to
   // prefill (no rematchOf, missing row, or a row from a different game).

@@ -37,6 +37,13 @@
 
 .fieldWrap {
   flex: 1;
+  /* Anchor for the absolute-positioned `.suggestions` overlay so it
+   * floats below the input without taking flow space. Without this,
+   * collapsing the panel (e.g. when focus moves off the input on
+   * submit) shifts every element below it — including the submit
+   * button — and a Mobile-Chrome tap mid-animation can land on the
+   * wrong element. */
+  position: relative;
 }
 
 .field {
@@ -167,7 +174,11 @@
 }
 
 .suggestions {
-  margin-top: 0.375rem;
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  left: 0;
+  right: 0;
+  z-index: 5;
   padding: 0.375rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
