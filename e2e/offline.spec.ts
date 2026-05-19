@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { login } from "./helpers/auth";
 
 /**
  * Serialize the offline file. Most tests here toggle network state at
@@ -52,6 +53,17 @@ async function setScore(
   await input.blur();
 }
 test.describe("Offline (local-first)", () => {
+  // Opt out of the shared `auth-setup` storageState. Each test signs up
+  // its own user so a sibling test running in parallel can't pollute
+  // this user's profile scope. Concretely: `seven-wonders.spec.ts`
+  // creates matches with `Bob-<stamp>` player names, every one of which
+  // becomes a Profile under the shared auth user. With workers > 1 the
+  // offline submit-flow autocomplete picks them up via pullSync; the
+  // resulting suggestion overlay overlaps the submit button and
+  // intercepts the click — exactly the local-only failure observed
+  // for `offline-created match persists, surfaces real CUID...`.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test.skip(
     ({ browserName }) => browserName !== "chromium",
     "Playwright's CDP-based setOffline is chromium-only",
@@ -66,8 +78,11 @@ test.describe("Offline (local-first)", () => {
       // populates the empty DB shortly after.
       indexedDB.deleteDatabase("onboard");
     });
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
+    // Sign up a fresh test user. After `login()` the page is on /games
+    // with the session cookie set; subsequent `page.goto("/games")` in
+    // each test is a fresh navigation that re-triggers pullSync and
+    // captures the responses the test waits on.
+    await login(page);
   });
 
   test("offline navigation to a previously-pulled game renders from Dexie", async ({
@@ -390,25 +405,34 @@ test.describe("Cross-device LWW merge (independent Dexie)", () => {
   test("match created on device A is pulled into device B on first boot", async ({
     browser,
   }) => {
+    // Sign up a fresh user in context A first, then export its session
+    // into context B so both "devices" are the same user. Without this
+    // (older variant loaded `e2e/.auth/state.json` directly), parallel
+    // sibling tests creating `Bob-<stamp>` profiles under the shared
+    // auth-setup user would pollute the autocomplete on pageA and the
+    // suggestion overlay would intercept the submit click. The fresh-
+    // user-per-test pattern isolates this test's profile scope.
     const contextA = await browser.newContext({
-      storageState: "e2e/.auth/state.json",
+      storageState: { cookies: [], origins: [] },
     });
-    const contextB = await browser.newContext({
-      storageState: "e2e/.auth/state.json",
-    });
+    let contextB: Awaited<ReturnType<typeof browser.newContext>> | undefined;
 
     try {
       const pageA = await contextA.newPage();
-      const pageB = await contextB.newPage();
+      await pageA.addInitScript(() => {
+        indexedDB.deleteDatabase("onboard");
+      });
+      await login(pageA);
 
-      // Each context starts with an empty IndexedDB. Without this wipe
-      // a flake in a prior run could leave a non-empty Dexie that
-      // makes "new match appears" trivially true.
-      for (const p of [pageA, pageB]) {
-        await p.addInitScript(() => {
-          indexedDB.deleteDatabase("onboard");
-        });
-      }
+      // Mirror the just-authenticated session into context B so both
+      // contexts are the same user. `context.storageState()` captures
+      // cookies + localStorage at this moment.
+      const sharedState = await contextA.storageState();
+      contextB = await browser.newContext({ storageState: sharedState });
+      const pageB = await contextB.newPage();
+      await pageB.addInitScript(() => {
+        indexedDB.deleteDatabase("onboard");
+      });
 
       // Device A: warm Dexie, then create a match via the offline-
       // then-reconnect pattern (same flow as the combined-lifecycle
@@ -466,7 +490,7 @@ test.describe("Cross-device LWW merge (independent Dexie)", () => {
       ).toBeVisible({ timeout: 5_000 });
     } finally {
       await contextA.close();
-      await contextB.close();
+      await contextB?.close();
     }
   });
 });
