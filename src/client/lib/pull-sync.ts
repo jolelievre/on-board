@@ -243,6 +243,17 @@ async function mergeGames(rows: ApiGame[]): Promise<void> {
     iconUrl: g.iconUrl ?? null,
   }));
   if (toPut.length > 0) await db.games.bulkPut(toPut);
+
+  // `/api/games` always returns the full catalogue (no `since` cursor),
+  // so any local game id missing from the response is no longer canonical
+  // and should be pruned. Without this, every `prisma db push --force-reset
+  // && db:seed` cycle regenerates the seeded games' CUIDs (the seed upserts
+  // by `slug`, so slug is stable but `id` changes), and the client's Dexie
+  // mirror accumulates a fresh duplicate of each game on every reset.
+  const incomingIds = new Set(rows.map((g) => g.id));
+  const allLocal = await db.games.toCollection().primaryKeys();
+  const stale = (allLocal as string[]).filter((id) => !incomingIds.has(id));
+  if (stale.length > 0) await db.games.bulkDelete(stale);
 }
 
 async function mergeMatches(rows: ApiMatch[]): Promise<void> {
