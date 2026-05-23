@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../../lib/db";
 import type { Match } from "../../types/match";
+import { loadProfilesForPlayers, projectPlayer } from "./hydratePlayer";
 
 export type DataStatus = "loading" | "ok" | "missing";
 
@@ -24,6 +25,10 @@ export function useMatch(id: string): UseMatchResult {
         db.scores.where("matchId").equals(id).toArray(),
       ]);
 
+      // Hydrate the Profile row for each Player so display callers can
+      // resolve the canonical alias without an additional hook.
+      const profileById = await loadProfilesForPlayers(players);
+
       return {
         id: match.id,
         status: match.status,
@@ -33,12 +38,7 @@ export function useMatch(id: string): UseMatchResult {
         game: game
           ? { id: game.id, slug: game.slug, name: game.name }
           : { id: match.gameId, slug: "", name: "" },
-        players: players.map((p) => ({
-          id: p.id,
-          name: p.name,
-          position: p.position,
-          user: p.user ?? null,
-        })),
+        players: players.map((p) => projectPlayer(p, profileById)),
         scores: scores.map((s) => ({
           playerId: s.playerId,
           category: s.category,

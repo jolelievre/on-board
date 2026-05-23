@@ -1,27 +1,90 @@
 /**
- * Shared display-name resolution for a Player record.
+ * Shared display-name resolution.
  *
- * Priority:
- *   1. linked User.alias (if set)
- *   2. linked User.name (if linked)
- *   3. Player.name (snapshot at match creation, used for unlinked players)
+ * Phase 6-A introduces the `Profile` domain entity as the canonical
+ * person identity. Two helpers live here:
  *
- * Use this everywhere a player's name is rendered — history list, scoring
- * grid, winner banner — so renaming via Settings (alias) takes effect
- * across past matches retroactively.
+ *   - `displayProfileName(profile, viewerId?)` — the new primary path.
+ *     Returns the profile's canonical alias, or — when the viewer is
+ *     the linked user themselves — their own auth identity (so a
+ *     friend who gave me a silly nickname doesn't override what I see
+ *     of myself).
+ *
+ *   - `displayPlayerName(player, viewerId?)` — back-compat wrapper.
+ *     If the Player carries a denormalized `profile`, delegates to
+ *     `displayProfileName`. Falls back to the legacy `linked user >
+ *     player.name` path when no profile is attached (legacy cached
+ *     rows pre-6-A, or server-side callers that don't join Profile).
  */
-export type PlayerDisplayInput = {
-  name: string;
-  user?: {
+
+export type ProfileDisplayInput = {
+  alias: string;
+  linkedUserId?: string | null;
+  linkedUser?: {
     name: string;
-    alias?: string | null;
+    alias: string | null;
   } | null;
 };
 
-export function displayPlayerName(player: PlayerDisplayInput): string {
+export type PlayerDisplayInput = {
+  name: string;
+  /** Denormalized Profile join populated by `useMatch` / `useMatchList`. */
+  profile?: ProfileDisplayInput | null;
+  user?: {
+    name: string;
+    alias: string | null;
+  } | null;
+};
+
+export function displayProfileName(
+  profile: ProfileDisplayInput,
+  viewerId?: string | null,
+): string {
+  // When the viewer IS the linked user, prefer their own auth-account
+  // identity (which they edit via Settings → Alias). The owner's
+  // Profile.alias is what other viewers see, but a person should see
+  // themselves under the name they chose.
+  if (profile.linkedUserId && viewerId && profile.linkedUserId === viewerId) {
+    const ua = profile.linkedUser?.alias?.trim();
+    if (ua) return ua;
+    const un = profile.linkedUser?.name?.trim();
+    if (un) return un;
+  }
+  return profile.alias;
+}
+
+export function displayPlayerName(
+  player: PlayerDisplayInput,
+  viewerId?: string | null,
+): string {
+  if (player.profile) return displayProfileName(player.profile, viewerId);
+  // Legacy path — no Profile attached. Used by the server-side
+  // suggestions endpoint and by any Dexie row that pre-dates 6-A.
   const alias = player.user?.alias?.trim();
   if (alias) return alias;
   const userName = player.user?.name?.trim();
   if (userName) return userName;
   return player.name;
+}
+
+/**
+ * Resolve the canonical alias for a self-Profile from the underlying
+ * User row. Trimmed `alias` wins; otherwise the full `name`; finally a
+ * hard-coded "Me" so the row is never blank in the suggestions list.
+ *
+ * Shared between the server (provisioning / mirroring the self-Profile
+ * in `src/server/lib/profiles.ts`) and the client (`refreshLocalAliases`
+ * mirror + `usePlayerSuggestions` session fallback) so all sites agree
+ * on the same fallback chain — drift would manifest as a self chip
+ * showing "Me" on one surface and the user's name on another.
+ */
+export function resolveSelfAlias(user: {
+  name: string;
+  alias: string | null;
+}): string {
+  const alias = user.alias?.trim();
+  if (alias) return alias;
+  const name = user.name?.trim();
+  if (name) return name;
+  return "Me";
 }

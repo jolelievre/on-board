@@ -3,6 +3,7 @@ import {
   db,
   type LocalMatch,
   type LocalPlayer,
+  type LocalProfile3,
   type LocalScore,
 } from "./db";
 import { syncEngine } from "./sync";
@@ -283,4 +284,120 @@ function warnMissingLocalMatch(op: string, matchId: string): void {
     `[mutations.${op}] match ${matchId} not found in Dexie; ` +
       `queueing server request without local mirror update.`,
   );
+}
+
+// ─── Profile mutations (Phase 6-A) ───
+
+export type CreateProfileInput = {
+  /** The User who will own the new profile. Caller passes their own
+   * id from the session. The server enforces this server-side from the
+   * authenticated cookie; the client copy is only used to populate the
+   * local Dexie row so it appears in suggestions before the POST has
+   * even hit the wire. */
+  ownerId: string;
+  alias: string;
+  /** Optional pre-supplied id — used by tests and by inline profile
+   * creation from the new-match form so the resulting Player row can
+   * reference it immediately. */
+  id?: string;
+};
+
+export type CreateProfileResult = {
+  profileId: string;
+};
+
+/**
+ * Create an unclaimed Profile locally and enqueue a POST to /api/profiles.
+ * The id is generated client-side; the server upserts idempotently on it.
+ *
+ * Owner-only visibility is enforced by the server's `profileVisibilityWhere`
+ * filter; the local row is written eagerly so `useProfileList()` rerenders
+ * before the network request resolves.
+ */
+export async function createProfile(
+  input: CreateProfileInput,
+): Promise<CreateProfileResult> {
+  const profileId = input.id ?? createId();
+  const alias = input.alias.trim();
+  const ts = nowIso();
+
+  const profile: LocalProfile3 = {
+    id: profileId,
+    ownerId: input.ownerId,
+    linkedUserId: null,
+    alias,
+    customAvatarUrl: null,
+    useLinkedAvatar: true,
+    usedAt: ts,
+    createdAt: ts,
+    updatedAt: ts,
+    linkedUser: null,
+  };
+
+  await db.transaction("rw", [db.profiles, db.syncQueue], async () => {
+    await db.profiles.put(profile);
+    await db.syncQueue.add({
+      method: "POST",
+      url: "/api/profiles",
+      body: JSON.stringify({ id: profileId, alias }),
+      createdAt: ts,
+      retries: 0,
+      status: "pending",
+    });
+  });
+
+  scheduleFlush();
+  return { profileId };
+}
+
+export type PatchProfileInput = {
+  profileId: string;
+  alias?: string;
+  useLinkedAvatar?: boolean;
+};
+
+/**
+ * Edit a Profile's owner-controlled fields. Optimistically applies the
+ * patch to Dexie and enqueues a PATCH /api/profiles/:id. Both fields are
+ * optional; passing neither is a no-op (the server would reject it).
+ */
+export async function patchProfile(input: PatchProfileInput): Promise<void> {
+  const ts = nowIso();
+  const body: { alias?: string; useLinkedAvatar?: boolean } = {};
+  if (input.alias !== undefined) body.alias = input.alias.trim();
+  if (input.useLinkedAvatar !== undefined)
+    body.useLinkedAvatar = input.useLinkedAvatar;
+
+  if (Object.keys(body).length === 0) return;
+
+  await db.transaction("rw", [db.profiles, db.syncQueue], async () => {
+    const profile = await db.profiles.get(input.profileId);
+    if (profile) {
+      const next: LocalProfile3 = {
+        ...profile,
+        ...(body.alias !== undefined ? { alias: body.alias } : {}),
+        ...(body.useLinkedAvatar !== undefined
+          ? { useLinkedAvatar: body.useLinkedAvatar }
+          : {}),
+        updatedAt: ts,
+      };
+      await db.profiles.put(next);
+    } else {
+      console.warn(
+        `[mutations.patchProfile] profile ${input.profileId} not found in Dexie; ` +
+          `queueing server request without local mirror update.`,
+      );
+    }
+
+    await db.syncQueue.add({
+      method: "PATCH",
+      url: `/api/profiles/${input.profileId}`,
+      body: JSON.stringify(body),
+      createdAt: ts,
+      retries: 0,
+      status: "pending",
+    });
+  });
+
+  scheduleFlush();
 }

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { login } from "./helpers/auth";
 
 /**
  * Serialize the offline file. Most tests here toggle network state at
@@ -51,7 +52,39 @@ async function setScore(
   await input.fill(String(value));
   await input.blur();
 }
+
+/**
+ * Wait promises for every endpoint pullSync fetches on boot/refresh.
+ * Spread into `Promise.all([...waitForPullSync(page), page.goto(...)])`
+ * before the offline window opens so Dexie can't catch an in-flight
+ * request and end up with a partial mirror.
+ *
+ * Add the new endpoint here when pullSync grows — every call site
+ * inherits the wait without per-test edits.
+ */
+function waitForPullSync(page: Page) {
+  return [
+    page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
+    page.waitForResponse(
+      (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+    ),
+    page.waitForResponse(
+      (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
+    ),
+  ];
+}
 test.describe("Offline (local-first)", () => {
+  // Opt out of the shared `auth-setup` storageState. Each test signs up
+  // its own user so a sibling test running in parallel can't pollute
+  // this user's profile scope. Concretely: `seven-wonders.spec.ts`
+  // creates matches with `Bob-<stamp>` player names, every one of which
+  // becomes a Profile under the shared auth user. With workers > 1 the
+  // offline submit-flow autocomplete picks them up via pullSync; the
+  // resulting suggestion overlay overlaps the submit button and
+  // intercepts the click — exactly the local-only failure observed
+  // for `offline-created match persists, surfaces real CUID...`.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test.skip(
     ({ browserName }) => browserName !== "chromium",
     "Playwright's CDP-based setOffline is chromium-only",
@@ -66,8 +99,11 @@ test.describe("Offline (local-first)", () => {
       // populates the empty DB shortly after.
       indexedDB.deleteDatabase("onboard");
     });
-    await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
+    // Sign up a fresh test user. After `login()` the page is on /games
+    // with the session cookie set; subsequent `page.goto("/games")` in
+    // each test is a fresh navigation that re-triggers pullSync and
+    // captures the responses the test waits on.
+    await login(page);
   });
 
   test("offline navigation to a previously-pulled game renders from Dexie", async ({
@@ -78,10 +114,7 @@ test.describe("Offline (local-first)", () => {
     // After both resolve, Dexie has the full games catalogue and the
     // user's matches.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
     await expect(page.locator("h1")).toContainText("Games");
@@ -107,10 +140,7 @@ test.describe("Offline (local-first)", () => {
     context,
   }) => {
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 
@@ -128,10 +158,7 @@ test.describe("Offline (local-first)", () => {
   }) => {
     // Warm Dexie with the games catalogue.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 
@@ -207,10 +234,7 @@ test.describe("Offline (local-first)", () => {
     // sequence intact also pins the queue's ordering contract — POST
     // before PATCH before PUT — without an explicit assertion.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 
@@ -299,10 +323,7 @@ test.describe("Offline (local-first)", () => {
     // rather than not-visible because the SyncStatus component returns
     // null when status==='idle', so it shouldn't be in the DOM at all.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
     await expect(page.locator("[data-testid='sync-status']")).toHaveCount(0);
@@ -360,25 +381,34 @@ test.describe("Cross-device LWW merge (independent Dexie)", () => {
   test("match created on device A is pulled into device B on first boot", async ({
     browser,
   }) => {
+    // Sign up a fresh user in context A first, then export its session
+    // into context B so both "devices" are the same user. Without this
+    // (older variant loaded `e2e/.auth/state.json` directly), parallel
+    // sibling tests creating `Bob-<stamp>` profiles under the shared
+    // auth-setup user would pollute the autocomplete on pageA and the
+    // suggestion overlay would intercept the submit click. The fresh-
+    // user-per-test pattern isolates this test's profile scope.
     const contextA = await browser.newContext({
-      storageState: "e2e/.auth/state.json",
+      storageState: { cookies: [], origins: [] },
     });
-    const contextB = await browser.newContext({
-      storageState: "e2e/.auth/state.json",
-    });
+    let contextB: Awaited<ReturnType<typeof browser.newContext>> | undefined;
 
     try {
       const pageA = await contextA.newPage();
-      const pageB = await contextB.newPage();
+      await pageA.addInitScript(() => {
+        indexedDB.deleteDatabase("onboard");
+      });
+      await login(pageA);
 
-      // Each context starts with an empty IndexedDB. Without this wipe
-      // a flake in a prior run could leave a non-empty Dexie that
-      // makes "new match appears" trivially true.
-      for (const p of [pageA, pageB]) {
-        await p.addInitScript(() => {
-          indexedDB.deleteDatabase("onboard");
-        });
-      }
+      // Mirror the just-authenticated session into context B so both
+      // contexts are the same user. `context.storageState()` captures
+      // cookies + localStorage at this moment.
+      const sharedState = await contextA.storageState();
+      contextB = await browser.newContext({ storageState: sharedState });
+      const pageB = await contextB.newPage();
+      await pageB.addInitScript(() => {
+        indexedDB.deleteDatabase("onboard");
+      });
 
       // Device A: warm Dexie, then create a match via the offline-
       // then-reconnect pattern (same flow as the combined-lifecycle
@@ -436,7 +466,7 @@ test.describe("Cross-device LWW merge (independent Dexie)", () => {
       ).toBeVisible({ timeout: 5_000 });
     } finally {
       await contextA.close();
-      await contextB.close();
+      await contextB?.close();
     }
   });
 });
@@ -566,10 +596,7 @@ test.describe("pullSync triggers", () => {
   }) => {
     // Warm Dexie.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 
@@ -624,10 +651,7 @@ test.describe("pullSync triggers", () => {
     // window. Future non-forced calls would no-op; only a forced
     // trigger can pull again.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 
@@ -655,10 +679,7 @@ test.describe("pullSync triggers", () => {
     page,
   }) => {
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 

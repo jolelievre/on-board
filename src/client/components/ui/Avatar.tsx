@@ -1,0 +1,166 @@
+import type { LocalProfile3 } from "../../lib/db";
+import { displayProfileName } from "../../../shared/players";
+import styles from "./Avatar.module.css";
+
+const BUCKETS = [
+  styles.bucket0,
+  styles.bucket1,
+  styles.bucket2,
+  styles.bucket3,
+  styles.bucket4,
+  styles.bucket5,
+  styles.bucket6,
+  styles.bucket7,
+];
+
+const SIZE_CLASS: Record<AvatarSize, string> = {
+  sm: styles.sm,
+  md: styles.md,
+  lg: styles.lg,
+};
+
+export type AvatarSize = "sm" | "md" | "lg";
+
+type CommonProps = {
+  size?: AvatarSize;
+  className?: string;
+};
+
+type ProfileSource = {
+  profile: Pick<
+    LocalProfile3,
+    "id" | "alias" | "linkedUserId" | "customAvatarUrl" | "useLinkedAvatar" | "linkedUser"
+  >;
+  /** The viewer for resolution: a linked user looking at their own
+   * profile sees their own canonical avatar; an owner sees either the
+   * friend's photo or their custom upload depending on `useLinkedAvatar`. */
+  viewerId?: string | null;
+};
+
+type FallbackSource = {
+  /** Use when no Profile row exists — e.g. legacy cached Player.name
+   * or a brand-new entry being typed in the new-match form. */
+  alias: string;
+  /** Optional stable hash key for the colour bucket. Defaults to the
+   * alias when omitted, so the same name always gets the same colour. */
+  hashKey?: string;
+};
+
+type Props = CommonProps & (ProfileSource | FallbackSource);
+
+/**
+ * Reusable avatar. In Phase 6-A it only renders the linked user's photo
+ * or an initial-letter fallback — owner-uploaded custom avatars land in
+ * Phase 6-B and the resolver below will pick them up automatically.
+ *
+ * Resolution order for an owner viewing a profile:
+ *   1. `customAvatarUrl` is set AND `useLinkedAvatar` is false → use it
+ *   2. profile is linked AND `useLinkedAvatar` is true →
+ *      `linkedUser.avatarUrl`
+ *   3. profile has a `customAvatarUrl` anyway → use it (fallback for
+ *      unclaimed profiles)
+ *   4. initial-letter chip in a deterministic colour
+ *
+ * When the viewer is the linked user themselves, always use the linked
+ * user's own canonical avatar — owners can never override what someone
+ * sees of themselves.
+ */
+export function Avatar(props: Props) {
+  const size: AvatarSize = props.size ?? "md";
+  const sizeClass = SIZE_CLASS[size];
+  const className = props.className
+    ? `${styles.root} ${sizeClass} ${props.className}`
+    : `${styles.root} ${sizeClass}`;
+
+  if ("profile" in props) {
+    const { profile, viewerId } = props;
+    const resolved = resolveAvatarUrl(profile, viewerId);
+    const name = displayProfileName(profile, viewerId);
+    const initial = initialFromName(name);
+    const bucket = BUCKETS[hashBucket(profile.id) % BUCKETS.length];
+
+    if (resolved) {
+      return (
+        <span
+          className={`${className} ${bucket}`}
+          role="img"
+          aria-label={name}
+        >
+          <img
+            className={styles.img}
+            src={resolved}
+            alt=""
+            // Referrer hides the user's auth host from external avatar
+            // providers; Google's hosted photos accept this fine.
+            referrerPolicy="no-referrer"
+          />
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className={`${className} ${bucket}`}
+        role="img"
+        aria-label={name}
+      >
+        {initial}
+      </span>
+    );
+  }
+
+  const { alias, hashKey } = props;
+  const initial = initialFromName(alias);
+  const bucket = BUCKETS[hashBucket(hashKey ?? alias) % BUCKETS.length];
+  return (
+    <span
+      className={`${className} ${bucket}`}
+      role="img"
+      aria-label={alias}
+    >
+      {initial}
+    </span>
+  );
+}
+
+function resolveAvatarUrl(
+  profile: ProfileSource["profile"],
+  viewerId: string | null | undefined,
+): string | null {
+  // The linked user always sees their own canonical avatar — owners
+  // can't override what someone sees of themselves.
+  if (
+    profile.linkedUserId &&
+    viewerId &&
+    profile.linkedUserId === viewerId
+  ) {
+    return profile.linkedUser?.avatarUrl ?? null;
+  }
+  // Owner-side: explicit override wins when `useLinkedAvatar` is false.
+  if (!profile.useLinkedAvatar && profile.customAvatarUrl) {
+    return profile.customAvatarUrl;
+  }
+  // Linked + opt-in to the friend's photo.
+  if (profile.linkedUserId && profile.useLinkedAvatar) {
+    return profile.linkedUser?.avatarUrl ?? profile.customAvatarUrl ?? null;
+  }
+  // Unclaimed with a custom upload (forward-compat with 6-B).
+  return profile.customAvatarUrl ?? null;
+}
+
+function initialFromName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "·";
+  // Grab the first codepoint so emoji / accented characters survive.
+  return [...trimmed][0]!.toUpperCase();
+}
+
+/** Simple deterministic 32-bit-ish hash. Stable across reloads, good
+ * enough to spread 8 buckets fairly across a few dozen profiles. */
+function hashBucket(input: string): number {
+  let h = 5381;
+  for (let i = 0; i < input.length; i++) {
+    h = ((h << 5) + h + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}

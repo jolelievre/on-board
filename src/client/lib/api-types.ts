@@ -18,11 +18,38 @@ export type ApiGame = {
 export type ApiPlayer = {
   id: string;
   matchId?: string;
+  /** Phase 6-A: server resolves a Profile for every Player on create and
+   * returns its id here. Older snapshots (pre-6-A persisted cache) may
+   * lack the field, hence nullable. */
+  profileId?: string | null;
   userId?: string | null;
   name: string;
   position: number;
   user?: { name: string; alias: string | null } | null;
   updatedAt?: string | null;
+};
+
+/** Linked-User projection embedded in profile responses so the client can
+ * render the canonical avatar / name without an extra `/api/users`
+ * lookup. Null when the profile is unclaimed. */
+export type ApiProfileLinkedUser = {
+  id: string;
+  name: string;
+  alias: string | null;
+  avatarUrl: string | null;
+};
+
+export type ApiProfile = {
+  id: string;
+  ownerId: string;
+  linkedUserId: string | null;
+  alias: string;
+  customAvatarUrl: string | null;
+  useLinkedAvatar: boolean;
+  usedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  linkedUser: ApiProfileLinkedUser | null;
 };
 
 export type ApiScore = {

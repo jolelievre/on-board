@@ -1,70 +1,67 @@
-import { useEffect } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { api } from "../lib/api";
 import { authClient } from "../lib/auth-client";
-import { db, type LocalProfile } from "../lib/db";
+import { db } from "../lib/db";
+import { resolveSelfAlias } from "../../shared/players";
 
 type PlayerSuggestion = { name: string; isSelf: boolean };
 
 /**
- * Suggestions are resolved from two sources, in priority order:
+ * Suggestions for the legacy new-match form (Phase 6-A: name-input mode
+ * is still the default — the profile-picker UI ships in 6-B). Reads
+ * exclusively from the server-mirrored `profiles` table:
  *
- *   1. The current auth session's `alias`/`name` — synthesises the self
- *      entry so it stays in sync with `updateProfile()` without an extra
- *      round-trip. Server's own self entry is intentionally ignored.
- *   2. Dexie `localProfiles` (non-self rows), populated by a background
- *      fetch of `/api/players/suggestions` on mount.
+ *   1. Self entry — synthesised from the auth session so renames in
+ *      Settings appear instantly without a server round-trip.
+ *   2. Every profile the viewer can see (owned or linked), sorted by
+ *      most-recently used. Self is excluded from this list because we
+ *      always emit it first from the session.
  *
- * `useLiveQuery` makes the Dexie read reactive: any write to
- * `localProfiles` (mirroring after fetch, or `persistPlayersToLocalProfiles`
- * after a new match) re-runs the predicate and re-renders consumers.
- *
- * Self is *never* mirrored into Dexie: persisting `{name: previousAlias,
- * isSelf: true}` would resurrect the previous alias as a phantom entry
- * after the user renames themselves.
+ * `useLiveQuery` makes the Dexie read reactive: any pullSync that
+ * updates a profile re-runs the predicate and re-renders consumers.
  */
 export function usePlayerSuggestions() {
   const { data: session } = authClient.useSession();
   const sessionUser = session?.user as
-    | { name?: string | null; alias?: string | null }
+    | { id: string; name?: string | null; alias?: string | null }
     | undefined;
-  const selfName =
-    sessionUser?.alias?.trim() || sessionUser?.name?.trim() || "";
+  const viewerId = sessionUser?.id;
 
-  // Background fetch + Dexie mirror. Self entry from the server response
-  // is dropped — we synthesise it from the session below.
-  useEffect(() => {
-    let cancelled = false;
-    void api<PlayerSuggestion[]>("/api/players/suggestions")
-      .then(async (rows) => {
-        if (cancelled) return;
-        const now = new Date().toISOString();
-        await Promise.all(
-          rows
-            .filter((s) => !s.isSelf)
-            .map((s) =>
-              db.localProfiles.put({
-                name: s.name,
-                isSelf: false,
-                usedAt: now,
-              }),
-            ),
-        );
-      })
-      .catch(() => {
-        // Offline or transient failure — useLiveQuery still serves the
-        // last-known Dexie state.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const localProfiles = useLiveQuery<LocalProfile[], LocalProfile[]>(
-    () => db.localProfiles.orderBy("usedAt").reverse().toArray(),
-    [],
+  const profiles = useLiveQuery(
+    async () => {
+      if (!viewerId) return [];
+      // Same OR shape as useProfileList — Dexie can't span two columns
+      // natively, so two indexed scans joined in memory. The set is
+      // small (10s of rows).
+      const [owned, linked] = await Promise.all([
+        db.profiles.where("ownerId").equals(viewerId).toArray(),
+        db.profiles.where("linkedUserId").equals(viewerId).toArray(),
+      ]);
+      const byId = new Map<string, (typeof owned)[number]>();
+      for (const p of owned) byId.set(p.id, p);
+      for (const p of linked) byId.set(p.id, p);
+      const rows = [...byId.values()];
+      rows.sort((a, b) => (a.usedAt > b.usedAt ? -1 : a.usedAt < b.usedAt ? 1 : 0));
+      return rows;
+    },
+    [viewerId],
     [],
   );
+
+  // Prefer the self-Profile's alias over the session payload: renames
+  // done via the Players tab call `patchProfile`, which updates Dexie's
+  // self-Profile but doesn't touch `User.alias` (only the Settings page
+  // does). `resolveSelfAlias` (shared with the server's self-Profile
+  // provisioning) keeps the chip populated during the brief window
+  // before pullSync has hydrated the self-Profile on a fresh boot.
+  const selfProfile = profiles.find((p) => p.linkedUserId === viewerId);
+  const selfName =
+    selfProfile?.alias?.trim() ||
+    (sessionUser
+      ? resolveSelfAlias({
+          name: sessionUser.name ?? "",
+          alias: sessionUser.alias ?? null,
+        })
+      : "");
 
   const seen = new Set<string>();
   const data: PlayerSuggestion[] = [];
@@ -74,36 +71,33 @@ export function usePlayerSuggestions() {
     data.push({ name: selfName, isSelf: true });
   }
 
-  for (const row of localProfiles) {
-    const key = row.name.toLowerCase();
+  for (const p of profiles) {
+    // Skip the self-Profile — we synthesise the self entry from the
+    // session above and never want it duplicated.
+    if (p.linkedUserId === viewerId) continue;
+    const key = p.alias.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    data.push({ name: row.name, isSelf: false });
+    data.push({ name: p.alias, isSelf: false });
   }
 
   return { data };
 }
 
 /**
- * Saves a list of players to Dexie LocalProfiles after a match is created.
+ * No-op after Phase 6-A: every Player row gets a Profile resolved
+ * server-side, and the next pullSync brings those rows into Dexie's
+ * `profiles` table — so suggestions automatically refresh without us
+ * mirroring anything by hand.
  *
- * `isSelf` is determined by `userId === selfUserId` — never by name equality.
- * Two friends sharing a first name (or a friend sharing the user's name) must
- * not stamp `isSelf: true` on the wrong row, which would pollute the
- * suggestion list and the userId attribution path on the next new-match form.
+ * Kept as an exported shim so the existing new-match form (which calls
+ * this after submit) compiles; can be deleted once 6-B converts the
+ * form to the profile-picker mode.
  */
 export async function persistPlayersToLocalProfiles(
-  players: { name: string; userId: string | null }[],
-  selfUserId: string | null,
+  _players: { name: string; userId: string | null }[],
+  _selfUserId: string | null,
 ): Promise<void> {
-  const now = new Date().toISOString();
-  await Promise.all(
-    players.map((p) =>
-      db.localProfiles.put({
-        name: p.name,
-        isSelf: !!selfUserId && p.userId === selfUserId,
-        usedAt: now,
-      }),
-    ),
-  );
+  // pullSync (kicked off after the match POST flushes) repopulates the
+  // profiles table from the server. No client-side mirror needed.
 }

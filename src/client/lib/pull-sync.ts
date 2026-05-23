@@ -1,14 +1,17 @@
 import { api } from "./api";
-import type { ApiGame, ApiMatch } from "./api-types";
+import type { ApiGame, ApiMatch, ApiProfile } from "./api-types";
 import {
   db,
   type LocalGame,
   type LocalMatch,
   type LocalPlayer,
+  type LocalProfile3,
   type LocalScore,
 } from "./db";
+import { resolveSelfAlias } from "../../shared/players";
 
 const SYNC_META_LAST_PULL = "lastPullAt";
+const SYNC_META_LAST_PROFILE_PULL = "lastProfilePullAt";
 
 /** Minimum interval between successive `pullSync()` attempts (forceable
  * via `{ force: true }`). Without throttling, the post-flush pullSync
@@ -26,30 +29,72 @@ const MIN_PULL_INTERVAL_MS = 5_000;
  * fills the post-reload cold cache regardless. */
 let lastPullStartedAt = 0;
 
-/** Patch the cached `player.user.alias` on every local Player linked
- * to the given user id.
+/** Patch the cached `player.user.alias` and the self-Profile's
+ * `alias` + `linkedUser.alias` on every local row tied to the given
+ * user id.
  *
  * Alias edits don't bump `Match.updatedAt` on the server (they only
  * touch the User row), so a subsequent `pullSync()` would LWW-skip
- * every match and leave Dexie's mirrored `player.user.alias` stale.
- * Settings calls this directly after `updateProfile` so the UI sees
- * the new alias on the next render without waiting for any external
- * bump. */
+ * every match and leave Dexie's mirrored values stale. Settings calls
+ * this directly after `updateProfile` so the UI sees the new alias on
+ * the next render without waiting for any external bump.
+ *
+ * Phase 6-A: also updates `profiles` rows. The history list now reads
+ * Profile.alias (via the Player → Profile join in `useMatchList`), so
+ * leaving Dexie profiles stale would break retroactive renames in the
+ * exact way the legacy player.user.alias mirror was designed to fix. */
 export async function refreshLocalAliases(
   userId: string,
   newAlias: string | null,
 ): Promise<void> {
-  const players = await db.players.where("userId").equals(userId).toArray();
-  if (players.length === 0) return;
   const ts = new Date().toISOString();
-  for (const p of players) {
-    p.user = {
-      name: p.user?.name ?? p.name,
-      alias: newAlias,
-    };
-    p.updatedAt = ts;
+
+  const players = await db.players.where("userId").equals(userId).toArray();
+  if (players.length > 0) {
+    for (const p of players) {
+      p.user = {
+        name: p.user?.name ?? p.name,
+        alias: newAlias,
+      };
+      p.updatedAt = ts;
+    }
+    await db.players.bulkPut(players);
   }
-  await db.players.bulkPut(players);
+
+  // Update profile rows for the self-Profile (ownerId === linkedUserId
+  // === userId) AND any profile this user is the linked target of.
+  // The first case keeps the user's own display name in sync; the
+  // second is forward-compat with the 6-C link feature, where a
+  // friend's profile would carry our auth alias in its linkedUser
+  // projection. Both queries are no-ops when nothing matches.
+  const linkedProfiles = await db.profiles
+    .where("linkedUserId")
+    .equals(userId)
+    .toArray();
+  if (linkedProfiles.length > 0) {
+    for (const profile of linkedProfiles) {
+      if (profile.linkedUser) {
+        profile.linkedUser = {
+          ...profile.linkedUser,
+          alias: newAlias,
+        };
+      }
+      // For the self-Profile, the canonical display alias is the user's
+      // own choice. Mirror it so all viewers (including third parties
+      // post-6-C) get the fresh value. When the user clears their alias,
+      // resolveSelfAlias picks the server's fallback (User.name → "Me")
+      // so the local Profile.alias stays in lockstep with what
+      // `syncSelfProfileAlias` wrote on the server.
+      if (profile.ownerId === userId) {
+        profile.alias = resolveSelfAlias({
+          name: profile.linkedUser?.name ?? "",
+          alias: newAlias,
+        });
+      }
+      profile.updatedAt = ts;
+    }
+    await db.profiles.bulkPut(linkedProfiles);
+  }
 }
 
 /** Read a key from the singleton syncMeta keystore. */
@@ -88,26 +133,109 @@ export async function pullSync(
   lastPullStartedAt = now;
 
   const since = await getSyncMeta(SYNC_META_LAST_PULL);
+  const sinceProfiles = await getSyncMeta(SYNC_META_LAST_PROFILE_PULL);
   const pulledAt = new Date().toISOString();
 
   const matchesUrl = since
     ? `/api/matches?since=${encodeURIComponent(since)}`
     : `/api/matches`;
+  const profilesUrl = sinceProfiles
+    ? `/api/profiles?since=${encodeURIComponent(sinceProfiles)}`
+    : `/api/profiles`;
 
-  const [games, matches] = await Promise.all([
+  // Each endpoint runs as an independent fetch → transaction pipeline.
+  // Earlier iterations coordinated all three with `Promise.all` /
+  // `allSettled`, but if any single fetch hangs (e.g. `setOffline(true)`
+  // dropping an in-flight request without rejecting it), the join would
+  // hang too — and the writes for the requests that DID return would
+  // never reach Dexie. Independent pipelines make each entity's
+  // freshness depend only on its own fetch returning. The outer
+  // `allSettled` only governs when the *caller's* await resolves; the
+  // Dexie writes already fired as each fetch landed.
+  const games = pullEntity(
     api<ApiGame[]>("/api/games"),
-    api<ApiMatch[]>(matchesUrl),
-  ]);
-
-  await db.transaction(
-    "rw",
-    [db.games, db.matches, db.players, db.scores, db.syncMeta],
-    async () => {
-      await mergeGames(games);
-      await mergeMatches(matches);
-      await setSyncMeta(SYNC_META_LAST_PULL, pulledAt);
+    async (rows) => {
+      await db.transaction("rw", db.games, async () => {
+        await mergeGames(rows);
+      });
     },
   );
+  const matches = pullEntity(
+    api<ApiMatch[]>(matchesUrl),
+    async (rows) => {
+      await db.transaction(
+        "rw",
+        [db.matches, db.players, db.scores, db.syncMeta],
+        async () => {
+          await mergeMatches(rows);
+          await setSyncMeta(SYNC_META_LAST_PULL, pulledAt);
+        },
+      );
+    },
+  );
+  const profiles = pullEntity(
+    api<ApiProfile[]>(profilesUrl),
+    async (rows) => {
+      await db.transaction(
+        "rw",
+        [db.profiles, db.syncMeta],
+        async () => {
+          await mergeProfiles(rows);
+          await setSyncMeta(SYNC_META_LAST_PROFILE_PULL, pulledAt);
+        },
+      );
+    },
+  );
+
+  await Promise.allSettled([games, matches, profiles]);
+}
+
+async function pullEntity<T>(
+  fetched: Promise<T>,
+  write: (rows: T) => Promise<void>,
+): Promise<void> {
+  try {
+    const rows = await fetched;
+    await write(rows);
+  } catch {
+    // Per-endpoint failure is non-fatal: the other endpoints still
+    // complete, and the next pullSync attempt will retry this one.
+  }
+}
+
+async function mergeProfiles(rows: ApiProfile[]): Promise<void> {
+  if (rows.length === 0) return;
+
+  const ids = rows.map((p) => p.id);
+  const existing = await db.profiles.bulkGet(ids);
+  const existingById = new Map<string, LocalProfile3>();
+  for (const p of existing) {
+    if (p) existingById.set(p.id, p);
+  }
+
+  const toPut: LocalProfile3[] = [];
+  for (const p of rows) {
+    const local = existingById.get(p.id);
+    // LWW on updatedAt: skip when the local copy is at least as fresh.
+    // Profile edits flow through `mutations.ts`, which bumps the local
+    // updatedAt at write time; the server bumps on PATCH. A tie favours
+    // local so a queued PATCH-then-pull doesn't undo the optimistic
+    // value.
+    if (local && local.updatedAt >= p.updatedAt) continue;
+    toPut.push({
+      id: p.id,
+      ownerId: p.ownerId,
+      linkedUserId: p.linkedUserId,
+      alias: p.alias,
+      customAvatarUrl: p.customAvatarUrl,
+      useLinkedAvatar: p.useLinkedAvatar,
+      usedAt: p.usedAt,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      linkedUser: p.linkedUser,
+    });
+  }
+  if (toPut.length > 0) await db.profiles.bulkPut(toPut);
 }
 
 async function mergeGames(rows: ApiGame[]): Promise<void> {
@@ -121,6 +249,17 @@ async function mergeGames(rows: ApiGame[]): Promise<void> {
     iconUrl: g.iconUrl ?? null,
   }));
   if (toPut.length > 0) await db.games.bulkPut(toPut);
+
+  // `/api/games` always returns the full catalogue (no `since` cursor),
+  // so any local game id missing from the response is no longer canonical
+  // and should be pruned. Without this, every `prisma db push --force-reset
+  // && db:seed` cycle regenerates the seeded games' CUIDs (the seed upserts
+  // by `slug`, so slug is stable but `id` changes), and the client's Dexie
+  // mirror accumulates a fresh duplicate of each game on every reset.
+  const incomingIds = new Set(rows.map((g) => g.id));
+  const allLocal = await db.games.toCollection().primaryKeys();
+  const stale = (allLocal as string[]).filter((id) => !incomingIds.has(id));
+  if (stale.length > 0) await db.games.bulkDelete(stale);
 }
 
 async function mergeMatches(rows: ApiMatch[]): Promise<void> {
@@ -176,6 +315,7 @@ async function mergeMatches(rows: ApiMatch[]): Promise<void> {
       playersToPut.push({
         id: p.id,
         matchId: m.id,
+        profileId: p.profileId ?? null,
         userId: p.userId ?? null,
         name: p.name,
         position: p.position,

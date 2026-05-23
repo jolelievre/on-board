@@ -115,6 +115,40 @@ test.describe("Alias — settings + propagation", () => {
     ).toHaveCount(0);
   });
 
+  test("editing the alias via the Players tab updates the new-match self suggestion", async ({
+    page,
+  }) => {
+    // Reproduces the bug where renaming via /players/<self> didn't
+    // refresh `usePlayerSuggestions` because the hook read the alias
+    // from the auth session (only updated by the Settings page) instead
+    // of from Dexie's self-Profile (updated by patchProfile too).
+    await signUpFresh(page);
+
+    // Open the self-Profile detail page. The list is sorted with self
+    // pinned at the top, so the first row is the self entry.
+    await page.goto("/players");
+    await page.waitForLoadState("domcontentloaded");
+    await page.locator("[data-testid='player-row']").first().click();
+    await page.waitForURL(/\/players\/[^/?#]+$/);
+
+    const aliasInput = page.locator("[data-testid='profile-alias-input']");
+    await expect(aliasInput).toBeVisible();
+    await aliasInput.fill("Captain");
+    await aliasInput.blur();
+    await expect(
+      page.locator("[data-testid='profile-alias-saved']"),
+    ).toBeVisible();
+
+    // The new alias must now appear as the self suggestion chip in the
+    // new-match form, just like it does when edited via Settings.
+    await page.goto("/games/7-wonders-duel/new");
+    await page.waitForLoadState("domcontentloaded");
+    await page.click("[data-testid='new-match-player-0']");
+    await expect(
+      page.locator("[data-testid='new-match-suggestion-0-Captain']"),
+    ).toBeVisible();
+  });
+
   test("alias retroactively updates match history for linked players", async ({
     page,
   }) => {
