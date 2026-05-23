@@ -1,9 +1,15 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../../lib/auth-client";
 import { patchProfile } from "../../../lib/mutations";
-import { useProfile, useProfileStats, useProfileRecentMatches } from "../../../hooks/data/useProfiles";
+import {
+  useProfile,
+  useProfileList,
+  useProfileStats,
+  useProfileRecentMatches,
+  useHeadToHead,
+} from "../../../hooks/data/useProfiles";
 import type { LocalProfile3 } from "../../../lib/db";
 import { Header } from "../../../components/layout/Header";
 import { Avatar } from "../../../components/ui/Avatar";
@@ -11,6 +17,9 @@ import { Group } from "../../../components/ui/Group";
 import { Input } from "../../../components/ui/Input";
 import { Pill } from "../../../components/ui/Pill";
 import { Icon } from "../../../components/ui/Icon";
+import { Button } from "../../../components/ui/Button";
+import { AvatarUploader } from "../../../components/profiles/AvatarUploader";
+import { MergeDialog } from "../../../components/profiles/MergeDialog";
 import { displayProfileName } from "../../../../shared/players";
 import styles from "./$profileId.module.css";
 
@@ -61,13 +70,28 @@ function ProfileDetailBody({
   viewerId: string | null;
 }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const isSelf = profile.linkedUserId === viewerId;
   const isLinked = profile.linkedUserId !== null;
   const isOwner = profile.ownerId === viewerId;
   const name = displayProfileName(profile, viewerId);
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   const stats = useProfileStats(profile.id);
   const recent = useProfileRecentMatches(profile.id, 10);
+
+  // Self-Profile id powers the head-to-head panel: only meaningful when
+  // the subject is someone else AND the viewer has a self-Profile in
+  // their local mirror. We pull from the visible-profiles list because
+  // it's already memoised in the page tree above.
+  const { data: visibleProfiles } = useProfileList(viewerId ?? undefined);
+  const selfProfileId = visibleProfiles?.find(
+    (p) => p.linkedUserId === viewerId,
+  )?.id;
+  const headToHead = useHeadToHead(
+    isSelf ? undefined : profile.id,
+    isSelf ? undefined : selfProfileId,
+  );
 
   return (
     <>
@@ -87,9 +111,62 @@ function ProfileDetailBody({
           </div>
         </div>
 
+        {isOwner && viewerId && (
+          <Group title={t("avatar.title")}>
+            <AvatarUploader profile={profile} viewerId={viewerId} />
+            {isLinked && (
+              <div className={styles.toggleRow}>
+                <label className={styles.toggleLabel}>
+                  <input
+                    type="checkbox"
+                    checked={profile.useLinkedAvatar}
+                    onChange={(e) =>
+                      void patchProfile({
+                        profileId: profile.id,
+                        useLinkedAvatar: e.target.checked,
+                      })
+                    }
+                    data-testid="profile-use-linked-avatar"
+                  />
+                  <span>{t("avatar.useLinkedAvatar")}</span>
+                </label>
+                <p className={styles.toggleHint}>
+                  {t("avatar.useLinkedAvatarHint")}
+                </p>
+              </div>
+            )}
+          </Group>
+        )}
+
         {isOwner && (
           <Group title={t("players.alias.title")}>
             <AliasEditor profileId={profile.id} initialValue={profile.alias} />
+          </Group>
+        )}
+
+        {!isSelf && headToHead && headToHead.matches > 0 && (
+          <Group title={t("players.headToHead.title")}>
+            <div className={styles.statsGrid}>
+              <Stat
+                value={headToHead.matches}
+                label={t("players.stats.matches")}
+              />
+              <Stat
+                value={headToHead.viewerWins}
+                label={t("players.headToHead.yourWins")}
+              />
+              <Stat
+                value={headToHead.subjectWins}
+                label={t("players.headToHead.theirWins")}
+              />
+            </div>
+            {headToHead.draws > 0 && (
+              <p className={styles.headToHeadDraws}>
+                {t("players.headToHead.draws", {
+                  count: headToHead.draws,
+                })}
+              </p>
+            )}
           </Group>
         )}
 
@@ -168,7 +245,36 @@ function ProfileDetailBody({
             </div>
           </Group>
         )}
+
+        {isOwner && !isSelf && !isLinked && (
+          <div className={styles.mergeActionRow}>
+            <Button
+              type="button"
+              variant="ghost"
+              iconBefore={<Icon name="merge" size={16} />}
+              onClick={() => setMergeOpen(true)}
+              data-testid="profile-merge-action"
+            >
+              {t("merge.title")}
+            </Button>
+          </div>
+        )}
       </div>
+
+      {mergeOpen && viewerId && (
+        <MergeDialog
+          source={profile}
+          viewerId={viewerId}
+          onClose={() => setMergeOpen(false)}
+          onMerged={(targetId) => {
+            setMergeOpen(false);
+            void navigate({
+              to: "/players/$profileId",
+              params: { profileId: targetId },
+            });
+          }}
+        />
+      )}
     </>
   );
 }

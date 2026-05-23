@@ -1,0 +1,91 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--color-ink) 30%, transparent);
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 28rem;
+  background: var(--color-surface);
+  border-radius: 1rem 1rem 0 0;
+  padding: 1.25rem 1.25rem 2rem;
+  box-shadow: 0 -8px 32px color-mix(in srgb, var(--color-ink) 18%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--color-ink);
+  margin: 0;
+}
+
+.hint {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  margin: 0;
+}
+
+.candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.candidate {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.625rem 0.75rem;
+  background: var(--color-surface-alt);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--color-ink);
+}
+
+.candidate:hover {
+  border-color: var(--color-primary);
+}
+
+.candidateSelected {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface-alt));
+}
+
+.empty {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--color-ink-faint);
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.error {
+  color: var(--color-danger);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}

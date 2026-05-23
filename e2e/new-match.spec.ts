@@ -133,3 +133,98 @@ test.describe("New match form — dynamic player count", () => {
     );
   });
 });
+
+test.describe("New match form — profile picker", () => {
+  test("typing a new name surfaces a Create row, tapping it fills the slot", async ({
+    page,
+  }) => {
+    const s = stamp();
+    const alias = `Picker-${s}`;
+
+    await page.goto("/games/skull-king/new");
+    await page.waitForLoadState("domcontentloaded");
+
+    await page.click("[data-testid='new-match-player-0']");
+    await page.fill("[data-testid='new-match-player-0']", alias);
+
+    const createRow = page.locator("[data-testid='new-match-create-0']");
+    await expect(createRow).toBeVisible();
+    await createRow.click();
+
+    // After picking the create row the slot is "filled" — the picker
+    // closed and the input still carries the new alias.
+    await expect(
+      page.locator("[data-testid='new-match-player-0']"),
+    ).toHaveValue(alias);
+    await expect(
+      page.locator("[data-testid='new-match-suggestions-0']"),
+    ).toHaveCount(0);
+  });
+
+  test("Create row disappears when the typed alias already exists", async ({
+    page,
+  }) => {
+    const s = stamp();
+    const alias = `Dupe-${s}`;
+
+    // Run one match so the profile becomes part of the user's set.
+    await page.goto("/games/skull-king/new");
+    await page.waitForLoadState("domcontentloaded");
+    await page.fill("[data-testid='new-match-player-0']", alias);
+    await page.fill("[data-testid='new-match-player-1']", `Other-${s}`);
+    await page.click("[data-testid='new-match-submit']");
+    await page.waitForURL(/\/matches\/[a-z0-9-]+/i);
+
+    // Open a new form and re-type the same alias.
+    await page.goto("/games/skull-king/new");
+    await page.waitForLoadState("domcontentloaded");
+    await page.click("[data-testid='new-match-player-0']");
+    await page.fill("[data-testid='new-match-player-0']", alias);
+
+    // The existing profile shows as a suggestion, the create row is hidden.
+    await expect(
+      page.locator(`[data-testid='new-match-suggestion-0-${alias}']`),
+    ).toBeVisible();
+    await expect(
+      page.locator("[data-testid='new-match-create-0']"),
+    ).toHaveCount(0);
+  });
+
+  test("Played-with chip appears after a match and fills slots in order", async ({
+    page,
+  }) => {
+    const s = stamp();
+    const alice = `Alice-${s}`;
+    const bob = `Bob-${s}`;
+    const carol = `Carol-${s}`;
+
+    await page.goto("/games/skull-king/new");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Three-player Skull King match.
+    await page.click("[data-testid='new-match-add-player']");
+    await page.fill("[data-testid='new-match-player-0']", alice);
+    await page.fill("[data-testid='new-match-player-1']", bob);
+    await page.fill("[data-testid='new-match-player-2']", carol);
+    await page.click("[data-testid='new-match-submit']");
+    await page.waitForURL(/\/matches\/[a-z0-9-]+/i);
+
+    // Same game's new-match form should now offer the played-with group.
+    await page.goto("/games/skull-king/new");
+    await page.waitForLoadState("domcontentloaded");
+
+    const chip = page.locator("[data-testid='new-match-played-with-0']");
+    await expect(chip).toBeVisible();
+    await chip.click();
+
+    await expect(
+      page.locator("[data-testid='new-match-player-0']"),
+    ).toHaveValue(alice);
+    await expect(
+      page.locator("[data-testid='new-match-player-1']"),
+    ).toHaveValue(bob);
+    await expect(
+      page.locator("[data-testid='new-match-player-2']"),
+    ).toHaveValue(carol);
+  });
+});

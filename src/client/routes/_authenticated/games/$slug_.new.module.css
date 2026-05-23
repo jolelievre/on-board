@@ -37,13 +37,16 @@
 
 .fieldWrap {
   flex: 1;
-  /* Anchor for the absolute-positioned `.suggestions` overlay so it
-   * floats below the input without taking flow space. Without this,
-   * collapsing the panel (e.g. when focus moves off the input on
-   * submit) shifts every element below it — including the submit
-   * button — and a Mobile-Chrome tap mid-animation can land on the
-   * wrong element. */
-  position: relative;
+}
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  /* The slot owns the (label, row, suggestions) stack. The suggestions
+   * panel is a sibling of `.row` (not nested inside it) so it can take
+   * flow space below the input without an absolute-positioned overlay
+   * that would intercept clicks on the "+ Add player" button below. */
 }
 
 .field {
@@ -174,18 +177,11 @@
 }
 
 .suggestions {
-  position: absolute;
-  top: calc(100% + 0.375rem);
-  left: 0;
-  right: 0;
-  z-index: 5;
-  /* Cap the panel height so a polluted suggestion list (e.g. dev DBs
-   * accumulating "Bob-<stamp>" entries across many test runs) can't
-   * grow past the absolute panel and start overlapping the submit
-   * button below the form — observed locally as the panel intercepting
-   * clicks on `[data-testid="new-match-submit"]`. The scroll lets users
-   * still reach all suggestions; production catalogues are small enough
-   * that this never actually scrolls. */
+  /* Inline block right under the input. Pushes the rest of the form
+   * (next slot, add-player button) down while the picker is open, then
+   * collapses back when it closes — no overlay means no intercept on
+   * elements below. The vertical cap keeps a polluted dev DB from
+   * making the panel scroll the page. */
   max-height: 9rem;
   overflow-y: auto;
   padding: 0.375rem;
@@ -199,7 +195,10 @@
 }
 
 .suggestionChip {
-  padding: 0.375rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem 0.25rem 0.25rem;
   font-family: var(--font-body);
   font-size: 0.85rem;
   font-weight: 500;
@@ -210,6 +209,96 @@
   cursor: pointer;
   line-height: 1;
   transition: background 80ms ease-out, color 80ms ease-out;
+}
+
+.suggestionAvatar {
+  flex-shrink: 0;
+}
+
+.createChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px dashed color-mix(in srgb, var(--color-primary) 35%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.createChip:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.playedWith {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.playedWithLabel {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.7rem;
+  color: var(--color-ink-soft);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.playedWithRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.playedWithChip {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 80ms ease-out, box-shadow 80ms ease-out;
+}
+
+.playedWithChip:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.playedWithAvatars {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.playedWithAvatar {
+  margin-left: -0.4rem;
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+.playedWithAvatar:first-child {
+  margin-left: 0;
+}
+
+.playedWithNames {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .suggestionChip:hover {
