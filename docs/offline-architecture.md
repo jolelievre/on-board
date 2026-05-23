@@ -17,9 +17,9 @@ The app uses a **local-first two-layer** design: the Service Worker keeps the ap
 ┌─────────────────────────────────────────────────────────┐
 │  Layer 2 — Local mirror (Dexie / IndexedDB)             │
 │  Single source of truth on the client. Holds full row   │
-│  mirrors of games / matches / players / scores, an      │
-│  outbound sync queue, a pull-cursor keystore, and the   │
-│  player-name profile autocomplete.                       │
+│  mirrors of games / matches / players / scores /        │
+│  profiles, an outbound sync queue, and a pull-cursor    │
+│  keystore.                                              │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -47,22 +47,24 @@ The Dexie-mirror design removes all three: `useLiveQuery` is reactive on Dexie w
 | Match list / detail | IndexedDB (Dexie `matches` + `players` + `scores`) | — | Permanent — incremental pull from `/api/matches?since=` |
 | Outbound mutation queue | IndexedDB (Dexie `syncQueue`) | — | Until flushed (or permanently failed) |
 | Pull-sync cursor | IndexedDB (Dexie `syncMeta`) | `lastPullAt` | Permanent — advanced on each successful pull |
-| Player name autocomplete | IndexedDB (Dexie `localProfiles`) | — | Permanent |
+| Profiles (Players tab + new-match autocomplete) | IndexedDB (Dexie `profiles` + `profileGroups` + `profileGroupMembers`) | — | Permanent — pulled by `pullSync` from `/api/profiles?since=` |
 
 The auth session stays on `localStorage` because better-auth needs it synchronously on first render. Everything else is async via Dexie.
 
 ### Dexie schema
 
-The current schema is version 2 (declared in `src/client/lib/db.ts`):
+The current schema is version 3 (declared in `src/client/lib/db.ts`):
 
 | Table | Primary key | Indexes |
 |---|---|---|
-| `localProfiles` | `name` | `usedAt`, `linkedUserId` |
 | `syncQueue` | `++id` | `createdAt`, `status` |
 | `games` | `id` | `slug` |
 | `matches` | `id` | `gameId`, `status`, `startedAt`, `updatedAt`, `[createdById+startedAt]` |
-| `players` | `id` | `matchId`, `userId`, `[matchId+position]` |
+| `players` | `id` | `matchId`, `userId`, `profileId`, `[matchId+position]` |
 | `scores` | `id` | `matchId`, `[matchId+playerId+category]`, `updatedAt` |
+| `profiles` | `id` | `ownerId`, `linkedUserId`, `usedAt`, `updatedAt` |
+| `profileGroups` | `id` | `ownerId`, `updatedAt` |
+| `profileGroupMembers` | `[groupId+profileId]` (compound) | `groupId`, `profileId` |
 | `syncMeta` | `key` | — |
 
 #### v1 → v2 upgrade
@@ -73,6 +75,10 @@ For users on a prior build, the upgrade callback does two things in a single tra
 2. **One-shot hydrate from the abandoned persisted query cache.** If `localStorage["onboard_query_cache"]` is present, parse it tolerantly (anything unrecognised is skipped, never thrown) and seed the `games` / `matches` / `players` / `scores` tables. After parsing, the localStorage key is deleted. The hydrate is best-effort: any failure falls through to `pullSync()` on the next online tick.
 
 The `matchDrafts` table from v1 is dropped (`stores: { matchDrafts: null }`) — PR #11 abandoned that approach and nothing in shipped code ever wrote to it.
+
+#### v2 → v3 upgrade
+
+Introduced by PR 6-A (Profile entity + Players tab). The upgrade drops the v2 `localProfiles` table — its purpose (name-keyed autocomplete + linked-user metadata) is now served by the server-mirrored `profiles` table, which is repopulated from `/api/profiles` on the next `pullSync()`. Three new tables are added (`profiles`, `profileGroups`, `profileGroupMembers`) and the `players` index gains `profileId` for the per-profile match-history queries.
 
 ---
 
@@ -134,10 +140,11 @@ Match ids, player ids, and score ids are client-generated CUIDs (`@paralleldrive
 
 The throttle is module-scoped (`lastPullStartedAt`), so a page reload resets it (which is fine — `usePullOnAuth` always runs a forced pull on mount). Explicit triggers — boot, `visibilitychange` — pass `{ force: true }` to bypass; throttle-respecting triggers — post-flush, route change — let the dedup apply.
 
-`pullSync()` does two things in one Dexie transaction:
+`pullSync()` runs three independent per-endpoint fetch → transaction pipelines (so a hung fetch on one can't strand the others):
 
 1. **Full pull of `/api/games`.** The catalogue is small (≤ a dozen) and rarely changes, so we just refresh it.
 2. **Incremental pull of `/api/matches?since={lastPullAt}`.** The cursor lives in `syncMeta["lastPullAt"]`. First call has no `since` and pulls everything; subsequent calls only fetch matches with `updatedAt > since`.
+3. **Incremental pull of `/api/profiles?since={lastProfilesPullAt}`.** Mirrors the same LWW pattern as matches — the cursor is stored separately so a profile-only edit on another device propagates without re-fetching every match.
 
 The merge is **per-row Last-Write-Wins on `updatedAt`**: for each incoming match, if the local copy's `updatedAt >= incoming.updatedAt`, the incoming match (and its child rows) are skipped entirely. Otherwise the match, players, and scores are upserted, and any local child rows of that match that no longer exist on the server are pruned (so we don't accumulate orphans).
 
@@ -145,9 +152,20 @@ If `navigator.onLine` is false at the start of the call, `pullSync()` short-circ
 
 ### Alias propagation special case
 
-`User.alias` lives on the `User` row, but every `LocalPlayer` denormalizes it into `player.user.alias` for offline rendering. Alias edits don't bump `Match.updatedAt` on the server, so a subsequent `pullSync()` would LWW-skip every match and leave the local mirror stale. To work around this, `refreshLocalAliases(userId, newAlias)` rewrites the cached alias on every local `PlayerRow` linked to that user; Settings calls it directly after `updateProfile`.
+Two denormalizations carry the user's alias offline:
 
-This is acknowledged as a tactical fix. Removing the denormalization entirely is tracked in [issue #19](https://github.com/jolelievre/on-board/issues/19) — once a Dexie `users` table exists, the alias is a single-row write and `pullSync` handles propagation naturally.
+- Every `LocalPlayer` keeps a `player.user.alias` copy for legacy display paths.
+- The self-`LocalProfile` (`ownerId === linkedUserId === me`) holds the canonical alias that the Players tab, history rendering, and new-match suggestions all read.
+
+Alias edits don't bump `Match.updatedAt` on the server, so a profiles-only pull would propagate the new alias but a matches LWW pass would still skip every match — leaving `player.user.alias` stale. To work around this, `refreshLocalAliases(userId, newAlias)` rewrites both denormalizations in a single Dexie pass:
+
+1. Every `LocalPlayer.user.alias` row joined to that user.
+2. Every `LocalProfile.linkedUser.alias` (forward-compat with the 6-C link feature, where a friend's owner-managed profile carries our auth alias).
+3. The self-`LocalProfile.alias` — mirroring the server's `resolveSelfAlias` fallback: trimmed `newAlias` when set, otherwise `linkedUser.name`, otherwise `"Me"`. The fallback matters when the user *clears* their alias via Settings, since the server-side `syncSelfProfileAlias` writes `User.name` (not an empty string) onto `Profile.alias`.
+
+Settings calls `refreshLocalAliases` directly after `updateProfile`. The Players-tab alias editor calls `patchProfile` instead, which is a normal Dexie + sync-queue write to the `profiles` row — no extra mirror call needed, because `useLiveQuery` over `profiles` already picks up the change reactively.
+
+The `player.user.alias` half of this is still acknowledged as a tactical fix and is tracked in [issue #19](https://github.com/jolelievre/on-board/issues/19) — once the legacy `Player.userId`/`Player.name` columns are dropped (PR 6-E), the only canonical source becomes `Profile.alias` and the duplicate mirror collapses.
 
 ---
 
@@ -196,7 +214,8 @@ The `Header` component used to also auto-render an offline `SyncPill` on every a
 | Score a round on an existing match | ✅ Queued, optimistic | Local write to `scores` is the optimistic update; queue replays on reconnect |
 | Complete an existing match | ✅ Queued, optimistic | Local write to `matches`; queue replays on reconnect |
 | **Create a brand-new match while offline** | ✅ Real CUID, optimistic | Client-generated CUID + idempotent server POST |
-| Player name autocomplete | ✅ Always | Three-tier resolution: server response, synthesized self entry from the auth session, Dexie `localProfiles` |
+| Players tab (list + detail) | ✅ After first `pullSync()` | `useProfileList` / `useProfile` read from Dexie `profiles` |
+| New-match autocomplete | ✅ Always | `usePlayerSuggestions` reads from Dexie `profiles`; self entry is the self-`LocalProfile` row (session fallback only before the first `pullSync()` lands) |
 | First-ever app open offline | ❌ Impossible in practice | Google OAuth requires network |
 
 Offline-no-cache pages (a game/match that the user has never pulled and tries to open offline) render a `common.offlineNoCache` message rather than an infinite spinner — data hooks distinguish "loading" from "missing".
@@ -211,19 +230,19 @@ Offline-no-cache pages (a game/match that the user has never pulled and tries to
 | `src/client/hooks/useOnlineStatus.ts` | Detects online/offline, triggers `syncEngine.flush()` on reconnect |
 | `src/client/hooks/usePullOnAuth.ts` | One forced `pullSync()` + `syncEngine.flush()` on session ready |
 | `src/client/hooks/usePullSyncBackground.ts` | `visibilitychange` (forced) + route-change (throttled) pull triggers |
-| `src/client/hooks/usePlayerSuggestions.ts` | Three-tier suggestion resolution; syncs server suggestions to Dexie |
-| `src/client/hooks/data/{useGame,useGames,useMatch,useMatchList}.ts` | `useLiveQuery`-backed reactive reads |
-| `src/client/lib/db.ts` | Dexie schema (v2) + v1→v2 upgrade callback |
+| `src/client/hooks/usePlayerSuggestions.ts` | Dexie-only suggestions (self from self-Profile, friends from owned/linked profiles) |
+| `src/client/hooks/data/{useGame,useGames,useMatch,useMatchList,useProfile*}.ts` | `useLiveQuery`-backed reactive reads (matches denormalize the Profile join via `hydratePlayer.ts`) |
+| `src/client/lib/db.ts` | Dexie schema (v3) + v1→v2 and v2→v3 upgrade callbacks |
 | `src/client/lib/api-types.ts` | Shared API response types consumed by `db.ts` and `pull-sync.ts` |
-| `src/client/lib/mutations.ts` | `createMatch` / `upsertScores` / `patchMatch` / `completeMatch` |
+| `src/client/lib/mutations.ts` | `createMatch` / `upsertScores` / `patchMatch` / `completeMatch` / `createProfile` / `patchProfile` |
 | `src/client/lib/sync.ts` | `syncEngine` — queue replay + reactive `useStatus()` |
-| `src/client/lib/pull-sync.ts` | `pullSync()` (LWW merge) + `refreshLocalAliases` |
+| `src/client/lib/pull-sync.ts` | `pullSync()` (per-endpoint LWW merge) + `refreshLocalAliases` |
 | `src/client/lib/match-client/{seven-wonders,skull-king}.ts` | Pure payload builders for the scorers |
 | `src/client/components/sync/SyncStatus.tsx` | Global pill mounted from `_authenticated.tsx` |
 | `src/client/components/layout/OfflineBanner.tsx` | Amber banner shown briefly on disconnect |
 | `src/client/components/layout/UpdateBanner.tsx` | "New version available" when a new SW installs |
 
-The QueryClient (`src/client/lib/query-client.ts`) is still around — it backs `authClient.useSession` and `usePlayerSuggestions` — but with default cache settings (no `gcTime: Infinity`, no persistence).
+The QueryClient (`src/client/lib/query-client.ts`) is still around — better-auth wires `authClient.useSession` through it — but with default cache settings (no `gcTime: Infinity`, no persistence). No feature-level hook calls `useQuery` directly: all data reads now flow through `useLiveQuery` on Dexie.
 
 ---
 
@@ -239,19 +258,20 @@ A cached session can't do anything dangerous offline (writes go to Dexie + the q
 
 ---
 
-## Player suggestions — three-tier resolution
+## Player suggestions — Dexie-only resolution
 
-`usePlayerSuggestions` is the **only remaining `useQuery` consumer in feature code**. It resolves suggestions from three sources, in priority order, and merges them case-insensitively:
+`usePlayerSuggestions` runs entirely on top of Dexie's `profiles` table. The hook returns two kinds of rows merged case-insensitively, the self entry first:
 
-1. **Server response** — `GET /api/players/suggestions` (cached via TanStack Query in-memory). Authoritative when available: its `isSelf` row already reflects the current alias.
-2. **Synthesized self entry** — `{ name: session.user.alias || session.user.name, isSelf: true }`, computed from the auth session. Used **only** when no server response has landed (first paint / offline-first install).
-3. **Dexie `localProfiles`** — fallback when the server query is paused/errored. Populated by every successful server fetch (non-self rows only) and by `persistPlayersToLocalProfiles` after a match is created.
+1. **Self entry** — the self-`LocalProfile` (the row with `linkedUserId === viewerId`). Its `alias` is the canonical source: edits made via Settings (`updateProfile` → `refreshLocalAliases`) and via the Players-tab alias editor (`patchProfile`) both land here, so the new-match self chip stays in sync with whichever surface the user just used. Falls back to `session.user.alias || session.user.name` for the brief window before the first `pullSync()` has hydrated the self-Profile on a fresh boot.
+2. **Friend entries** — every other profile the viewer can see (`ownerId === me OR linkedUserId === me`), sorted by `usedAt` descending so the most recently used friends bubble up.
 
-The self entry is **not** persisted to Dexie. Two reasons: the auth session is itself cached (`onboard_session_cache` in localStorage + better-auth's reactive cache), so the synthesized self survives reloads without a Dexie copy; and persisting `{ name: previousAlias, isSelf: true }` would resurrect the old alias as a phantom suggestion after the user changes it. The server's `isSelf` row is filtered out of the Dexie mirror for the same reason.
+Both come from the same `useLiveQuery` predicate, so any `pullSync()` that brings down a profile change re-renders consumers automatically — there is no manual invalidation and no separate server query.
 
-`isSelf` is determined by `userId === selfUserId` — never by name equality — so two friends sharing a first name (or a friend sharing the user's name) cannot stamp `isSelf: true` on the wrong row.
+`isSelf` is set by `linkedUserId === viewerId` — never by name equality — so two friends sharing a first name (or a friend sharing the user's name) cannot stamp `isSelf: true` on the wrong row.
 
-Migrating this hook off `useQuery` (so the entire app reads from Dexie via `useLiveQuery`) is deferred to a follow-up PR — the three-tier resolution adds enough nuance that bundling it with the broader local-first migration would have inflated review scope.
+### Why the self entry isn't double-fetched
+
+Before PR 6-A, `usePlayerSuggestions` was the only remaining `useQuery` consumer in feature code, with a three-tier fallback (server `/api/players/suggestions` → synthesized self from session → Dexie `localProfiles`). The endpoint still exists for backward-compat (slated for removal in PR 6-E) but is no longer consulted by the hook. The session-derived self entry survives only as a one-tick fallback to prevent an empty self chip when the auth session has resolved but `pullSync` hasn't returned yet.
 
 ---
 
@@ -345,7 +365,7 @@ The merge contract is **per-row Last-Write-Wins on `updatedAt`**, applied at the
 - If `localMatch.updatedAt >= incomingMatch.updatedAt`, the entire match (including its child rows) is skipped. The local copy is treated as newer or equal.
 - Otherwise the match is upserted, its incoming `players` and `scores` are upserted, and any local child rows whose ids aren't in the incoming payload are pruned (so a player removal on the server propagates instead of leaving an orphan).
 
-The server's `updatedAt` is bumped whenever the match itself changes (scores, status, metadata). Touching only a user field (alias) does not bump it — handled by `refreshLocalAliases` as described above and tracked for refactor in [issue #19](https://github.com/jolelievre/on-board/issues/19).
+The server's `updatedAt` is bumped whenever the match itself changes (scores, status, metadata). Touching only a user field (alias) does not bump `Match.updatedAt` — handled by `refreshLocalAliases` (see [Alias propagation special case](#alias-propagation-special-case)). Profile rows have their own `updatedAt` and their own `/api/profiles?since=` cursor, so a profile-only edit on another device propagates via the dedicated pipeline without piggybacking on the matches pull.
 
 Concurrent writes from two devices race naturally: the server is the tie-breaker. Whichever PATCH/PUT lands second sets the final `updatedAt`, and both devices converge on the next `pullSync()`. There is no last-writer-wins detection or merge UI — the assumption is that the same user editing the same match from two tabs is the only realistic source of conflict, and the latest action is what they meant.
 
