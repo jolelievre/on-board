@@ -14,6 +14,19 @@ type ResolveInput = {
   playerUserId: string | null;
 };
 
+type ResolveByProfileInput = {
+  creatorId: string;
+  profileId: string;
+};
+
+type ProfileResolution = {
+  profileId: string;
+  /** Snapshot of `Profile.alias` at resolution time — written to the
+   * legacy `Player.name` column so older clients that still read it (and
+   * the dormant column itself, until 6-E) stay coherent. */
+  alias: string;
+};
+
 /**
  * Resolve a Player payload to a Profile id, creating an unclaimed
  * Profile owned by the creator if necessary. Used by `POST /api/matches`
@@ -37,7 +50,7 @@ type ResolveInput = {
 export async function resolvePlayerProfileId(
   tx: TxClient,
   { creatorId, playerName, playerUserId }: ResolveInput,
-): Promise<string> {
+): Promise<ProfileResolution> {
   const trimmed = playerName.trim();
   const now = new Date();
 
@@ -45,7 +58,7 @@ export async function resolvePlayerProfileId(
   if (playerUserId && playerUserId === creatorId) {
     let self = await tx.profile.findUnique({
       where: { linkedUserId: creatorId },
-      select: { id: true },
+      select: { id: true, alias: true },
     });
     if (!self) {
       // Legacy account that pre-dates the auth hook. Pull the creator's
@@ -62,7 +75,7 @@ export async function resolvePlayerProfileId(
           linkedUserId: creatorId,
           alias,
         },
-        select: { id: true },
+        select: { id: true, alias: true },
       });
     } else {
       await tx.profile.update({
@@ -70,7 +83,7 @@ export async function resolvePlayerProfileId(
         data: { usedAt: now },
       });
     }
-    return self.id;
+    return { profileId: self.id, alias: self.alias };
   }
 
   // Path 2: unclaimed alias match.
@@ -88,7 +101,7 @@ export async function resolvePlayerProfileId(
       where: { id: hit.id },
       data: { usedAt: now },
     });
-    return hit.id;
+    return { profileId: hit.id, alias: hit.alias };
   }
 
   // Path 3: create.
@@ -98,7 +111,51 @@ export async function resolvePlayerProfileId(
       alias: trimmed,
       usedAt: now,
     },
-    select: { id: true },
+    select: { id: true, alias: true },
   });
-  return created.id;
+  return { profileId: created.id, alias: created.alias };
+}
+
+/**
+ * Resolve a Player payload that references a Profile by id (the 6-B
+ * input mode). Verifies the caller is allowed to see the profile (owner
+ * or linked) and bumps `usedAt` so the suggestion list stays fresh.
+ *
+ * Returns the canonical `alias` so the legacy `Player.name` column can
+ * snapshot it — keeping the dormant field coherent until 6-E drops it.
+ *
+ * Throws if the profile doesn't exist or the caller isn't allowed to
+ * use it; the matches route translates that into a 4xx response.
+ */
+export async function resolvePlayerByProfileId(
+  tx: TxClient,
+  { creatorId, profileId }: ResolveByProfileInput,
+): Promise<ProfileResolution> {
+  const profile = await tx.profile.findUnique({
+    where: { id: profileId },
+    select: { id: true, alias: true, ownerId: true, linkedUserId: true },
+  });
+  if (!profile) {
+    throw new ProfileAuthorizationError("Profile not found", 404);
+  }
+  if (profile.ownerId !== creatorId && profile.linkedUserId !== creatorId) {
+    throw new ProfileAuthorizationError(
+      "Profile is not visible to this user",
+      403,
+    );
+  }
+  await tx.profile.update({
+    where: { id: profile.id },
+    data: { usedAt: new Date() },
+  });
+  return { profileId: profile.id, alias: profile.alias };
+}
+
+export class ProfileAuthorizationError extends Error {
+  status: 403 | 404;
+  constructor(message: string, status: 403 | 404) {
+    super(message);
+    this.name = "ProfileAuthorizationError";
+    this.status = status;
+  }
 }

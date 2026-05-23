@@ -227,16 +227,25 @@ test.describe("API: Profiles (authenticated)", () => {
       },
     });
     const secondMatch = (await second.json()) as {
-      players: { name: string; profileId: string | null }[];
+      players: {
+        name: string;
+        position: number;
+        profileId: string | null;
+      }[];
     };
 
     const firstAlice = firstMatch.players.find((p) => p.name === "Alice")!;
-    const secondAlice = secondMatch.players.find((p) => p.name === "alice")!;
+    // PR 6-B: Player.name is now snapshotted from the canonical
+    // Profile.alias, so the second slot reads "Alice" even though the
+    // client passed "alice". Identity comes from profileId, not from
+    // the legacy display column.
+    const secondAlice = secondMatch.players.find((p) => p.position === 0)!;
     expect(secondAlice.profileId).toBe(firstAlice.profileId);
+    expect(secondAlice.name).toBe("Alice");
 
     // Carol gets a brand-new profile.
     const firstBob = firstMatch.players.find((p) => p.name === "Bob")!;
-    const secondCarol = secondMatch.players.find((p) => p.name === "Carol")!;
+    const secondCarol = secondMatch.players.find((p) => p.position === 1)!;
     expect(secondCarol.profileId).not.toBe(firstBob.profileId);
     expect(secondCarol.profileId).not.toBe(firstAlice.profileId);
   });

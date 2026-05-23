@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { resolvePlayerProfileId } from "../lib/match-profiles.js";
+import {
+  ProfileAuthorizationError,
+  resolvePlayerByProfileId,
+  resolvePlayerProfileId,
+} from "../lib/match-profiles.js";
 import type { AuthUser } from "../middleware/auth.js";
 
 type AuthEnv = {
@@ -41,8 +45,9 @@ export const matchesRoutes = new Hono<AuthEnv>()
       gameId?: string;
       players?: {
         id?: string;
-        name: string;
+        name?: string;
         userId?: string;
+        profileId?: string;
         position: number;
       }[];
       metadata?: Record<string, unknown>;
@@ -70,16 +75,27 @@ export const matchesRoutes = new Hono<AuthEnv>()
       );
     }
 
-    // Validate player payload (names, positions, ids, opt-in userId attribution).
+    // Validate player payload. As of PR 6-B clients send `profileId`
+    // (the picker output); legacy clients still send `name` + optional
+    // `userId`. Exactly one of those two paths is required.
     for (const p of players) {
-      if (!p.name || typeof p.name !== "string" || p.name.trim().length === 0) {
-        return c.json({ error: "All players must have a name" }, 400);
+      const hasProfileId = typeof p.profileId === "string";
+      const hasName =
+        typeof p.name === "string" && p.name.trim().length > 0;
+      if (!hasProfileId && !hasName) {
+        return c.json(
+          { error: "Each player needs profileId or name" },
+          400,
+        );
       }
       if (typeof p.position !== "number") {
         return c.json({ error: "All players must have a position" }, 400);
       }
       if (p.id !== undefined && !CUID_RE.test(p.id)) {
         return c.json({ error: "Invalid player id format" }, 400);
+      }
+      if (hasProfileId && !CUID_RE.test(p.profileId as string)) {
+        return c.json({ error: "Invalid profileId format" }, 400);
       }
       // userId attribution is opt-in by the client and only allowed for the
       // currently authenticated user. Name-based auto-linking would mis-attach
@@ -112,6 +128,9 @@ export const matchesRoutes = new Hono<AuthEnv>()
     // Phase 6-A: every Player gets a Profile alongside the legacy fields.
     // Resolve each player to a Profile owned by the match creator BEFORE
     // creating the Match so we can write `profileId` in the same insert.
+    // Phase 6-B: clients pass `profileId` directly when the picker
+    // selected an existing profile; otherwise we still fall through to
+    // the name-based resolver for legacy callers.
     // Wrapped in a transaction so a per-player resolution failure can't
     // leave orphan Profile rows.
     let match: Prisma.MatchGetPayload<{ include: typeof matchInclude }>;
@@ -119,17 +138,22 @@ export const matchesRoutes = new Hono<AuthEnv>()
       match = await prisma.$transaction(async (tx) => {
         const playersWithProfile = await Promise.all(
           players.map(async (p) => {
-            const profileId = await resolvePlayerProfileId(tx, {
-              creatorId: user.id,
-              playerName: p.name,
-              playerUserId: p.userId ?? null,
-            });
+            const resolution = p.profileId
+              ? await resolvePlayerByProfileId(tx, {
+                  creatorId: user.id,
+                  profileId: p.profileId,
+                })
+              : await resolvePlayerProfileId(tx, {
+                  creatorId: user.id,
+                  playerName: p.name as string,
+                  playerUserId: p.userId ?? null,
+                });
             return {
               ...(p.id ? { id: p.id } : {}),
-              name: p.name.trim(),
+              name: resolution.alias,
               position: p.position,
               userId: p.userId || null,
-              profileId,
+              profileId: resolution.profileId,
             };
           }),
         );
@@ -150,6 +174,12 @@ export const matchesRoutes = new Hono<AuthEnv>()
         });
       });
     } catch (err) {
+      // A profileId the caller can't see (or doesn't exist) surfaces as
+      // a typed error from the resolver — translate to the right 4xx
+      // rather than letting it become a 500.
+      if (err instanceof ProfileAuthorizationError) {
+        return c.json({ error: err.message }, err.status);
+      }
       // Idempotency race: when two replays of the same queued POST
       // arrive concurrently, both can pass the `findUnique` check above
       // before either commits, and the second `match.create` trips the
