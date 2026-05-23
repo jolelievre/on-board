@@ -126,12 +126,13 @@ function ProfileDetailBody({
                     <div key={g.gameId} className={styles.perGameRow}>
                       <span className={styles.perGameName}>{g.gameName}</span>
                       <span className={styles.perGameStats}>
-                        {t("players.stats.perGameLine", {
-                          matches: g.matches,
-                          wins: g.wins,
-                          losses: g.losses,
-                          draws: g.draws,
-                        })}
+                        {t("players.stats.matchesShort", { count: g.matches })}
+                        {g.wins > 0 &&
+                          ` · ${g.wins}${t("players.stats.winShort")}`}
+                        {g.losses > 0 &&
+                          ` · ${g.losses}${t("players.stats.lossShort")}`}
+                        {g.draws > 0 &&
+                          ` · ${g.draws}${t("players.stats.drawShort")}`}
                       </span>
                     </div>
                   ))}

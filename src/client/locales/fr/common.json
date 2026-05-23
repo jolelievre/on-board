@@ -244,7 +244,10 @@
       "matches": "Parties",
       "wins": "Victoires",
       "winRate": "Taux de victoire",
-      "perGameLine": "{{matches}} parties · {{wins}}V · {{losses}}D · {{draws}}N"
+      "matchesShort": "{{count}} parties",
+      "winShort": "V",
+      "lossShort": "D",
+      "drawShort": "N"
     },
     "recent": {
       "title": "Parties récentes",

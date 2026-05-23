@@ -244,7 +244,10 @@
       "matches": "Matches",
       "wins": "Wins",
       "winRate": "Win rate",
-      "perGameLine": "{{matches}} played · {{wins}}W · {{losses}}L · {{draws}}D"
+      "matchesShort": "{{count}} played",
+      "winShort": "W",
+      "lossShort": "L",
+      "drawShort": "D"
     },
     "recent": {
       "title": "Recent matches",

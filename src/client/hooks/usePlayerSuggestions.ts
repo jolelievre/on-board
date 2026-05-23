@@ -24,8 +24,6 @@ export function usePlayerSuggestions() {
     | { id: string; name?: string | null; alias?: string | null }
     | undefined;
   const viewerId = sessionUser?.id;
-  const selfName =
-    sessionUser?.alias?.trim() || sessionUser?.name?.trim() || "";
 
   const profiles = useLiveQuery(
     async () => {
@@ -47,6 +45,19 @@ export function usePlayerSuggestions() {
     [viewerId],
     [],
   );
+
+  // Prefer the self-Profile's alias over the session payload: renames
+  // done via the Players tab call `patchProfile`, which updates Dexie's
+  // self-Profile but doesn't touch `User.alias` (only the Settings page
+  // does). Falling back to session.alias / session.name keeps the chip
+  // populated during the brief window before pullSync has hydrated the
+  // self-Profile on a fresh boot.
+  const selfProfile = profiles.find((p) => p.linkedUserId === viewerId);
+  const selfName =
+    selfProfile?.alias?.trim() ||
+    sessionUser?.alias?.trim() ||
+    sessionUser?.name?.trim() ||
+    "";
 
   const seen = new Set<string>();
   const data: PlayerSuggestion[] = [];

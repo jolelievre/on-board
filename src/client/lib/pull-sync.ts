@@ -80,10 +80,13 @@ export async function refreshLocalAliases(
       }
       // For the self-Profile, the canonical display alias is the user's
       // own choice. Mirror it so all viewers (including third parties
-      // post-6-C) get the fresh value.
+      // post-6-C) get the fresh value. When the user clears their alias,
+      // mirror the server's fallback (User.name → "Me") so the local
+      // Profile.alias stays in lockstep with what `syncSelfProfileAlias`
+      // wrote on the server.
       if (profile.ownerId === userId) {
         const trimmed = newAlias?.trim();
-        if (trimmed) profile.alias = trimmed;
+        profile.alias = trimmed || profile.linkedUser?.name?.trim() || "Me";
       }
       profile.updatedAt = ts;
     }
