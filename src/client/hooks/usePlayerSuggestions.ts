@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { authClient } from "../lib/auth-client";
 import { db } from "../lib/db";
+import { resolveSelfAlias } from "../../shared/players";
 
 type PlayerSuggestion = { name: string; isSelf: boolean };
 
@@ -49,15 +50,18 @@ export function usePlayerSuggestions() {
   // Prefer the self-Profile's alias over the session payload: renames
   // done via the Players tab call `patchProfile`, which updates Dexie's
   // self-Profile but doesn't touch `User.alias` (only the Settings page
-  // does). Falling back to session.alias / session.name keeps the chip
-  // populated during the brief window before pullSync has hydrated the
-  // self-Profile on a fresh boot.
+  // does). `resolveSelfAlias` (shared with the server's self-Profile
+  // provisioning) keeps the chip populated during the brief window
+  // before pullSync has hydrated the self-Profile on a fresh boot.
   const selfProfile = profiles.find((p) => p.linkedUserId === viewerId);
   const selfName =
     selfProfile?.alias?.trim() ||
-    sessionUser?.alias?.trim() ||
-    sessionUser?.name?.trim() ||
-    "";
+    (sessionUser
+      ? resolveSelfAlias({
+          name: sessionUser.name ?? "",
+          alias: sessionUser.alias ?? null,
+        })
+      : "");
 
   const seen = new Set<string>();
   const data: PlayerSuggestion[] = [];

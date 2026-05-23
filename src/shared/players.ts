@@ -66,3 +66,25 @@ export function displayPlayerName(
   if (userName) return userName;
   return player.name;
 }
+
+/**
+ * Resolve the canonical alias for a self-Profile from the underlying
+ * User row. Trimmed `alias` wins; otherwise the full `name`; finally a
+ * hard-coded "Me" so the row is never blank in the suggestions list.
+ *
+ * Shared between the server (provisioning / mirroring the self-Profile
+ * in `src/server/lib/profiles.ts`) and the client (`refreshLocalAliases`
+ * mirror + `usePlayerSuggestions` session fallback) so all sites agree
+ * on the same fallback chain — drift would manifest as a self chip
+ * showing "Me" on one surface and the user's name on another.
+ */
+export function resolveSelfAlias(user: {
+  name: string;
+  alias: string | null;
+}): string {
+  const alias = user.alias?.trim();
+  if (alias) return alias;
+  const name = user.name?.trim();
+  if (name) return name;
+  return "Me";
+}

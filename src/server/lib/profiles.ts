@@ -1,20 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
-
-/**
- * Resolve the display alias for a self-Profile from the underlying User
- * row. Mirrors the precedence used elsewhere: a non-empty `alias` wins;
- * otherwise fall back to the full `name`; finally a hard-coded "Me" so
- * the row is never created with an empty alias (which would render
- * blank in the suggestions list).
- */
-function resolveSelfAlias(user: { name: string; alias: string | null }): string {
-  const alias = user.alias?.trim();
-  if (alias) return alias;
-  const name = user.name?.trim();
-  if (name) return name;
-  return "Me";
-}
+import { resolveSelfAlias } from "../../shared/players.js";
 
 /**
  * Idempotently provision the self-Profile for a User.

@@ -8,6 +8,7 @@ import {
   type LocalProfile3,
   type LocalScore,
 } from "./db";
+import { resolveSelfAlias } from "../../shared/players";
 
 const SYNC_META_LAST_PULL = "lastPullAt";
 const SYNC_META_LAST_PROFILE_PULL = "lastProfilePullAt";
@@ -81,12 +82,14 @@ export async function refreshLocalAliases(
       // For the self-Profile, the canonical display alias is the user's
       // own choice. Mirror it so all viewers (including third parties
       // post-6-C) get the fresh value. When the user clears their alias,
-      // mirror the server's fallback (User.name → "Me") so the local
-      // Profile.alias stays in lockstep with what `syncSelfProfileAlias`
-      // wrote on the server.
+      // resolveSelfAlias picks the server's fallback (User.name → "Me")
+      // so the local Profile.alias stays in lockstep with what
+      // `syncSelfProfileAlias` wrote on the server.
       if (profile.ownerId === userId) {
-        const trimmed = newAlias?.trim();
-        profile.alias = trimmed || profile.linkedUser?.name?.trim() || "Me";
+        profile.alias = resolveSelfAlias({
+          name: profile.linkedUser?.name ?? "",
+          alias: newAlias,
+        });
       }
       profile.updatedAt = ts;
     }
