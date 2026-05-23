@@ -1,23 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createAndSignIn } from "../helpers/auth";
-
-type ApiProfile = {
-  id: string;
-  ownerId: string;
-  linkedUserId: string | null;
-  alias: string;
-  useLinkedAvatar: boolean;
-  customAvatarUrl: string | null;
-  usedAt: string;
-  createdAt: string;
-  updatedAt: string;
-  linkedUser: {
-    id: string;
-    name: string;
-    alias: string | null;
-    avatarUrl: string | null;
-  } | null;
-};
+import type { ApiProfile } from "../../src/client/lib/api-types";
 
 function makeClientId(): string {
   let hex = "";

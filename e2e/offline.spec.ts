@@ -52,6 +52,27 @@ async function setScore(
   await input.fill(String(value));
   await input.blur();
 }
+
+/**
+ * Wait promises for every endpoint pullSync fetches on boot/refresh.
+ * Spread into `Promise.all([...waitForPullSync(page), page.goto(...)])`
+ * before the offline window opens so Dexie can't catch an in-flight
+ * request and end up with a partial mirror.
+ *
+ * Add the new endpoint here when pullSync grows — every call site
+ * inherits the wait without per-test edits.
+ */
+function waitForPullSync(page: Page) {
+  return [
+    page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
+    page.waitForResponse(
+      (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
+    ),
+    page.waitForResponse(
+      (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
+    ),
+  ];
+}
 test.describe("Offline (local-first)", () => {
   // Opt out of the shared `auth-setup` storageState. Each test signs up
   // its own user so a sibling test running in parallel can't pollute
@@ -93,16 +114,7 @@ test.describe("Offline (local-first)", () => {
     // After both resolve, Dexie has the full games catalogue and the
     // user's matches.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
-      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
-      // so the offline window can't catch an in-flight request and
-      // leave Dexie's profile mirror partly populated.
-      page.waitForResponse(
-        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
     await expect(page.locator("h1")).toContainText("Games");
@@ -128,16 +140,7 @@ test.describe("Offline (local-first)", () => {
     context,
   }) => {
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
-      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
-      // so the offline window can't catch an in-flight request and
-      // leave Dexie's profile mirror partly populated.
-      page.waitForResponse(
-        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 
@@ -155,16 +158,7 @@ test.describe("Offline (local-first)", () => {
   }) => {
     // Warm Dexie with the games catalogue.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
-      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
-      // so the offline window can't catch an in-flight request and
-      // leave Dexie's profile mirror partly populated.
-      page.waitForResponse(
-        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 
@@ -240,16 +234,7 @@ test.describe("Offline (local-first)", () => {
     // sequence intact also pins the queue's ordering contract — POST
     // before PATCH before PUT — without an explicit assertion.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
-      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
-      // so the offline window can't catch an in-flight request and
-      // leave Dexie's profile mirror partly populated.
-      page.waitForResponse(
-        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 
@@ -338,16 +323,7 @@ test.describe("Offline (local-first)", () => {
     // rather than not-visible because the SyncStatus component returns
     // null when status==='idle', so it shouldn't be in the DOM at all.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
-      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
-      // so the offline window can't catch an in-flight request and
-      // leave Dexie's profile mirror partly populated.
-      page.waitForResponse(
-        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
     await expect(page.locator("[data-testid='sync-status']")).toHaveCount(0);
@@ -620,16 +596,7 @@ test.describe("pullSync triggers", () => {
   }) => {
     // Warm Dexie.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
-      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
-      // so the offline window can't catch an in-flight request and
-      // leave Dexie's profile mirror partly populated.
-      page.waitForResponse(
-        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 
@@ -684,16 +651,7 @@ test.describe("pullSync triggers", () => {
     // window. Future non-forced calls would no-op; only a forced
     // trigger can pull again.
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
-      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
-      // so the offline window can't catch an in-flight request and
-      // leave Dexie's profile mirror partly populated.
-      page.waitForResponse(
-        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 
@@ -721,16 +679,7 @@ test.describe("pullSync triggers", () => {
     page,
   }) => {
     await Promise.all([
-      page.waitForResponse((r) => r.url().endsWith("/api/games") && r.ok()),
-      page.waitForResponse(
-        (r) => /\/api\/matches(\?|$)/.test(r.url()) && r.ok(),
-      ),
-      // Phase 6-A: pullSync now also fetches /api/profiles. Wait for it
-      // so the offline window can't catch an in-flight request and
-      // leave Dexie's profile mirror partly populated.
-      page.waitForResponse(
-        (r) => /\/api\/profiles(\?|$)/.test(r.url()) && r.ok(),
-      ),
+      ...waitForPullSync(page),
       page.goto("/games"),
     ]);
 

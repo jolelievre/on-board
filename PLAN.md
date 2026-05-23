@@ -847,6 +847,7 @@ After 6-A → 6-D have soaked in production and analytics confirm no client is w
 - Drop `Player.userId`, `Player.name`.
 - Remove `/api/players/suggestions` (already unused after 6-A).
 - Tighten client types now that `Player.name` is gone.
+- Rename the Dexie row type `LocalProfile3` → `LocalProfile` once the legacy `LocalProfile` is fully removed (the `3` suffix only exists because both names coexisted during 6-A through 6-D).
 
 **Hold this PR unless cleanup matters more than the small risk of a soak-window regression** — dead columns are cheap; the work above is mostly aesthetic.
 

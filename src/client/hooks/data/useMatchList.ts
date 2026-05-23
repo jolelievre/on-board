@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../../lib/db";
 import type { Player } from "../../types/match";
+import { loadProfilesForPlayers, projectPlayer } from "./hydratePlayer";
 
 export type MatchListItem = {
   id: string;
@@ -39,37 +40,12 @@ export function useMatchList(gameId?: string): UseMatchListResult {
 
       // Bulk-fetch all referenced profiles once so the per-player
       // mapping below is O(N) instead of O(N*log N) per-row lookups.
-      const profileIds = [
-        ...new Set(
-          allPlayers.map((p) => p.profileId).filter((x): x is string => !!x),
-        ),
-      ];
-      const profiles = profileIds.length
-        ? await db.profiles.bulkGet(profileIds)
-        : [];
-      const profileById = new Map<string, (typeof profiles)[number]>();
-      for (const pr of profiles) {
-        if (pr) profileById.set(pr.id, pr);
-      }
+      const profileById = await loadProfilesForPlayers(allPlayers);
 
       const playersByMatch = new Map<string, Player[]>();
       for (const p of allPlayers) {
         const list = playersByMatch.get(p.matchId) ?? [];
-        const pr = p.profileId ? profileById.get(p.profileId) : null;
-        list.push({
-          id: p.id,
-          name: p.name,
-          position: p.position,
-          profileId: p.profileId ?? null,
-          profile: pr
-            ? {
-                alias: pr.alias,
-                linkedUserId: pr.linkedUserId,
-                linkedUser: pr.linkedUser,
-              }
-            : null,
-          user: p.user ?? null,
-        });
+        list.push(projectPlayer(p, profileById));
         playersByMatch.set(p.matchId, list);
       }
       for (const list of playersByMatch.values()) {
