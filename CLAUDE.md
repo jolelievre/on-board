@@ -149,6 +149,27 @@ The PWA manifest (`name`, `short_name`, `theme_color`) and the icon set vary by 
 
 Coolify must set `DEPLOY_ENV` per environment (build arg). `prebuild` re-renders `pwa-icon-{192,512}.png` + `favicon.svg` with the right badge, and `vite.config.ts` reads the same variable to pick the manifest values.
 
+### Avatar uploads volume
+
+Owner-uploaded avatars (PR 6-B) are written to `/app/uploads/avatars/{profileId}.{version}.jpg` and served from `/api/uploads/avatars/*`.
+
+When to mount a persistent Coolify volume on `/app/uploads`:
+
+| Environment | Volume recommended? | Why |
+|---|---|---|
+| `production` | **Yes** | Avatars must survive every redeploy. |
+| `integration` | **Yes** | Same — integration is for human testing across sessions. |
+| `preview` | Optional | Preview is throwaway; if you keep `RESET_DB=false` between deploys you'll probably want the volume, but it's also valid to run without one and let `RESET_DB=true` wipe everything on each deploy. |
+
+Volume settings when used:
+- Volume name: `onboard-uploads` (per environment)
+- Container path: `/app/uploads`
+- Set `UPLOADS_DIR=/app/uploads` in Coolify env vars (default; only override if you mount elsewhere)
+
+`RESET_DB=true` clears `${UPLOADS_DIR}/avatars/*` alongside the DB reset (entrypoint.sh) so the filesystem and the DB stay in sync — no orphan `customAvatarUrl` references pointing at deleted files. The mountpoint itself is preserved.
+
+Without a volume **and** `RESET_DB=false`, the upload directory gets recreated empty on each deploy while the DB still references the old URLs — the UI would show broken image icons. Pair "no volume" with "`RESET_DB=true` on every deploy" to keep state consistent.
+
 ## Git Workflow
 
 - Feature branches off `main`

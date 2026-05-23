@@ -7,6 +7,7 @@ import { matchesRoutes } from "./routes/matches.js";
 import { scoresRoutes } from "./routes/scores.js";
 import { playersRoutes } from "./routes/players.js";
 import { profilesRoutes } from "./routes/profiles.js";
+import { uploadsRoutes } from "./routes/uploads.js";
 
 const app = new Hono().basePath("/api");
 
@@ -28,6 +29,12 @@ app.route("/players", playersRoutes);
 
 app.use("/profiles/*", requireAuth);
 app.route("/profiles", profilesRoutes);
+
+// Public static-serve for owner-uploaded avatars. No auth — the URL
+// embeds the profile id + a per-upload random version token so leaking
+// the URL is the only way someone else can fetch the file (same
+// capability model as Google avatar URLs).
+app.route("/uploads", uploadsRoutes);
 
 app.get("/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });

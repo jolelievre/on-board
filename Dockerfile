@@ -47,6 +47,13 @@ COPY scripts/entrypoint.sh ./scripts/entrypoint.sh
 
 RUN chmod +x ./scripts/entrypoint.sh
 
+# Owner-uploaded avatars (PR 6-B). Pre-create the dir so the appuser
+# can write to it on first upload — without this the runtime mkdir would
+# fail under the read-only-by-default WORKDIR ownership. In production
+# this path should be mounted as a Coolify volume so uploads survive
+# redeploys (see CLAUDE.md → Deployment).
+RUN mkdir -p /app/uploads/avatars && chown -R appuser:appgroup /app/uploads
+
 USER appuser
 EXPOSE 3000
 
