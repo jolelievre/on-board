@@ -130,8 +130,20 @@ E2E tests should drive mutations through the **UI**, not via `page.request.post(
 
 - Docker multi-stage build (see `Dockerfile`)
 - Coolify: auto-deploy on push to main (integration), manual deploy on release (production)
-- Preview environment on PRs (fixed URL)
 - `entrypoint.sh`: runs `prisma migrate deploy` then seeds + starts server (preserves data across deploys)
+
+### Coolify topology (important)
+
+There are **two** standalone Coolify applications, not three:
+
+- `onboard-prod` → production deploy (manual, on release).
+- `onboard-integration` → integration deploy (auto, on push to `main`).
+
+`preview` is **not** a third app. It's Coolify's GitHub-preview-deployment feature riding on `onboard-integration`: each open PR triggers a fully isolated sub-deployment with its own scoped env vars (incl. its own DB, `onboard-db-preview`) and its own per-PR slice of any storage marked `is_preview_suffix_enabled`. PRs being closed/merged tears the sub-deployment down automatically.
+
+Practical implications:
+- Per-environment config that lives in Coolify (env vars, secrets, persistent storages) gets attached to the **integration** app and Coolify scopes it for preview via the "preview" toggle/suffix.
+- There is no separate Coolify app to click into for "preview" — you reach a preview deployment from the integration app's preview-deployments tab or via the PR URL.
 
 ### Resetting the preview/integration database
 
@@ -139,7 +151,7 @@ Set `RESET_DB=true` in Coolify's env vars for the target environment, then redep
 
 ### Per-env PWA branding
 
-The PWA manifest (`name`, `short_name`, `theme_color`) and the icon set vary by environment so the three deploys can be installed and recognized side-by-side on the home screen. The `DEPLOY_ENV` build arg drives this:
+The PWA manifest (`name`, `short_name`, `theme_color`) and the icon set vary by environment so the production, integration, and preview deploys can be installed and recognized side-by-side on the home screen. The `DEPLOY_ENV` build arg drives this:
 
 | `DEPLOY_ENV` | App name | Icon badge | Theme color |
 |---|---|---|---|
@@ -147,28 +159,28 @@ The PWA manifest (`name`, `short_name`, `theme_color`) and the icon set vary by 
 | `integration` | OnBoard Dev | teal gear in lower-right | `#0E7C66` (teal) |
 | `preview` | OnBoard Test | red bug in lower-right | `#B91C1C` (red) |
 
-Coolify must set `DEPLOY_ENV` per environment (build arg). `prebuild` re-renders `pwa-icon-{192,512}.png` + `favicon.svg` with the right badge, and `vite.config.ts` reads the same variable to pick the manifest values.
+`DEPLOY_ENV` is a Docker build arg. `prebuild` re-renders `pwa-icon-{192,512}.png` + `favicon.svg` with the right badge, and `vite.config.ts` reads the same variable to pick the manifest values.
+
+Set it on each Coolify app:
+- `onboard-prod` → `DEPLOY_ENV=production`
+- `onboard-integration` → `DEPLOY_ENV=integration` for the main deploy, and `DEPLOY_ENV=preview` scoped to the preview-deployment env vars so each PR deploy rebrands as "OnBoard Test".
 
 ### Avatar uploads volume
 
-Owner-uploaded avatars (PR 6-B) are written to `/app/uploads/avatars/{profileId}.{version}.jpg` and served from `/api/uploads/avatars/*`.
+Owner-uploaded avatars (PR 6-B) are written to `/app/uploads/avatars/{profileId}.{version}.jpg` and served from `/api/uploads/avatars/*`. Each environment needs a persistent volume mounted at `/app/uploads` so uploads survive redeploys.
 
-When to mount a persistent Coolify volume on `/app/uploads`:
+Per the Coolify topology above, **two** persistent storages cover everything (both named `onboard-uploads` for consistency; Coolify prefixes with the app UUID internally so the Docker volume names stay unique):
 
-| Environment | Volume recommended? | Why |
-|---|---|---|
-| `production` | **Yes** | Avatars must survive every redeploy. |
-| `integration` | **Yes** | Same — integration is for human testing across sessions. |
-| `preview` | Optional | Preview is throwaway; if you keep `RESET_DB=false` between deploys you'll probably want the volume, but it's also valid to run without one and let `RESET_DB=true` wipe everything on each deploy. |
+| Coolify app | Storage name | Mount path | `is_preview_suffix_enabled` | Covers |
+|---|---|---|---|---|
+| `onboard-integration` | `onboard-uploads` | `/app/uploads` | ✓ | integration deploy **and** every preview PR (each PR gets its own volume slice automatically) |
+| `onboard-prod` | `onboard-uploads` | `/app/uploads` | — | production |
 
-Volume settings when used:
-- Volume name: `onboard-uploads` (per environment)
-- Container path: `/app/uploads`
-- Set `UPLOADS_DIR=/app/uploads` in Coolify env vars (default; only override if you mount elsewhere)
+`UPLOADS_DIR=/app/uploads` is the code default; only set it as an env var if you ever mount elsewhere.
 
-`RESET_DB=true` clears `${UPLOADS_DIR}/avatars/*` alongside the DB reset (entrypoint.sh) so the filesystem and the DB stay in sync — no orphan `customAvatarUrl` references pointing at deleted files. The mountpoint itself is preserved.
+`RESET_DB=true` clears `${UPLOADS_DIR:-/app/uploads}/avatars/*` alongside the DB reset (`entrypoint.sh`) so the filesystem and the DB stay in sync — no orphan `customAvatarUrl` references pointing at deleted files. The volume itself (mountpoint) is preserved across resets.
 
-Without a volume **and** `RESET_DB=false`, the upload directory gets recreated empty on each deploy while the DB still references the old URLs — the UI would show broken image icons. Pair "no volume" with "`RESET_DB=true` on every deploy" to keep state consistent.
+Same `RESET_DB` flip-back caveat as the DB-reset section: turn it back to `false` immediately after the reset deploy, or every subsequent deploy will keep wiping both the DB and the uploads.
 
 ## Git Workflow
 
