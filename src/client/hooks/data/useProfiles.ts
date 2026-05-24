@@ -258,9 +258,10 @@ export type PlayedWithGroup = {
  * its most-recent appearance so tapping a chip fills slots in the same
  * order the players sat last time.
  *
- * "Unique" is keyed on the ordered profile-id list (different orderings
- * are different groups). We deduplicate from a recency-sorted scan and
- * keep the first occurrence, so the chip reflects the latest seating.
+ * "Unique" is set-based on the profile ids — two matches with the same
+ * roster in different seat orders count as one group. We deduplicate
+ * from a recency-sorted scan and keep the first occurrence, so the
+ * stored seating reflects the latest match featuring that exact crew.
  *
  * Returns `undefined` while Dexie reads are in flight. Returns `[]` when
  * the viewer has no matches for this game yet — the picker hides the
@@ -309,7 +310,13 @@ export function usePlayedWith(
         }
         if (!valid || ids.length === 0) continue;
 
-        const key = ids.join("|");
+        // Set-based dedup: sort the ids when computing the key so two
+        // matches with the same roster in different seat orders collapse
+        // to one group. We still store the un-sorted `ids` so the chip
+        // fills slots in the latest seating that crew actually used —
+        // the recency-first scan + first-occurrence rule above guarantees
+        // that's the most recent match for this group.
+        const key = [...ids].sort().join("|");
         if (seen.has(key)) continue;
         seen.set(key, {
           profileIds: ids,
