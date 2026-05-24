@@ -322,6 +322,122 @@ test.describe("API: Matches (authenticated)", () => {
     const match = await res.json();
     expect(match.metadata).toEqual({ skullKing: { dealerStart: 1 } });
   });
+
+  test("POST /api/matches accepts profileId and snapshots alias to Player.name", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const gamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gamesRes.json();
+
+    const profileARes = await request.post("/api/profiles", {
+      data: { alias: "Alice" },
+    });
+    expect(profileARes.status()).toBe(201);
+    const profileA = await profileARes.json();
+
+    const profileBRes = await request.post("/api/profiles", {
+      data: { alias: "Bob" },
+    });
+    expect(profileBRes.status()).toBe(201);
+    const profileB = await profileBRes.json();
+
+    const res = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { profileId: profileA.id, position: 0 },
+          { profileId: profileB.id, position: 1 },
+        ],
+      },
+    });
+    expect(res.status()).toBe(201);
+    const match = await res.json();
+    expect(match.players).toHaveLength(2);
+    expect(match.players[0].profileId).toBe(profileA.id);
+    expect(match.players[0].name).toBe("Alice");
+    expect(match.players[1].profileId).toBe(profileB.id);
+    expect(match.players[1].name).toBe("Bob");
+  });
+
+  test("POST /api/matches rejects a profileId not visible to the caller", async ({
+    request,
+  }) => {
+    const ownerGamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await ownerGamesRes.json();
+
+    await createAndSignIn(request);
+    const ownerProfileRes = await request.post("/api/profiles", {
+      data: { alias: "Private" },
+    });
+    expect(ownerProfileRes.status()).toBe(201);
+    const ownerProfile = await ownerProfileRes.json();
+
+    // Switch identity — the new user can't see ownerProfile.
+    await createAndSignIn(request);
+    const res = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { profileId: ownerProfile.id, position: 0 },
+          { name: "Bob", position: 1 },
+        ],
+      },
+    });
+    expect(res.status()).toBe(403);
+  });
+
+  test("POST /api/matches rejects a player payload with neither profileId nor name", async ({
+    request,
+  }) => {
+    const gamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gamesRes.json();
+
+    const res = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { position: 0 },
+          { name: "Bob", position: 1 },
+        ],
+      },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test("POST /api/matches rejects a malformed profileId", async ({ request }) => {
+    const gamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gamesRes.json();
+
+    const res = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { profileId: "not-a-cuid", position: 0 },
+          { name: "Bob", position: 1 },
+        ],
+      },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test("POST /api/matches returns 404 for an unknown profileId", async ({
+    request,
+  }) => {
+    const gamesRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gamesRes.json();
+
+    const res = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { profileId: makeClientId(), position: 0 },
+          { name: "Bob", position: 1 },
+        ],
+      },
+    });
+    expect(res.status()).toBe(404);
+  });
 });
 
 test.describe("API: PATCH /api/matches/:id (authenticated)", () => {

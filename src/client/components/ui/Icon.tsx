@@ -20,7 +20,11 @@ export type IconName =
   | "pencil"
   | "x"
   | "play"
-  | "link";
+  | "link"
+  | "camera"
+  | "image"
+  | "refresh"
+  | "merge";
 
 type Props = {
   name: IconName;
@@ -221,6 +225,39 @@ export function Icon({ name, size = 20, stroke = 1.6, className, title }: Props)
           {titleEl}
           <path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7L11 7" />
           <path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7L13 17" />
+        </svg>
+      );
+    case "camera":
+      return (
+        <svg {...props}>
+          {titleEl}
+          <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" />
+          <circle cx="12" cy="13" r="3.5" />
+        </svg>
+      );
+    case "image":
+      return (
+        <svg {...props}>
+          {titleEl}
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="M3 17l5-5 4 4 3-3 6 6" />
+          <circle cx="9" cy="9" r="1.5" />
+        </svg>
+      );
+    case "refresh":
+      return (
+        <svg {...props}>
+          {titleEl}
+          <path d="M21 12a9 9 0 11-3-6.7M21 4v5h-5" />
+          <path d="M3 12a9 9 0 0015.7 6L21 16" />
+        </svg>
+      );
+    case "merge":
+      return (
+        <svg {...props}>
+          {titleEl}
+          <path d="M6 3v6a4 4 0 004 4h4a4 4 0 014 4v4M18 3v6" />
+          <path d="M3 6l3-3 3 3M15 6l3-3 3 3" />
         </svg>
       );
   }

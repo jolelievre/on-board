@@ -227,16 +227,25 @@ test.describe("API: Profiles (authenticated)", () => {
       },
     });
     const secondMatch = (await second.json()) as {
-      players: { name: string; profileId: string | null }[];
+      players: {
+        name: string;
+        position: number;
+        profileId: string | null;
+      }[];
     };
 
     const firstAlice = firstMatch.players.find((p) => p.name === "Alice")!;
-    const secondAlice = secondMatch.players.find((p) => p.name === "alice")!;
+    // PR 6-B: Player.name is now snapshotted from the canonical
+    // Profile.alias, so the second slot reads "Alice" even though the
+    // client passed "alice". Identity comes from profileId, not from
+    // the legacy display column.
+    const secondAlice = secondMatch.players.find((p) => p.position === 0)!;
     expect(secondAlice.profileId).toBe(firstAlice.profileId);
+    expect(secondAlice.name).toBe("Alice");
 
     // Carol gets a brand-new profile.
     const firstBob = firstMatch.players.find((p) => p.name === "Bob")!;
-    const secondCarol = secondMatch.players.find((p) => p.name === "Carol")!;
+    const secondCarol = secondMatch.players.find((p) => p.position === 1)!;
     expect(secondCarol.profileId).not.toBe(firstBob.profileId);
     expect(secondCarol.profileId).not.toBe(firstAlice.profileId);
   });
@@ -269,6 +278,242 @@ test.describe("API: Profiles (authenticated)", () => {
 
     const selfPlayer = match.players.find((p) => p.userId === me.user.id)!;
     expect(selfPlayer.profileId).toBe(selfProfile.id);
+  });
+});
+
+// Smallest valid PNG (1x1 transparent). sharp resizes it to the
+// 400/100 outputs without complaint, and the file is small enough to
+// fit inline.
+const TINY_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+function tinyPngBuffer(): Buffer {
+  return Buffer.from(TINY_PNG_BASE64, "base64");
+}
+
+test.describe("API: Profile avatars (authenticated)", () => {
+  test("POST /api/profiles/:id/avatar resizes + persists customAvatarUrl", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const created = await request.post("/api/profiles", {
+      data: { alias: "Alice" },
+    });
+    expect(created.status()).toBe(201);
+    const profile = (await created.json()) as ApiProfile;
+
+    const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
+      multipart: {
+        avatar: {
+          name: "avatar.png",
+          mimeType: "image/png",
+          buffer: tinyPngBuffer(),
+        },
+      },
+    });
+    expect(upload.status()).toBe(200);
+    const updated = (await upload.json()) as ApiProfile;
+    expect(updated.customAvatarUrl).toMatch(
+      new RegExp(`^/api/uploads/avatars/${profile.id}\\.[a-z0-9]+\\.jpg$`),
+    );
+    // A custom upload implies the owner wants this one shown.
+    expect(updated.useLinkedAvatar).toBe(false);
+
+    // And the file actually serves.
+    const file = await request.get(updated.customAvatarUrl as string);
+    expect(file.ok()).toBeTruthy();
+    expect(file.headers()["content-type"]).toBe("image/jpeg");
+  });
+
+  test("POST /api/profiles/:id/avatar rejects when caller doesn't own the profile", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const created = await request.post("/api/profiles", {
+      data: { alias: "Alice" },
+    });
+    const profile = (await created.json()) as ApiProfile;
+
+    await createAndSignIn(request); // switch identity
+    const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
+      multipart: {
+        avatar: {
+          name: "avatar.png",
+          mimeType: "image/png",
+          buffer: tinyPngBuffer(),
+        },
+      },
+    });
+    expect(upload.status()).toBe(403);
+  });
+
+  test("POST /api/profiles/:id/avatar rejects an empty body", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const created = await request.post("/api/profiles", {
+      data: { alias: "Alice" },
+    });
+    const profile = (await created.json()) as ApiProfile;
+
+    const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
+      data: "",
+      headers: { "content-type": "application/json" },
+    });
+    // Body without multipart → either 400 "multipart required" or 400
+    // "missing avatar part" depending on which guard fires first.
+    expect(upload.status()).toBe(400);
+  });
+
+  test("DELETE /api/profiles/:id/avatar clears customAvatarUrl + restores linked default", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const created = await request.post("/api/profiles", {
+      data: { alias: "Alice" },
+    });
+    const profile = (await created.json()) as ApiProfile;
+
+    const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
+      multipart: {
+        avatar: {
+          name: "avatar.png",
+          mimeType: "image/png",
+          buffer: tinyPngBuffer(),
+        },
+      },
+    });
+    expect(upload.status()).toBe(200);
+
+    const clear = await request.delete(`/api/profiles/${profile.id}/avatar`);
+    expect(clear.status()).toBe(200);
+    const cleared = (await clear.json()) as ApiProfile;
+    expect(cleared.customAvatarUrl).toBeNull();
+    expect(cleared.useLinkedAvatar).toBe(true);
+  });
+
+  test("GET /api/uploads/avatars rejects path-traversal-shaped filenames", async ({
+    request,
+  }) => {
+    const res = await request.get(
+      "/api/uploads/avatars/..%2F..%2Fpackage.json",
+    );
+    expect(res.status()).toBe(404);
+  });
+});
+
+test.describe("API: Profile merge (authenticated)", () => {
+  test("POST /api/profiles/:targetId/merge collapses Player.profileId + deletes source", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const gameRes = await request.get("/api/games/7-wonders-duel");
+    const game = await gameRes.json();
+
+    const aliceRes = await request.post("/api/profiles", {
+      data: { alias: "Alice" },
+    });
+    const alice = (await aliceRes.json()) as ApiProfile;
+    const aliasRes = await request.post("/api/profiles", {
+      data: { alias: "Aliss" },
+    });
+    const alias = (await aliasRes.json()) as ApiProfile;
+
+    // One match references each profile so the merge has rewrites to do.
+    const matchRes = await request.post("/api/matches", {
+      data: {
+        gameId: game.id,
+        players: [
+          { profileId: alice.id, position: 0 },
+          { profileId: alias.id, position: 1 },
+        ],
+      },
+    });
+    const match = await matchRes.json();
+    const matchId = match.id;
+
+    const merge = await request.post(`/api/profiles/${alice.id}/merge`, {
+      data: { sourceProfileId: alias.id },
+    });
+    expect(merge.status()).toBe(200);
+    const body = (await merge.json()) as { status: string; profile: ApiProfile };
+    expect(body.status).toBe("merged");
+    expect(body.profile.id).toBe(alice.id);
+
+    // Source profile is gone.
+    const sourceFetch = await request.get(`/api/profiles`);
+    const profiles = (await sourceFetch.json()) as ApiProfile[];
+    expect(profiles.some((p) => p.id === alias.id)).toBe(false);
+
+    // The match's second Player now references alice's profile and
+    // snapshots her alias to Player.name.
+    const detail = await request.get(`/api/matches/${matchId}`);
+    const detailBody = (await detail.json()) as {
+      players: { profileId: string | null; name: string }[];
+    };
+    expect(
+      detailBody.players.every((p) => p.profileId === alice.id),
+    ).toBe(true);
+    expect(detailBody.players.every((p) => p.name === "Alice")).toBe(true);
+  });
+
+  test("POST /api/profiles/:targetId/merge requires ownership of both profiles", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const aliceRes = await request.post("/api/profiles", {
+      data: { alias: "Alice" },
+    });
+    const alice = (await aliceRes.json()) as ApiProfile;
+
+    await createAndSignIn(request);
+    const otherRes = await request.post("/api/profiles", {
+      data: { alias: "Other" },
+    });
+    const other = (await otherRes.json()) as ApiProfile;
+
+    const merge = await request.post(`/api/profiles/${other.id}/merge`, {
+      data: { sourceProfileId: alice.id },
+    });
+    // The caller doesn't own alice (it was created under a previous
+    // identity), so the resolver returns 403.
+    expect(merge.status()).toBe(403);
+  });
+
+  test("POST /api/profiles/:targetId/merge rejects when either side is linked", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const selfRes = await request.get("/api/profiles");
+    const profiles = (await selfRes.json()) as ApiProfile[];
+    const self = profiles.find((p) => p.linkedUserId === p.ownerId)!;
+
+    const otherRes = await request.post("/api/profiles", {
+      data: { alias: "Other" },
+    });
+    const other = (await otherRes.json()) as ApiProfile;
+
+    // self is linked (linkedUserId === viewer.id) — 6-B refuses linked
+    // merges; the token-required variant ships in 6-C.
+    const merge = await request.post(`/api/profiles/${self.id}/merge`, {
+      data: { sourceProfileId: other.id },
+    });
+    expect(merge.status()).toBe(409);
+  });
+
+  test("POST /api/profiles/:targetId/merge rejects same-id payload", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const aliceRes = await request.post("/api/profiles", {
+      data: { alias: "Alice" },
+    });
+    const alice = (await aliceRes.json()) as ApiProfile;
+
+    const merge = await request.post(`/api/profiles/${alice.id}/merge`, {
+      data: { sourceProfileId: alice.id },
+    });
+    expect(merge.status()).toBe(400);
   });
 });
 

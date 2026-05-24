@@ -16,6 +16,47 @@
   text-align: center;
 }
 
+/* Edit mode replaces the avatar in the hero with the uploader card,
+ * but we still want the name + badges centred below it for context. */
+.heroTextOnly {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  text-align: center;
+}
+
+.heroAvatar {
+  position: relative;
+  display: inline-flex;
+}
+
+.heroEditButton {
+  position: absolute;
+  /* Offset the pencil pill so it sits just outside the avatar's edge
+   * rather than overlapping the face. The button is small enough that
+   * `right: -4px; bottom: -4px` keeps it inside the hero block but
+   * uncovers the lower-right portion of the photo. */
+  bottom: -4px;
+  right: -4px;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: white;
+  border: 2px solid var(--color-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--color-ink) 18%, transparent);
+}
+
+.heroEditButton:hover {
+  filter: brightness(1.05);
+}
+
 .heroBadges {
   display: flex;
   gap: 0.4rem;
@@ -171,4 +212,17 @@
   text-align: center;
   padding: 2rem 0;
   margin: 0;
+}
+
+.headToHeadDraws {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+}
+
+.mergeActionRow {
+  margin-top: 1.25rem;
+  display: flex;
+  justify-content: center;
 }

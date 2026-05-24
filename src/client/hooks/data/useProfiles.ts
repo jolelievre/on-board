@@ -201,6 +201,250 @@ export function useProfileStats(
   return data ?? undefined;
 }
 
+export type ProfileSuggestion = {
+  id: string;
+  alias: string;
+  isSelf: boolean;
+  profile: LocalProfile3;
+};
+
+/**
+ * Filtered profile list for the new-match picker. Wraps `useProfileList`
+ * with two client-side reductions the picker always wants:
+ *   - `query`: case-insensitive substring match on `alias`. An empty
+ *     query returns every visible profile.
+ *   - `excludeIds`: skip profiles already chosen in another slot. The
+ *     picker computes this from the other slots' current `profileId`s.
+ *
+ * Returns the picker-shaped projection so the dropdown can mark "Me"
+ * without rederiving the self-relationship in JSX.
+ */
+export function useProfileSuggestions(
+  viewerId: string | undefined,
+  query: string,
+  excludeIds: Set<string>,
+): ProfileSuggestion[] | undefined {
+  const { data } = useProfileList(viewerId);
+  if (!data) return undefined;
+  const needle = query.trim().toLowerCase();
+  return data
+    .filter((p) => !excludeIds.has(p.id))
+    .filter((p) =>
+      needle === "" ? true : p.alias.toLowerCase().includes(needle),
+    )
+    .map((p) => ({
+      id: p.id,
+      alias: p.alias,
+      isSelf: p.linkedUserId === viewerId,
+      profile: p,
+    }));
+}
+
+export type PlayedWithGroup = {
+  /** Ordered profile ids — preserved as the seating order from the
+   * most-recent match this combination appeared in. */
+  profileIds: string[];
+  /** Resolved profile rows for rendering avatars + aliases in the chip.
+   * Indices align with `profileIds`. */
+  profiles: LocalProfile3[];
+  /** `startedAt` of the most-recent match this exact group played. */
+  lastPlayedAt: string;
+};
+
+/**
+ * The 3 most recent unique player groupings the viewer has played with
+ * for a given game — powers the "Played with" chips above the slot list
+ * on the new-match form. Each group preserves the seating order from
+ * its most-recent appearance so tapping a chip fills slots in the same
+ * order the players sat last time.
+ *
+ * "Unique" is set-based on the profile ids — two matches with the same
+ * roster in different seat orders count as one group. We deduplicate
+ * from a recency-sorted scan and keep the first occurrence, so the
+ * stored seating reflects the latest match featuring that exact crew.
+ *
+ * Returns `undefined` while Dexie reads are in flight. Returns `[]` when
+ * the viewer has no matches for this game yet — the picker hides the
+ * row in that case.
+ */
+export function usePlayedWith(
+  viewerId: string | undefined,
+  gameId: string | undefined,
+  limit = 3,
+): PlayedWithGroup[] | undefined {
+  const data = useLiveQuery(
+    async (): Promise<PlayedWithGroup[] | null> => {
+      if (!viewerId || !gameId) return null;
+
+      // Pull every match for this game and find ones we ourselves created.
+      // Pre-filter on the indexed gameId column; the createdBy gate is in
+      // memory because we don't carry an explicit createdById on
+      // LocalMatch (the server enforces visibility, and Dexie only
+      // contains rows we already pulled). All matches in our Dexie are
+      // ones we can see — for now that's "ones we created" since cross-
+      // user linking ships in 6-C.
+      const matches = await db.matches.where("gameId").equals(gameId).toArray();
+      if (matches.length === 0) return [];
+      matches.sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
+
+      const seen = new Map<string, PlayedWithGroup>();
+      // Collect the profile ids we'll need to hydrate at the end.
+      const allProfileIds = new Set<string>();
+
+      for (const m of matches) {
+        const matchPlayers = await db.players
+          .where("matchId")
+          .equals(m.id)
+          .sortBy("position");
+        // A pre-6-A match may have null profileIds. Skip — we can't
+        // build a stable chip without ids.
+        const ids: string[] = [];
+        let valid = true;
+        for (const p of matchPlayers) {
+          if (!p.profileId) {
+            valid = false;
+            break;
+          }
+          ids.push(p.profileId);
+          allProfileIds.add(p.profileId);
+        }
+        if (!valid || ids.length === 0) continue;
+
+        // Set-based dedup: sort the ids when computing the key so two
+        // matches with the same roster in different seat orders collapse
+        // to one group. We still store the un-sorted `ids` so the chip
+        // fills slots in the latest seating that crew actually used —
+        // the recency-first scan + first-occurrence rule above guarantees
+        // that's the most recent match for this group.
+        const key = [...ids].sort().join("|");
+        if (seen.has(key)) continue;
+        seen.set(key, {
+          profileIds: ids,
+          profiles: [], // filled below once we know which profiles to fetch
+          lastPlayedAt: m.startedAt,
+        });
+        if (seen.size >= limit) break;
+      }
+
+      if (seen.size === 0) return [];
+
+      const profileRows = await db.profiles.bulkGet([...allProfileIds]);
+      const profilesById = new Map<string, LocalProfile3>();
+      for (const p of profileRows) {
+        if (p) profilesById.set(p.id, p);
+      }
+
+      // Drop any group whose profiles aren't fully hydrated locally
+      // (the row was deleted, or pullSync hasn't caught up). The chip
+      // would render as half-blanks otherwise.
+      const groups: PlayedWithGroup[] = [];
+      for (const g of seen.values()) {
+        const hydrated = g.profileIds.map((id) => profilesById.get(id));
+        if (hydrated.every((p): p is LocalProfile3 => p !== undefined)) {
+          groups.push({ ...g, profiles: hydrated });
+        }
+      }
+      return groups;
+    },
+    [viewerId, gameId, limit],
+  );
+  return data ?? undefined;
+}
+
+export type HeadToHeadRecord = {
+  /** Total completed matches in which both profiles played. */
+  matches: number;
+  /** Wins for the *subject* profile (the one whose detail page we're on). */
+  subjectWins: number;
+  /** Wins for the viewer (the self-Profile). */
+  viewerWins: number;
+  /** Completed matches where neither side was the winner — Skull King ties,
+   * 7WD draws. */
+  draws: number;
+};
+
+/**
+ * Head-to-head record between the subject profile and the viewer's
+ * self-Profile, computed live from Dexie.
+ *
+ * "Both played" = at least one Player row in the same Match exists for
+ * each profileId. Only `COMPLETED` matches feed the win/loss/draw
+ * counters; the viewer-wins side reads `viewerSelfProfileId`, which the
+ * caller is expected to derive from `useProfileList` (the self-Profile
+ * is `linkedUserId === viewerId`).
+ *
+ * Returns `undefined` while Dexie reads are in flight. Returns a
+ * record with `matches: 0` when the two profiles have never shared a
+ * completed match.
+ */
+export function useHeadToHead(
+  subjectProfileId: string | undefined,
+  viewerSelfProfileId: string | undefined,
+): HeadToHeadRecord | undefined {
+  return useLiveQuery(
+    async (): Promise<HeadToHeadRecord> => {
+      if (!subjectProfileId || !viewerSelfProfileId) {
+        return { matches: 0, subjectWins: 0, viewerWins: 0, draws: 0 };
+      }
+      if (subjectProfileId === viewerSelfProfileId) {
+        // No head-to-head against yourself.
+        return { matches: 0, subjectWins: 0, viewerWins: 0, draws: 0 };
+      }
+
+      const subjectPlayers = await db.players
+        .where("profileId")
+        .equals(subjectProfileId)
+        .toArray();
+      const matchIds = [...new Set(subjectPlayers.map((p) => p.matchId))];
+      if (matchIds.length === 0) {
+        return { matches: 0, subjectWins: 0, viewerWins: 0, draws: 0 };
+      }
+
+      const matches = await db.matches.bulkGet(matchIds);
+      const playersByMatch = new Map<string, typeof subjectPlayers>();
+      const allInMatch = await db.players
+        .where("matchId")
+        .anyOf(matchIds)
+        .toArray();
+      for (const p of allInMatch) {
+        const list = playersByMatch.get(p.matchId) ?? [];
+        list.push(p);
+        playersByMatch.set(p.matchId, list);
+      }
+
+      let total = 0;
+      let subjectWins = 0;
+      let viewerWins = 0;
+      let draws = 0;
+
+      for (const m of matches) {
+        if (!m) continue;
+        if (m.status !== "COMPLETED") continue;
+        const inMatch = playersByMatch.get(m.id) ?? [];
+        const subjectPlayer = inMatch.find(
+          (p) => p.profileId === subjectProfileId,
+        );
+        const viewerPlayer = inMatch.find(
+          (p) => p.profileId === viewerSelfProfileId,
+        );
+        if (!subjectPlayer || !viewerPlayer) continue;
+        total += 1;
+        if (m.winnerId === subjectPlayer.id) subjectWins += 1;
+        else if (m.winnerId === viewerPlayer.id) viewerWins += 1;
+        else draws += 1;
+      }
+
+      return {
+        matches: total,
+        subjectWins,
+        viewerWins,
+        draws,
+      };
+    },
+    [subjectProfileId, viewerSelfProfileId],
+  );
+}
+
 export type ProfileRecentMatch = {
   matchId: string;
   gameSlug: string;

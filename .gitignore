@@ -39,6 +39,10 @@ e2e/.auth/
 # Plan assets (game rules reference, not for commit)
 plan-assets/
 
+# Owner-uploaded avatars (PR 6-B). Local dev writes JPEGs here; in prod
+# this is a Coolify volume mount (see CLAUDE.md → Deployment).
+uploads/
+
 # Claude Code (local settings + runtime state)
 .claude/settings.local.json
 .claude/scheduled_tasks.lock

@@ -57,8 +57,13 @@ function honoDevServer(): Plugin {
           if (setCookies.length > 0) {
             res.setHeader("set-cookie", setCookies);
           }
-          const body = await response.text();
-          res.end(body);
+          // Use arrayBuffer + Buffer to preserve binary bodies (avatar
+          // JPEGs served from /api/uploads/avatars/*). The previous
+          // `.text()` path UTF-8-decoded those bytes, breaking the
+          // Content-Length / payload coherence and surfacing as
+          // "Parse Error: Expected HTTP/" on the client side.
+          const buf = Buffer.from(await response.arrayBuffer());
+          res.end(buf);
         } catch (err) {
           console.error("[hono-dev-server]", err);
           res.statusCode = 500;

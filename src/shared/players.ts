@@ -73,10 +73,11 @@ export function displayPlayerName(
  * hard-coded "Me" so the row is never blank in the suggestions list.
  *
  * Shared between the server (provisioning / mirroring the self-Profile
- * in `src/server/lib/profiles.ts`) and the client (`refreshLocalAliases`
- * mirror + `usePlayerSuggestions` session fallback) so all sites agree
- * on the same fallback chain — drift would manifest as a self chip
- * showing "Me" on one surface and the user's name on another.
+ * in `src/server/lib/profiles.ts`) and the client (Avatar / picker
+ * fallbacks for fresh sessions before pullSync hydrates the
+ * self-Profile) so all sites agree on the same fallback chain — drift
+ * would manifest as a self chip showing "Me" on one surface and the
+ * user's name on another.
  */
 export function resolveSelfAlias(user: {
   name: string;

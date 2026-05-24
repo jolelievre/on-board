@@ -22,7 +22,19 @@ function scheduleFlush(): void {
 
 export type CreateMatchInput = {
   gameId: string;
-  players: { name: string; userId?: string | null }[];
+  /**
+   * Per-slot resolution. As of PR 6-B every entry should carry a
+   * `profileId` — the picker either selected an existing profile or
+   * created one inline before submit. `name` + `userId` remain for the
+   * narrow rematch path that hits a pre-6-A Dexie row whose profileId
+   * is still null; on submit the server falls back to the legacy
+   * name-resolver for that single slot.
+   */
+  players: {
+    profileId?: string | null;
+    name?: string;
+    userId?: string | null;
+  }[];
   /** Pre-supplied id (tests/replay). Otherwise generated. */
   id?: string;
   metadata?: Record<string, unknown>;
@@ -46,14 +58,29 @@ export async function createMatch(
   const matchId = input.id ?? createId();
   const ts = nowIso();
 
-  const players: LocalPlayer[] = input.players.map((p, position) => ({
-    id: createId(),
-    matchId,
-    name: p.name,
-    position,
-    userId: p.userId ?? null,
-    updatedAt: ts,
-  }));
+  // Hydrate each slot to the row we want to mirror locally. The picker
+  // passes `profileId`; legacy callers (rematch from pre-6-A rows) still
+  // pass `name`. We look up the local Profile to snapshot its alias into
+  // `Player.name` so the UI has something to render even before the
+  // server response comes back.
+  const players: LocalPlayer[] = await Promise.all(
+    input.players.map(async (p, position) => {
+      let name = p.name ?? "";
+      if (p.profileId) {
+        const profile = await db.profiles.get(p.profileId);
+        if (profile) name = profile.alias;
+      }
+      return {
+        id: createId(),
+        matchId,
+        name,
+        position,
+        userId: p.userId ?? null,
+        profileId: p.profileId ?? null,
+        updatedAt: ts,
+      };
+    }),
+  );
 
   const match: LocalMatch = {
     id: matchId,
@@ -82,8 +109,10 @@ export async function createMatch(
           ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
           players: players.map((p) => ({
             id: p.id,
-            name: p.name,
             position: p.position,
+            ...(p.profileId
+              ? { profileId: p.profileId }
+              : { name: p.name }),
             ...(p.userId ? { userId: p.userId } : {}),
           })),
         }),
@@ -348,6 +377,119 @@ export async function createProfile(
 
   scheduleFlush();
   return { profileId };
+}
+
+/**
+ * Upload an avatar image for a Profile. Bypasses the sync queue (the
+ * request body is binary; queue entries are JSON) and uploads
+ * synchronously — if offline, the call rejects and the caller surfaces
+ * an error rather than queuing the binary for later. On success the
+ * server returns the updated Profile row; we mirror it into Dexie so
+ * the UI updates without waiting for the next pullSync.
+ */
+export async function uploadAvatar(input: {
+  profileId: string;
+  file: Blob;
+}): Promise<void> {
+  if (!navigator.onLine) {
+    throw new Error("Avatar uploads require an online connection");
+  }
+  const form = new FormData();
+  form.append("avatar", input.file);
+
+  const res = await fetch(`/api/profiles/${input.profileId}/avatar`, {
+    method: "POST",
+    body: form,
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Upload failed (${res.status})`);
+  }
+  const updated = (await res.json()) as LocalProfile3;
+  await db.profiles.put(updated);
+}
+
+/**
+ * Clear the owner-uploaded avatar. Deletes the server-side files and
+ * resets `customAvatarUrl` + `useLinkedAvatar` to defaults; we mirror
+ * the response into Dexie so the UI flips back to the initial-letter
+ * or linked-photo fallback immediately.
+ */
+export async function clearCustomAvatar(input: {
+  profileId: string;
+}): Promise<void> {
+  if (!navigator.onLine) {
+    throw new Error("Avatar removal requires an online connection");
+  }
+  const res = await fetch(`/api/profiles/${input.profileId}/avatar`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Delete failed (${res.status})`);
+  }
+  const updated = (await res.json()) as LocalProfile3;
+  await db.profiles.put(updated);
+}
+
+/**
+ * Collapse `sourceProfileId` into `targetProfileId` for the unclaimed
+ * variant (6-B). Optimistically rewrites Dexie's Player rows + deletes
+ * the source Profile before the POST returns so the UI updates
+ * immediately, then queues the POST so an offline merge replays on
+ * reconnect.
+ *
+ * The 6-B server endpoint rejects linked profiles outright; we don't
+ * pre-check here because the UI surface (MergeDialog) only shows
+ * unclaimed candidates. A server rejection therefore implies a sync
+ * race (target became linked between dialog render and submit) — the
+ * queued POST flips to `failed` and the user can retry from a fresh
+ * dialog.
+ */
+export async function mergeProfile(input: {
+  targetProfileId: string;
+  sourceProfileId: string;
+}): Promise<void> {
+  const ts = nowIso();
+  const target = await db.profiles.get(input.targetProfileId);
+  const survivingAlias = target?.alias ?? "";
+
+  await db.transaction(
+    "rw",
+    [db.profiles, db.players, db.syncQueue],
+    async () => {
+      // Rewrite every local Player from source → target. We carry the
+      // surviving alias forward into the legacy `name` column so the
+      // dormant value matches what the server is about to snapshot.
+      const players = await db.players
+        .where("profileId")
+        .equals(input.sourceProfileId)
+        .toArray();
+      for (const p of players) {
+        p.profileId = input.targetProfileId;
+        if (survivingAlias) p.name = survivingAlias;
+        p.updatedAt = ts;
+      }
+      if (players.length > 0) {
+        await db.players.bulkPut(players);
+      }
+
+      await db.profiles.delete(input.sourceProfileId);
+
+      await db.syncQueue.add({
+        method: "POST",
+        url: `/api/profiles/${input.targetProfileId}/merge`,
+        body: JSON.stringify({ sourceProfileId: input.sourceProfileId }),
+        createdAt: ts,
+        retries: 0,
+        status: "pending",
+      });
+    },
+  );
+
+  scheduleFlush();
 }
 
 export type PatchProfileInput = {

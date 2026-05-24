@@ -87,13 +87,17 @@
     "newMatch": {
       "title": "New match",
       "playerLabel": "Player {{n}}",
-      "playerPlaceholder": "Player name",
+      "playerPlaceholder": "Tap to pick or type a name",
       "playerRange": "{{min}}–{{max}} players",
       "addPlayer": "Add player",
       "removePlayer": "Remove player {{n}}",
       "start": "Start match",
       "duplicateNames": "Players must have different names.",
-      "missingName": "Each player must have a name."
+      "missingName": "Each player must have a name.",
+      "youSuffix": "you",
+      "createProfile": "Create \"{{alias}}\"",
+      "playedWith": "Played with",
+      "playedWithFill": "Fill with this group"
     },
     "history": {
       "empty": "No matches yet.",
@@ -252,13 +256,55 @@
     "recent": {
       "title": "Recent matches",
       "win": "Win"
+    },
+    "headToHead": {
+      "title": "Head-to-head",
+      "yourWins": "You",
+      "theirWins": "Them",
+      "draws_one": "{{count}} draw",
+      "draws_other": "{{count}} draws"
     }
   },
   "common": {
     "loading": "Loading…",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "done": "Done",
     "offlineBanner": "Offline — changes will sync when you reconnect",
     "offlineNoCache": "This page wasn't saved for offline use. Reconnect to load it.",
     "syncPending_one": "1 change pending sync",
     "syncPending_other": "{{count}} changes pending sync"
+  },
+  "avatar": {
+    "title": "Photo",
+    "edit": "Edit photo",
+    "takePhoto": "Take photo",
+    "chooseFile": "Choose file",
+    "capture": "Capture",
+    "retake": "Retake",
+    "confirm": "Use photo",
+    "clear": "Remove photo",
+    "flipCamera": "Flip camera",
+    "useLinkedAvatar": "Use friend's photo",
+    "useLinkedAvatarHint": "When on, this profile shows the linked Google account's avatar instead of any custom upload.",
+    "useLinkedAvatarSelf": "Use my Google account photo",
+    "useLinkedAvatarSelfHint": "When on, your profile shows the photo from your Google account. Turn off to use the photo you upload below.",
+    "uploadFailed": "Could not upload photo",
+    "clearFailed": "Could not remove photo",
+    "cameraError": {
+      "permissionDenied": "Camera access denied. Allow it in your browser settings.",
+      "noCamera": "No camera detected.",
+      "unknown": "Could not open the camera."
+    }
+  },
+  "merge": {
+    "title": "Merge into another profile",
+    "hint": "Pick the surviving profile. Every match where {{alias}} played will be reattached to that profile, and {{alias}} will be removed.",
+    "pick": "Pick a target",
+    "noCandidates": "No other unclaimed profiles to merge with.",
+    "confirm": "Merge",
+    "confirming": "Merging…",
+    "success": "Profiles merged.",
+    "linkedBlocked": "Linked profiles can't be merged yet — that ships in PR 6-C."
   }
 }

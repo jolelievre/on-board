@@ -119,9 +119,11 @@ test.describe("Alias — settings + propagation", () => {
     page,
   }) => {
     // Reproduces the bug where renaming via /players/<self> didn't
-    // refresh `usePlayerSuggestions` because the hook read the alias
-    // from the auth session (only updated by the Settings page) instead
-    // of from Dexie's self-Profile (updated by patchProfile too).
+    // refresh the new-match self suggestion because the legacy hook
+    // read the alias from the auth session (only updated by the
+    // Settings page) instead of from Dexie's self-Profile (updated by
+    // patchProfile too). 6-B's picker reads from Dexie directly, so the
+    // refresh is automatic — this test guards against regression.
     await signUpFresh(page);
 
     // Open the self-Profile detail page. The list is sorted with self

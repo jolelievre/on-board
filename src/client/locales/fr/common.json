@@ -87,13 +87,17 @@
     "newMatch": {
       "title": "Nouvelle partie",
       "playerLabel": "Joueur {{n}}",
-      "playerPlaceholder": "Nom du joueur",
+      "playerPlaceholder": "Touchez pour choisir ou tapez un nom",
       "playerRange": "{{min}}–{{max}} joueurs",
       "addPlayer": "Ajouter un joueur",
       "removePlayer": "Retirer le joueur {{n}}",
       "start": "Commencer la partie",
       "duplicateNames": "Les joueurs doivent avoir des noms différents.",
-      "missingName": "Chaque joueur doit avoir un nom."
+      "missingName": "Chaque joueur doit avoir un nom.",
+      "youSuffix": "vous",
+      "createProfile": "Créer « {{alias}} »",
+      "playedWith": "Joué avec",
+      "playedWithFill": "Remplir avec ce groupe"
     },
     "history": {
       "empty": "Aucune partie pour le moment.",
@@ -252,13 +256,55 @@
     "recent": {
       "title": "Parties récentes",
       "win": "Victoire"
+    },
+    "headToHead": {
+      "title": "Face à face",
+      "yourWins": "Vous",
+      "theirWins": "Eux",
+      "draws_one": "{{count}} égalité",
+      "draws_other": "{{count}} égalités"
     }
   },
   "common": {
     "loading": "Chargement…",
+    "saving": "Enregistrement…",
+    "cancel": "Annuler",
+    "done": "Terminé",
     "offlineBanner": "Hors ligne — les modifications seront synchronisées à la reconnexion",
     "offlineNoCache": "Cette page n'a pas été enregistrée pour le mode hors ligne. Reconnectez-vous pour la charger.",
     "syncPending_one": "1 modification en attente de sync",
     "syncPending_other": "{{count}} modifications en attente de sync"
+  },
+  "avatar": {
+    "title": "Photo",
+    "edit": "Modifier la photo",
+    "takePhoto": "Prendre une photo",
+    "chooseFile": "Choisir un fichier",
+    "capture": "Capturer",
+    "retake": "Reprendre",
+    "confirm": "Utiliser cette photo",
+    "clear": "Retirer la photo",
+    "flipCamera": "Changer de caméra",
+    "useLinkedAvatar": "Utiliser la photo de l'ami·e",
+    "useLinkedAvatarHint": "Si activé, ce profil affiche l'avatar du compte Google lié au lieu d'une photo personnalisée.",
+    "useLinkedAvatarSelf": "Utiliser la photo de mon compte Google",
+    "useLinkedAvatarSelfHint": "Si activé, votre profil affiche la photo de votre compte Google. Désactivez pour utiliser la photo que vous téléversez ci-dessous.",
+    "uploadFailed": "Impossible d'envoyer la photo",
+    "clearFailed": "Impossible de retirer la photo",
+    "cameraError": {
+      "permissionDenied": "Accès à la caméra refusé. Autorisez-le dans les réglages de votre navigateur.",
+      "noCamera": "Aucune caméra détectée.",
+      "unknown": "Impossible d'ouvrir la caméra."
+    }
+  },
+  "merge": {
+    "title": "Fusionner avec un autre profil",
+    "hint": "Choisissez le profil qui restera. Toutes les parties où {{alias}} a joué seront rattachées à ce profil, et {{alias}} sera supprimé.",
+    "pick": "Choisir une cible",
+    "noCandidates": "Aucun autre profil non lié à fusionner.",
+    "confirm": "Fusionner",
+    "confirming": "Fusion en cours…",
+    "success": "Profils fusionnés.",
+    "linkedBlocked": "Les profils liés ne peuvent pas encore être fusionnés — fonction prévue en PR 6-C."
   }
 }
