@@ -30,6 +30,11 @@
   font-size: 1.8rem;
 }
 
+.xl {
+  --avatar-size: 120px;
+  font-size: 2.6rem;
+}
+
 .img {
   width: 100%;
   height: 100%;

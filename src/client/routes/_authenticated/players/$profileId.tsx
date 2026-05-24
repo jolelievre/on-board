@@ -98,15 +98,37 @@ function ProfileDetailBody({
     <>
       <Header back={{ to: "/players", label: t("nav.players") }} />
       <div className="px-5">
-        <div className={styles.hero}>
-          {editingPhoto && isOwner ? (
-            <AvatarUploader
-              profile={profile}
-              onDone={() => setEditingPhoto(false)}
-            />
-          ) : (
+        {editingPhoto && isOwner && viewerId ? (
+          // Edit mode: the uploader replaces the hero avatar block
+          // entirely, wrapped in the standard `Group` card so the
+          // boundary reads clearly against the surrounding sections.
+          // Name + badges still render below so the user keeps their
+          // sense of place.
+          <>
+            <Group title={t("avatar.title")}>
+              <AvatarUploader
+                profile={profile}
+                viewerId={viewerId}
+                onDone={() => setEditingPhoto(false)}
+              />
+            </Group>
+            <div className={styles.heroTextOnly}>
+              <h1 className={styles.title}>{name}</h1>
+              <div className={styles.heroBadges}>
+                {isSelf ? (
+                  <Pill tone="primary">{t("players.you")}</Pill>
+                ) : isLinked ? (
+                  <Pill tone="success">{t("players.linked")}</Pill>
+                ) : (
+                  <Pill tone="muted">{t("players.unclaimed")}</Pill>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className={styles.hero}>
             <div className={styles.heroAvatar}>
-              <Avatar profile={profile} viewerId={viewerId} size="lg" />
+              <Avatar profile={profile} viewerId={viewerId} size="xl" />
               {isOwner && (
                 <button
                   type="button"
@@ -115,51 +137,21 @@ function ProfileDetailBody({
                   aria-label={t("avatar.edit")}
                   data-testid="profile-edit-avatar"
                 >
-                  <Icon name="pencil" size={14} />
+                  <Icon name="pencil" size={12} />
                 </button>
               )}
             </div>
-          )}
-          <h1 className={styles.title}>{name}</h1>
-          <div className={styles.heroBadges}>
-            {isSelf ? (
-              <Pill tone="primary">{t("players.you")}</Pill>
-            ) : isLinked ? (
-              <Pill tone="success">{t("players.linked")}</Pill>
-            ) : (
-              <Pill tone="muted">{t("players.unclaimed")}</Pill>
-            )}
-          </div>
-        </div>
-
-        {isOwner && isLinked && (
-          <Group title={t("avatar.title")}>
-            <div className={styles.toggleRow}>
-              <label className={styles.toggleLabel}>
-                <input
-                  type="checkbox"
-                  checked={profile.useLinkedAvatar}
-                  onChange={(e) =>
-                    void patchProfile({
-                      profileId: profile.id,
-                      useLinkedAvatar: e.target.checked,
-                    })
-                  }
-                  data-testid="profile-use-linked-avatar"
-                />
-                <span>
-                  {isSelf
-                    ? t("avatar.useLinkedAvatarSelf")
-                    : t("avatar.useLinkedAvatar")}
-                </span>
-              </label>
-              <p className={styles.toggleHint}>
-                {isSelf
-                  ? t("avatar.useLinkedAvatarSelfHint")
-                  : t("avatar.useLinkedAvatarHint")}
-              </p>
+            <h1 className={styles.title}>{name}</h1>
+            <div className={styles.heroBadges}>
+              {isSelf ? (
+                <Pill tone="primary">{t("players.you")}</Pill>
+              ) : isLinked ? (
+                <Pill tone="success">{t("players.linked")}</Pill>
+              ) : (
+                <Pill tone="muted">{t("players.unclaimed")}</Pill>
+              )}
             </div>
-          </Group>
+          </div>
         )}
 
         {isOwner && (

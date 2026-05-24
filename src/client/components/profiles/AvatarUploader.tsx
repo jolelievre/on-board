@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocalProfile3 } from "../../lib/db";
 import { useCamera, type CameraErrorKey } from "../../hooks/useCamera";
-import { uploadAvatar, clearCustomAvatar } from "../../lib/mutations";
+import {
+  uploadAvatar,
+  clearCustomAvatar,
+  patchProfile,
+} from "../../lib/mutations";
+import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import styles from "./AvatarUploader.module.css";
@@ -28,9 +33,14 @@ type Mode = "idle" | "camera" | "preview";
  */
 export function AvatarUploader({
   profile,
+  viewerId,
   onDone,
 }: {
   profile: LocalProfile3;
+  /** Powers the in-line `<Avatar>` preview (so the resolver picks the
+   * right photo for the viewer) and decides whether to render the
+   * self-profile vs friend-profile copy on the linked-avatar toggle. */
+  viewerId: string;
   onDone?: () => void;
 }) {
   const { t } = useTranslation();
@@ -130,30 +140,40 @@ export function AvatarUploader({
     ? t(`avatar.cameraError.${camera.error}` as const)
     : null;
 
+  // Self-profile semantics: ownerId === linkedUserId === viewerId.
+  // Drives the linked-avatar toggle copy ("Use my Google photo" vs
+  // "Use friend's photo") so the same control reads correctly for both
+  // audiences. We re-derive this inside the uploader (rather than
+  // accepting it as a prop) because the upload + toggle live together
+  // here and there's only one source of truth needed.
+  const isSelf =
+    profile.linkedUserId !== null &&
+    profile.linkedUserId === viewerId &&
+    profile.ownerId === viewerId;
+  const showLinkedToggle = profile.linkedUserId !== null;
+
   return (
     <div className={styles.root} data-testid="avatar-uploader">
       <canvas ref={camera.canvasRef} className={styles.canvas} />
 
-      {/* The bounding circle only appears when there's something live
-          to show (camera stream or in-progress capture). In idle mode
-          we let the parent render the existing avatar — no redundancy. */}
-      {(mode === "camera" || mode === "preview") && (
-        <div className={styles.preview}>
-          {mode === "camera" ? (
-            <video
-              ref={camera.videoRef}
-              autoPlay
-              playsInline
-              muted
-              className={styles.video}
-            />
-          ) : (
-            previewUrl && (
-              <img src={previewUrl} alt="" className={styles.previewImage} />
-            )
-          )}
-        </div>
-      )}
+      <div className={styles.preview}>
+        {mode === "camera" ? (
+          <video
+            ref={camera.videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={styles.video}
+          />
+        ) : mode === "preview" && previewUrl ? (
+          <img src={previewUrl} alt="" className={styles.previewImage} />
+        ) : (
+          // Idle: show the current resolved avatar at the full bounding
+          // circle size. `xl` matches the .preview frame (120px), so the
+          // photo fills the circle the same way the captured frames do.
+          <Avatar profile={profile} viewerId={viewerId} size="xl" />
+        )}
+      </div>
 
       {cameraErrorMessage && (
         <p className={styles.error}>{cameraErrorMessage}</p>
@@ -222,50 +242,84 @@ export function AvatarUploader({
       )}
 
       {mode === "idle" && (
-        <div className={styles.actions}>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => void handleStartCamera()}
-            disabled={submitting}
-            iconBefore={<Icon name="camera" size={16} />}
-            data-testid="avatar-open-camera"
-          >
-            {t("avatar.takePhoto")}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={submitting}
-            iconBefore={<Icon name="image" size={16} />}
-            data-testid="avatar-pick-file"
-          >
-            {t("avatar.chooseFile")}
-          </Button>
-          {profile.customAvatarUrl && (
+        <>
+          <div className={styles.actions}>
             <Button
               type="button"
-              variant="ghost"
-              onClick={() => void handleClear()}
+              variant="primary"
+              onClick={() => void handleStartCamera()}
               disabled={submitting}
-              data-testid="avatar-clear"
+              iconBefore={<Icon name="camera" size={16} />}
+              data-testid="avatar-open-camera"
             >
-              {t("avatar.clear")}
+              {t("avatar.takePhoto")}
             </Button>
-          )}
-          {onDone && (
             <Button
               type="button"
-              variant="ghost"
-              onClick={onDone}
+              variant="secondary"
+              onClick={() => fileInputRef.current?.click()}
               disabled={submitting}
-              data-testid="avatar-done"
+              iconBefore={<Icon name="image" size={16} />}
+              data-testid="avatar-pick-file"
             >
-              {t("common.done")}
+              {t("avatar.chooseFile")}
             </Button>
+            {profile.customAvatarUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => void handleClear()}
+                disabled={submitting}
+                data-testid="avatar-clear"
+              >
+                {t("avatar.clear")}
+              </Button>
+            )}
+            {onDone && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onDone}
+                disabled={submitting}
+                data-testid="avatar-done"
+              >
+                {t("common.done")}
+              </Button>
+            )}
+          </div>
+
+          {/* Linked-avatar toggle lives inside the uploader's idle UI:
+              it's an edit-time control, so hiding it until the user
+              taps the pencil keeps the read-only profile view clean.
+              Only rendered when the profile is actually linked. */}
+          {showLinkedToggle && (
+            <div className={styles.toggleRow}>
+              <label className={styles.toggleLabel}>
+                <input
+                  type="checkbox"
+                  checked={profile.useLinkedAvatar}
+                  onChange={(e) =>
+                    void patchProfile({
+                      profileId: profile.id,
+                      useLinkedAvatar: e.target.checked,
+                    })
+                  }
+                  data-testid="profile-use-linked-avatar"
+                />
+                <span>
+                  {isSelf
+                    ? t("avatar.useLinkedAvatarSelf")
+                    : t("avatar.useLinkedAvatar")}
+                </span>
+              </label>
+              <p className={styles.toggleHint}>
+                {isSelf
+                  ? t("avatar.useLinkedAvatarSelfHint")
+                  : t("avatar.useLinkedAvatarHint")}
+              </p>
+            </div>
           )}
-        </div>
+        </>
       )}
 
       <input

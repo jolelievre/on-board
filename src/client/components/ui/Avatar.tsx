@@ -17,9 +17,10 @@ const SIZE_CLASS: Record<AvatarSize, string> = {
   sm: styles.sm,
   md: styles.md,
   lg: styles.lg,
+  xl: styles.xl,
 };
 
-export type AvatarSize = "sm" | "md" | "lg";
+export type AvatarSize = "sm" | "md" | "lg" | "xl";
 
 type CommonProps = {
   size?: AvatarSize;
