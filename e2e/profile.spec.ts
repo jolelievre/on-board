@@ -110,11 +110,14 @@ test.describe("Profile detail — avatar uploader", () => {
       .click();
     await page.waitForURL(/\/players\/[a-z0-9-]+$/);
 
-    // Upload via the hidden file input — same code path the "Choose
-    // file" button triggers, just without the OS file picker.
+    // Enter photo edit mode — the uploader is hidden by default.
+    await page.click("[data-testid='profile-edit-avatar']");
     await expect(
       page.locator("[data-testid='avatar-uploader']"),
     ).toBeVisible();
+
+    // Upload via the hidden file input — same code path the "Choose
+    // file" button triggers, just without the OS file picker.
     await page
       .locator("[data-testid='avatar-file-input']")
       .setInputFiles({
@@ -129,5 +132,11 @@ test.describe("Profile detail — avatar uploader", () => {
     // Clear it.
     await page.click("[data-testid='avatar-clear']");
     await expect(page.locator("[data-testid='avatar-clear']")).toHaveCount(0);
+
+    // Close edit mode.
+    await page.click("[data-testid='avatar-done']");
+    await expect(
+      page.locator("[data-testid='avatar-uploader']"),
+    ).toHaveCount(0);
   });
 });

@@ -269,6 +269,7 @@
     "loading": "Loading…",
     "saving": "Saving…",
     "cancel": "Cancel",
+    "done": "Done",
     "offlineBanner": "Offline — changes will sync when you reconnect",
     "offlineNoCache": "This page wasn't saved for offline use. Reconnect to load it.",
     "syncPending_one": "1 change pending sync",
@@ -276,6 +277,7 @@
   },
   "avatar": {
     "title": "Photo",
+    "edit": "Edit photo",
     "takePhoto": "Take photo",
     "chooseFile": "Choose file",
     "capture": "Capture",
@@ -285,6 +287,8 @@
     "flipCamera": "Flip camera",
     "useLinkedAvatar": "Use friend's photo",
     "useLinkedAvatarHint": "When on, this profile shows the linked Google account's avatar instead of any custom upload.",
+    "useLinkedAvatarSelf": "Use my Google account photo",
+    "useLinkedAvatarSelfHint": "When on, your profile shows the photo from your Google account. Turn off to use the photo you upload below.",
     "uploadFailed": "Could not upload photo",
     "clearFailed": "Could not remove photo",
     "cameraError": {

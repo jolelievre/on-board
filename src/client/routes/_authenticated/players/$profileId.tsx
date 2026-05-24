@@ -76,6 +76,7 @@ function ProfileDetailBody({
   const isOwner = profile.ownerId === viewerId;
   const name = displayProfileName(profile, viewerId);
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [editingPhoto, setEditingPhoto] = useState(false);
 
   const stats = useProfileStats(profile.id);
   const recent = useProfileRecentMatches(profile.id, 10);
@@ -98,7 +99,27 @@ function ProfileDetailBody({
       <Header back={{ to: "/players", label: t("nav.players") }} />
       <div className="px-5">
         <div className={styles.hero}>
-          <Avatar profile={profile} viewerId={viewerId} size="lg" />
+          {editingPhoto && isOwner ? (
+            <AvatarUploader
+              profile={profile}
+              onDone={() => setEditingPhoto(false)}
+            />
+          ) : (
+            <div className={styles.heroAvatar}>
+              <Avatar profile={profile} viewerId={viewerId} size="lg" />
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => setEditingPhoto(true)}
+                  className={styles.heroEditButton}
+                  aria-label={t("avatar.edit")}
+                  data-testid="profile-edit-avatar"
+                >
+                  <Icon name="pencil" size={14} />
+                </button>
+              )}
+            </div>
+          )}
           <h1 className={styles.title}>{name}</h1>
           <div className={styles.heroBadges}>
             {isSelf ? (
@@ -111,30 +132,33 @@ function ProfileDetailBody({
           </div>
         </div>
 
-        {isOwner && viewerId && (
+        {isOwner && isLinked && (
           <Group title={t("avatar.title")}>
-            <AvatarUploader profile={profile} viewerId={viewerId} />
-            {isLinked && (
-              <div className={styles.toggleRow}>
-                <label className={styles.toggleLabel}>
-                  <input
-                    type="checkbox"
-                    checked={profile.useLinkedAvatar}
-                    onChange={(e) =>
-                      void patchProfile({
-                        profileId: profile.id,
-                        useLinkedAvatar: e.target.checked,
-                      })
-                    }
-                    data-testid="profile-use-linked-avatar"
-                  />
-                  <span>{t("avatar.useLinkedAvatar")}</span>
-                </label>
-                <p className={styles.toggleHint}>
-                  {t("avatar.useLinkedAvatarHint")}
-                </p>
-              </div>
-            )}
+            <div className={styles.toggleRow}>
+              <label className={styles.toggleLabel}>
+                <input
+                  type="checkbox"
+                  checked={profile.useLinkedAvatar}
+                  onChange={(e) =>
+                    void patchProfile({
+                      profileId: profile.id,
+                      useLinkedAvatar: e.target.checked,
+                    })
+                  }
+                  data-testid="profile-use-linked-avatar"
+                />
+                <span>
+                  {isSelf
+                    ? t("avatar.useLinkedAvatarSelf")
+                    : t("avatar.useLinkedAvatar")}
+                </span>
+              </label>
+              <p className={styles.toggleHint}>
+                {isSelf
+                  ? t("avatar.useLinkedAvatarSelfHint")
+                  : t("avatar.useLinkedAvatarHint")}
+              </p>
+            </div>
           </Group>
         )}
 

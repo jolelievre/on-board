@@ -29,7 +29,13 @@ type CommonProps = {
 type ProfileSource = {
   profile: Pick<
     LocalProfile3,
-    "id" | "alias" | "linkedUserId" | "customAvatarUrl" | "useLinkedAvatar" | "linkedUser"
+    | "id"
+    | "ownerId"
+    | "alias"
+    | "linkedUserId"
+    | "customAvatarUrl"
+    | "useLinkedAvatar"
+    | "linkedUser"
   >;
   /** The viewer for resolution: a linked user looking at their own
    * profile sees their own canonical avatar; an owner sees either the
@@ -127,24 +133,35 @@ function resolveAvatarUrl(
   profile: ProfileSource["profile"],
   viewerId: string | null | undefined,
 ): string | null {
-  // The linked user always sees their own canonical avatar — owners
-  // can't override what someone sees of themselves.
+  // Friend-linked protection: if I'm viewing a profile linked to ME
+  // but owned by *someone else* (e.g. a friend created a profile for
+  // me and linked it to my account), they don't get to customise what
+  // I see — always show my own canonical avatar to me.
+  //
+  // The self-profile case (`ownerId === linkedUserId === viewerId`)
+  // is *not* protected: I'm both the owner and the linked user, so
+  // toggling `useLinkedAvatar` off + uploading a custom photo must
+  // override the canonical Google one. Without the `ownerId !==
+  // viewerId` guard below, self-profile uploads would silently fall
+  // back to the Google photo on the owner's own device.
   if (
     profile.linkedUserId &&
     viewerId &&
-    profile.linkedUserId === viewerId
+    profile.linkedUserId === viewerId &&
+    profile.ownerId !== viewerId
   ) {
     return profile.linkedUser?.avatarUrl ?? null;
   }
-  // Owner-side: explicit override wins when `useLinkedAvatar` is false.
+  // Owner-side (incl. self-profile): explicit override wins when
+  // `useLinkedAvatar` is false.
   if (!profile.useLinkedAvatar && profile.customAvatarUrl) {
     return profile.customAvatarUrl;
   }
-  // Linked + opt-in to the friend's photo.
+  // Linked + opt-in to the linked user's photo.
   if (profile.linkedUserId && profile.useLinkedAvatar) {
     return profile.linkedUser?.avatarUrl ?? profile.customAvatarUrl ?? null;
   }
-  // Unclaimed with a custom upload (forward-compat with 6-B).
+  // Unclaimed with a custom upload.
   return profile.customAvatarUrl ?? null;
 }
 

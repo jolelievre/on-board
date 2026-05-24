@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import type { LocalProfile3 } from "../../lib/db";
 import { useCamera, type CameraErrorKey } from "../../hooks/useCamera";
 import { uploadAvatar, clearCustomAvatar } from "../../lib/mutations";
-import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import styles from "./AvatarUploader.module.css";
@@ -18,17 +17,21 @@ type Mode = "idle" | "camera" | "preview";
  *      `capture()` returns a centre-cropped JPEG Blob.
  *   2. **Gallery upload** — `<input type="file" accept="image/*">`.
  *
- * Shows a clear-button when the profile already has a custom upload
- * (calls DELETE /avatar). The "use linked friend's photo" toggle isn't
- * here — it lives on the ProfileEditor since it's a Profile-row flag,
- * not part of the upload flow.
+ * The component owns the bounding circle only when actively
+ * capturing or previewing a new photo — in idle mode the parent is
+ * responsible for showing the current avatar (we don't repeat it).
+ *
+ * Pass `onDone` to expose a "Done" button that closes whatever edit
+ * surface the parent opened. After a successful upload the same
+ * callback fires automatically, so a parent that mounts the uploader
+ * inline can collapse back to a read-only avatar in one tap.
  */
 export function AvatarUploader({
   profile,
-  viewerId,
+  onDone,
 }: {
   profile: LocalProfile3;
-  viewerId: string;
+  onDone?: () => void;
 }) {
   const { t } = useTranslation();
   const camera = useCamera();
@@ -97,6 +100,9 @@ export function AvatarUploader({
       setPreviewBlob(null);
       setPreviewUrl(null);
       setMode("idle");
+      // Stay in idle mode so the user can also clear, retake, or close
+      // explicitly via the "Done" button. Auto-closing on success would
+      // strand the user mid-flow if they wanted a follow-up action.
     } catch (err) {
       setUploadError(
         err instanceof Error ? err.message : t("avatar.uploadFailed"),
@@ -128,21 +134,26 @@ export function AvatarUploader({
     <div className={styles.root} data-testid="avatar-uploader">
       <canvas ref={camera.canvasRef} className={styles.canvas} />
 
-      <div className={styles.preview}>
-        {mode === "camera" ? (
-          <video
-            ref={camera.videoRef}
-            autoPlay
-            playsInline
-            muted
-            className={styles.video}
-          />
-        ) : mode === "preview" && previewUrl ? (
-          <img src={previewUrl} alt="" className={styles.previewImage} />
-        ) : (
-          <Avatar profile={profile} viewerId={viewerId} size="lg" />
-        )}
-      </div>
+      {/* The bounding circle only appears when there's something live
+          to show (camera stream or in-progress capture). In idle mode
+          we let the parent render the existing avatar — no redundancy. */}
+      {(mode === "camera" || mode === "preview") && (
+        <div className={styles.preview}>
+          {mode === "camera" ? (
+            <video
+              ref={camera.videoRef}
+              autoPlay
+              playsInline
+              muted
+              className={styles.video}
+            />
+          ) : (
+            previewUrl && (
+              <img src={previewUrl} alt="" className={styles.previewImage} />
+            )
+          )}
+        </div>
+      )}
 
       {cameraErrorMessage && (
         <p className={styles.error}>{cameraErrorMessage}</p>
@@ -241,6 +252,17 @@ export function AvatarUploader({
               data-testid="avatar-clear"
             >
               {t("avatar.clear")}
+            </Button>
+          )}
+          {onDone && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onDone}
+              disabled={submitting}
+              data-testid="avatar-done"
+            >
+              {t("common.done")}
             </Button>
           )}
         </div>

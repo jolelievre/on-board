@@ -269,6 +269,7 @@
     "loading": "Chargement…",
     "saving": "Enregistrement…",
     "cancel": "Annuler",
+    "done": "Terminé",
     "offlineBanner": "Hors ligne — les modifications seront synchronisées à la reconnexion",
     "offlineNoCache": "Cette page n'a pas été enregistrée pour le mode hors ligne. Reconnectez-vous pour la charger.",
     "syncPending_one": "1 modification en attente de sync",
@@ -276,6 +277,7 @@
   },
   "avatar": {
     "title": "Photo",
+    "edit": "Modifier la photo",
     "takePhoto": "Prendre une photo",
     "chooseFile": "Choisir un fichier",
     "capture": "Capturer",
@@ -285,6 +287,8 @@
     "flipCamera": "Changer de caméra",
     "useLinkedAvatar": "Utiliser la photo de l'ami·e",
     "useLinkedAvatarHint": "Si activé, ce profil affiche l'avatar du compte Google lié au lieu d'une photo personnalisée.",
+    "useLinkedAvatarSelf": "Utiliser la photo de mon compte Google",
+    "useLinkedAvatarSelfHint": "Si activé, votre profil affiche la photo de votre compte Google. Désactivez pour utiliser la photo que vous téléversez ci-dessous.",
     "uploadFailed": "Impossible d'envoyer la photo",
     "clearFailed": "Impossible de retirer la photo",
     "cameraError": {
