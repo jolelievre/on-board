@@ -173,6 +173,19 @@ test.describe("Profile detail — QR link flow", () => {
         "[data-testid='player-row'] >> text=you",
       );
       await expect(youPills).toHaveCount(1);
+
+      // No duplicate row for the same linked friend. The friend
+      // should see exactly:
+      //   - their own self-profile
+      //   - one row representing the owner (the auto-created reverse
+      //     profile in their account)
+      // …and *not* the owner-owned profile that points at them (it's
+      // a representation of *the friend themself* in the owner's
+      // account, which would just show up as another row badged with
+      // the friend's own name). Total: 2 rows.
+      await expect(
+        friendPage.getByTestId("player-row"),
+      ).toHaveCount(2);
     } finally {
       await friendCtx.close();
       await ownerCtx.close();
@@ -284,6 +297,287 @@ test.describe("Profile detail — QR link flow", () => {
       ).toBeVisible();
     } finally {
       await ctx.close();
+    }
+  });
+
+  test("matches created by either side surface under the bilateral linked profile", async ({
+    browser,
+  }) => {
+    // After a successful link, the friend can create a match
+    // including the owner from their side. The match must be
+    // visible to the owner under the bilateral reverse profile
+    // (owned by owner, linkedUserId === friend). Without the
+    // person-wide widening in `useProfileRecentMatches` the owner
+    // would only see matches they themselves picked the reverse
+    // profile in, never matches the friend originated.
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await signUp(friendCtx);
+      const friendMe = await getMe(friendCtx.request);
+
+      await signUp(ownerCtx);
+      const ownerMe = await getMe(ownerCtx.request);
+      const alice = await createUnclaimedProfile(ownerCtx.request, "Alice");
+
+      // Owner links Alice → friend.
+      const ownerPage = await ownerCtx.newPage();
+      await openProfile(ownerPage, alice.id);
+      await ownerPage.click("[data-testid='profile-link']");
+      await submitTokenViaHook(
+        ownerPage,
+        await getLinkToken(friendCtx.request),
+      );
+      await expect(
+        ownerPage.locator("[data-testid='link-scanner-linked']"),
+      ).toBeVisible();
+      await ownerPage.click("[data-testid='link-scanner'] >> text=Done");
+
+      // Friend creates a match including themselves + the owner.
+      // The owner's seat references the friend's bilateral reverse
+      // profile (owned by friend, linked to owner) — that's the
+      // row the relaxed alias resolver picks when "owner.name"
+      // matches it, and the picker path is what real users hit.
+      const friendProfiles = (await (
+        await friendCtx.request.get("/api/profiles")
+      ).json()) as {
+        id: string;
+        ownerId: string;
+        linkedUserId: string | null;
+      }[];
+      const friendsViewOfOwner = friendProfiles.find(
+        (p) => p.ownerId === friendMe.id && p.linkedUserId === ownerMe.id,
+      );
+      expect(friendsViewOfOwner).toBeDefined();
+
+      const gameRes = await friendCtx.request.get(
+        "/api/games/7-wonders-duel",
+      );
+      const game = (await gameRes.json()) as { id: string };
+      const matchRes = await friendCtx.request.post("/api/matches", {
+        data: {
+          gameId: game.id,
+          players: [
+            // Friend's own seat — server self-attributes via
+            // `userId` and sets `Player.userId = friend.id`.
+            {
+              name: friendMe.name,
+              userId: friendMe.id,
+              position: 0,
+            },
+            {
+              profileId: friendsViewOfOwner!.id,
+              position: 1,
+            },
+          ],
+        },
+      });
+      expect(matchRes.status()).toBe(201);
+
+      // Locate the owner's bilateral reverse profile id.
+      const profiles = (await (
+        await ownerCtx.request.get("/api/profiles")
+      ).json()) as {
+        id: string;
+        ownerId: string;
+        linkedUserId: string | null;
+      }[];
+      const reverse = profiles.find(
+        (p) => p.ownerId === ownerMe.id && p.linkedUserId === friendMe.id,
+      );
+      expect(reverse).toBeDefined();
+
+      // Sanity-check the server response first: the visibility
+      // filter must include the friend's match (via the bilateral
+      // friend-side profile pointing at the owner) before we can
+      // ask the UI to render it.
+      await expect
+        .poll(
+          async () => {
+            const list = (await (
+              await ownerCtx.request.get("/api/matches")
+            ).json()) as { id: string }[];
+            return list.length;
+          },
+          { timeout: 5_000 },
+        )
+        .toBeGreaterThan(0);
+
+      // Open the bilateral reverse profile in the owner's browser.
+      // The friend's match must appear in the recent-matches list
+      // (resolved via the `Player.userId === friend.id` widening
+      // in `useProfileRecentMatches`).
+      await openProfile(ownerPage, reverse!.id);
+      // Pull-sync runs on a 5 s throttle for route changes; the
+      // friend's match was created via the API and the owner's
+      // browser has no other signal that it should re-fetch.
+      // Firing a `visibilitychange` is the same path the app uses
+      // when the user returns to the tab from another device and
+      // bypasses the throttle (`force: true`).
+      await ownerPage.evaluate(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      const recentLinks = ownerPage.locator(
+        "[data-testid='profile-recent-match']",
+      );
+      await expect(recentLinks).not.toHaveCount(0, { timeout: 10_000 });
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
+  test("unlinking severs both directions and prunes friend-only matches from local Dexie", async ({
+    browser,
+  }) => {
+    // After unlink the user expects the friendship to be fully
+    // gone: friend's matches must drop out of the local mirror so
+    // history visible offline reflects the new visibility. This
+    // requires both (a) bilateral unlink on the server (otherwise
+    // the bilateral reverse keeps the match visible) and (b) a
+    // local prune step in `unlinkProfile` since pull-sync's
+    // incremental cursor can't represent deletions.
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await signUp(friendCtx);
+      const friendMe = await getMe(friendCtx.request);
+      await signUp(ownerCtx);
+      const ownerMe = await getMe(ownerCtx.request);
+
+      // Link.
+      const alice = await createUnclaimedProfile(ownerCtx.request, "Alice");
+      const ownerPage = await ownerCtx.newPage();
+      await openProfile(ownerPage, alice.id);
+      await ownerPage.click("[data-testid='profile-link']");
+      await submitTokenViaHook(
+        ownerPage,
+        await getLinkToken(friendCtx.request),
+      );
+      await expect(
+        ownerPage.locator("[data-testid='link-scanner-linked']"),
+      ).toBeVisible();
+      await ownerPage.click("[data-testid='link-scanner'] >> text=Done");
+
+      // Friend creates a match including the owner via their
+      // bilateral reverse (the alias resolver picks it up by name).
+      const game = (await (
+        await friendCtx.request.get("/api/games/7-wonders-duel")
+      ).json()) as { id: string };
+      const matchRes = await friendCtx.request.post("/api/matches", {
+        data: {
+          gameId: game.id,
+          players: [
+            { name: friendMe.name, userId: friendMe.id, position: 0 },
+            { name: ownerMe.name, position: 1 },
+          ],
+        },
+      });
+      expect(matchRes.status()).toBe(201);
+      const friendMatchId = (await matchRes.json()).id as string;
+
+      // Bring it into the owner's Dexie via a forced pullSync.
+      await ownerPage.evaluate(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      // Game view: the friend's match must appear in the per-game
+      // history list too, since it's just another row in Dexie
+      // that `useMatchList(gameId)` reads. Asserting on the UI
+      // here covers the user's "match shows up in the game list,
+      // not just the friend profile" request.
+      await ownerPage.goto("/games/7-wonders-duel");
+      await ownerPage.waitForLoadState("domcontentloaded");
+      await expect(
+        ownerPage.locator(`[data-testid='match-history-row-${friendMatchId}']`),
+      ).toBeVisible({ timeout: 10_000 });
+
+      // Stats block on the bilateral reverse profile also counts
+      // the shared match — `useProfileStats` uses the same
+      // `collectPersonPlayers` widening as the recent-matches
+      // hook, so the friend-side match counts toward the owner's
+      // record of matches played with this friend.
+      const reverseProfiles = (await (
+        await ownerCtx.request.get("/api/profiles")
+      ).json()) as {
+        id: string;
+        ownerId: string;
+        linkedUserId: string | null;
+      }[];
+      const reverseId = reverseProfiles.find(
+        (p) => p.ownerId === ownerMe.id && p.linkedUserId === friendMe.id,
+      )!.id;
+      await openProfile(ownerPage, reverseId);
+      await expect(
+        ownerPage.locator("[data-testid='profile-stats-matches']"),
+      ).toContainText("1");
+
+      // Unlink Alice from the owner side.
+      await openProfile(ownerPage, alice.id);
+      await ownerPage.click("[data-testid='profile-unlink']");
+      // Mutation settled: the unlink button is no longer present
+      // (profile flipped back to unclaimed → re-renders to scan
+      // CTA).
+      await expect(
+        ownerPage.locator("[data-testid='profile-unlink']"),
+      ).toHaveCount(0);
+
+      // Server view: bilateral unlink cleared both sides. The
+      // friend's match is no longer visible to the owner because
+      // no profile linking owner remains in any of its players.
+      await expect
+        .poll(
+          async () => {
+            const list = (await (
+              await ownerCtx.request.get("/api/matches")
+            ).json()) as { id: string }[];
+            return list.some((m) => m.id === friendMatchId);
+          },
+          { timeout: 5_000 },
+        )
+        .toBe(false);
+
+      // Game view after unlink: the match must drop out of the
+      // history list. Without the prune step it would linger
+      // forever (the incremental pull-sync cursor can't represent
+      // deletions, so a passive re-pull would not remove it).
+      await ownerPage.goto("/games/7-wonders-duel");
+      await ownerPage.waitForLoadState("domcontentloaded");
+      await expect(
+        ownerPage.locator(`[data-testid='match-history-row-${friendMatchId}']`),
+      ).toHaveCount(0);
+
+      // The friend-side bilateral reverse is gone too (bilateral
+      // unlink). Re-resolve the unclaimed profile that used to be
+      // the bilateral pair on the owner's side — it now has
+      // `linkedUserId: null`, so the stats block reads the
+      // direct-only player rows. The previously visible friend's
+      // match was pruned, so the count is 0.
+      const afterUnlink = (await (
+        await ownerCtx.request.get("/api/profiles")
+      ).json()) as {
+        id: string;
+        ownerId: string;
+        linkedUserId: string | null;
+      }[];
+      const standalone = afterUnlink.find(
+        (p) =>
+          p.ownerId === ownerMe.id &&
+          p.linkedUserId === null &&
+          (p.id === reverseId || p.id === alice.id),
+      );
+      if (standalone) {
+        await openProfile(ownerPage, standalone.id);
+        // The stats block renders an empty-state when totalMatches
+        // is 0 — that's the right signal that the friend-side
+        // match no longer feeds into this profile's stats.
+        await expect(
+          ownerPage.locator("[data-testid='profile-stats-matches']"),
+        ).toHaveCount(0);
+      }
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
     }
   });
 
