@@ -43,7 +43,17 @@ export function useProfileList(viewerId: string | undefined): UseProfileListResu
       const byId = new Map<string, LocalProfile3>();
       for (const p of owned) byId.set(p.id, p);
       for (const p of linked) byId.set(p.id, p);
-      const rows = [...byId.values()];
+      // Hide friend-owned profiles that point back at me: those rows
+      // represent ME inside the friend's account, not a friend in
+      // mine. The bilateral upsert on `/link` creates a viewer-owned
+      // reverse profile that already covers the "friend in my list"
+      // role, so showing this one too would render a confusing
+      // duplicate (two rows badged with my own name on linked-side,
+      // see PR 6-C feedback). They stay visible to the rest of the
+      // app (Dexie still holds them) — only the list view is filtered.
+      const rows = [...byId.values()].filter(
+        (p) => !(p.linkedUserId === viewerId && p.ownerId !== viewerId),
+      );
       const isSelfRow = (p: LocalProfile3) =>
         p.linkedUserId === viewerId && p.ownerId === viewerId;
       rows.sort((a, b) => {
@@ -63,6 +73,53 @@ export function useProfileList(viewerId: string | undefined): UseProfileListResu
   if (data === undefined) return { data: undefined, status: "loading" };
   if (data === null) return { data: undefined, status: "loading" };
   return { data, status: "ok" };
+}
+
+/**
+ * Collect every Player row that represents the same *person* as the
+ * given profile. After 6-C the same auth user can be represented by
+ * multiple Profile rows on the same client (the local owner's
+ * representation + any profile linked to that user), so a naive
+ * `db.players.where('profileId').equals(p.id)` query under-counts:
+ *
+ *   - Matches I create where I pick the friend → Player.profileId is
+ *     the friend's bilateral reverse profile (owned by me, linked to
+ *     them). Covered by the direct query.
+ *   - Matches the friend creates where they include themselves →
+ *     Player.profileId is the friend's *self-profile* (which my
+ *     account never pulls — visibility filter excludes it) but
+ *     `Player.userId` is set to the friend's auth id by the server's
+ *     creator-self attribution path. Covered by the `userId` query.
+ *
+ * The union surfaces matches under the friend's profile in the
+ * Players tab regardless of who created them.
+ */
+async function collectPersonPlayers(
+  profile: { id: string; linkedUserId: string | null },
+): Promise<{ id: string; matchId: string }[]> {
+  const direct = await db.players
+    .where("profileId")
+    .equals(profile.id)
+    .toArray();
+  if (!profile.linkedUserId) return direct;
+
+  const byUserId = await db.players
+    .where("userId")
+    .equals(profile.linkedUserId)
+    .toArray();
+  const seen = new Set<string>();
+  const out: { id: string; matchId: string }[] = [];
+  for (const p of direct) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    out.push(p);
+  }
+  for (const p of byUserId) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    out.push(p);
+  }
+  return out;
 }
 
 /** Reactive read of one profile by id. Returns `status: "missing"` when
@@ -117,10 +174,9 @@ export function useProfileStats(
   const data = useLiveQuery(
     async (): Promise<ProfileStats | null> => {
       if (!profileId) return null;
-      const players = await db.players
-        .where("profileId")
-        .equals(profileId)
-        .toArray();
+      const profile = await db.profiles.get(profileId);
+      if (!profile) return null;
+      const players = await collectPersonPlayers(profile);
       if (players.length === 0) {
         return {
           totalMatches: 0,
@@ -400,26 +456,44 @@ export function useHeadToHead(
         return { matches: 0, subjectWins: 0, viewerWins: 0, draws: 0 };
       }
 
-      const subjectPlayers = await db.players
-        .where("profileId")
-        .equals(subjectProfileId)
-        .toArray();
+      const [subjectProfile, viewerProfile] = await Promise.all([
+        db.profiles.get(subjectProfileId),
+        db.profiles.get(viewerSelfProfileId),
+      ]);
+      if (!subjectProfile || !viewerProfile) {
+        return { matches: 0, subjectWins: 0, viewerWins: 0, draws: 0 };
+      }
+
+      // Use the same "all player rows for this person" widening as
+      // the recent-matches view, so head-to-head picks up matches
+      // the friend created (where the friend's seat is identified
+      // by `Player.userId` rather than the bilateral reverse
+      // profile's id).
+      const subjectPlayers = await collectPersonPlayers(subjectProfile);
       const matchIds = [...new Set(subjectPlayers.map((p) => p.matchId))];
       if (matchIds.length === 0) {
         return { matches: 0, subjectWins: 0, viewerWins: 0, draws: 0 };
       }
 
       const matches = await db.matches.bulkGet(matchIds);
-      const playersByMatch = new Map<string, typeof subjectPlayers>();
       const allInMatch = await db.players
         .where("matchId")
         .anyOf(matchIds)
         .toArray();
+      const playersByMatch = new Map<string, typeof allInMatch>();
       for (const p of allInMatch) {
         const list = playersByMatch.get(p.matchId) ?? [];
         list.push(p);
         playersByMatch.set(p.matchId, list);
       }
+
+      const subjectPlayerIds = new Set(subjectPlayers.map((p) => p.id));
+      // Mirror the same widening on the viewer side, so a match the
+      // viewer created with `userId === me` (server self-attribution)
+      // still counts toward "your wins" even if their bilateral
+      // reverse profile didn't exist at the time of that match.
+      const viewerPlayers = await collectPersonPlayers(viewerProfile);
+      const viewerPlayerIds = new Set(viewerPlayers.map((p) => p.id));
 
       let total = 0;
       let subjectWins = 0;
@@ -430,12 +504,8 @@ export function useHeadToHead(
         if (!m) continue;
         if (m.status !== "COMPLETED") continue;
         const inMatch = playersByMatch.get(m.id) ?? [];
-        const subjectPlayer = inMatch.find(
-          (p) => p.profileId === subjectProfileId,
-        );
-        const viewerPlayer = inMatch.find(
-          (p) => p.profileId === viewerSelfProfileId,
-        );
+        const subjectPlayer = inMatch.find((p) => subjectPlayerIds.has(p.id));
+        const viewerPlayer = inMatch.find((p) => viewerPlayerIds.has(p.id));
         if (!subjectPlayer || !viewerPlayer) continue;
         total += 1;
         if (m.winnerId === subjectPlayer.id) subjectWins += 1;
@@ -473,10 +543,9 @@ export function useProfileRecentMatches(
   const data = useLiveQuery(
     async (): Promise<ProfileRecentMatch[] | null> => {
       if (!profileId) return null;
-      const players = await db.players
-        .where("profileId")
-        .equals(profileId)
-        .toArray();
+      const profile = await db.profiles.get(profileId);
+      if (!profile) return null;
+      const players = await collectPersonPlayers(profile);
       if (players.length === 0) return [];
 
       const playerById = new Map<string, string>();

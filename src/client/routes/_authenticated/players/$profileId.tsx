@@ -218,10 +218,12 @@ function ProfileDetailBody({
                 <Stat
                   value={stats.totalMatches}
                   label={t("players.stats.matches")}
+                  testid="profile-stats-matches"
                 />
                 <Stat
                   value={stats.totalWins}
                   label={t("players.stats.wins")}
+                  testid="profile-stats-wins"
                 />
                 <Stat
                   value={
@@ -265,6 +267,7 @@ function ProfileDetailBody({
                   to="/matches/$id"
                   params={{ id: m.matchId }}
                   className={styles.recentRow}
+                  data-testid="profile-recent-match"
                 >
                   <div className={styles.recentMeta}>
                     <span className={styles.recentTitle}>{m.gameName}</span>
@@ -479,9 +482,17 @@ function LinkSection({
   );
 }
 
-function Stat({ value, label }: { value: number | string; label: string }) {
+function Stat({
+  value,
+  label,
+  testid,
+}: {
+  value: number | string;
+  label: string;
+  testid?: string;
+}) {
   return (
-    <div className={styles.statCard}>
+    <div className={styles.statCard} data-testid={testid}>
       <span className={styles.statValue}>{value}</span>
       <span className={styles.statLabel}>{label}</span>
     </div>
