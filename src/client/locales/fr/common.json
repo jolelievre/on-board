@@ -334,7 +334,7 @@
       "hint": "L'application de votre ami va scanner ce code. Il est valide pendant 60 secondes."
     },
     "scanner": {
-      "hint": "Pointez la caméra sur le code de liaison de votre ami.",
+      "hint": "Pointez la caméra sur le code de liaison de votre ami. Il peut afficher le sien dans Paramètres → « Afficher mon code de liaison ».",
       "submitting": "Liaison…",
       "linked": "Lié !",
       "error": "Impossible de lier",

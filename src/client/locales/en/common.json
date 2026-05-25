@@ -334,7 +334,7 @@
       "hint": "Your friend's app will scan this. The code is valid for 60 seconds."
     },
     "scanner": {
-      "hint": "Point the camera at your friend's link code.",
+      "hint": "Point the camera at your friend's link code. They can show theirs from Settings → \"Show my link code\".",
       "submitting": "Linking…",
       "linked": "Linked!",
       "error": "Could not link",
