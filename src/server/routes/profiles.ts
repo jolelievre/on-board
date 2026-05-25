@@ -11,6 +11,11 @@ import {
   mergeUnclaimedProfiles,
   ProfileMergeError,
 } from "../lib/profile-merge.js";
+import {
+  createLinkToken,
+  LinkTokenError,
+  verifyLinkToken,
+} from "../lib/link-tokens.js";
 import type { AuthUser } from "../middleware/auth.js";
 
 type AuthEnv = {
@@ -283,9 +288,12 @@ export const profilesRoutes = new Hono<AuthEnv>()
     const user = c.get("user");
     const targetId = c.req.param("targetId");
 
-    let body: { sourceProfileId?: string };
+    let body: { sourceProfileId?: string; token?: string };
     try {
-      body = (await c.req.json()) as { sourceProfileId?: string };
+      body = (await c.req.json()) as {
+        sourceProfileId?: string;
+        token?: string;
+      };
     } catch {
       return c.json({ error: "JSON body required" }, 400);
     }
@@ -297,12 +305,28 @@ export const profilesRoutes = new Hono<AuthEnv>()
       return c.json({ error: "Invalid profile id format" }, 400);
     }
 
+    // A token unlocks linked-side merges (PR 6-C). We verify it here so
+    // the merge helper only sees a trusted User id, never a raw token.
+    let allowLinkedUserId: string | undefined;
+    if (typeof body.token === "string" && body.token.length > 0) {
+      try {
+        const payload = verifyLinkToken(body.token);
+        allowLinkedUserId = payload.userId;
+      } catch (err) {
+        if (err instanceof LinkTokenError) {
+          return c.json({ error: err.message }, 400);
+        }
+        throw err;
+      }
+    }
+
     try {
       const survivor = await prisma.$transaction(async (tx) => {
         return mergeUnclaimedProfiles(tx, {
           callerId: user.id,
           targetProfileId: targetId,
           sourceProfileId,
+          allowLinkedUserId,
         });
       });
       const profile = await prisma.profile.findUnique({
@@ -316,4 +340,149 @@ export const profilesRoutes = new Hono<AuthEnv>()
       }
       throw err;
     }
+  })
+  .post("/link-token", async (c) => {
+    // The caller mints a token attesting that *they* are themselves —
+    // the token's userId comes from the authenticated session, never
+    // from the request body. The friend will later scan this and use
+    // it to bind the caller's User id to one of their local profiles.
+    const user = c.get("user");
+    const { token, expiresAt } = createLinkToken(user.id);
+    return c.json({ token, expiresAt });
+  })
+  .post("/:id/link", async (c) => {
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    let body: { token?: string };
+    try {
+      body = (await c.req.json()) as { token?: string };
+    } catch {
+      return c.json({ error: "JSON body required" }, 400);
+    }
+    if (typeof body.token !== "string" || body.token.length === 0) {
+      return c.json({ error: "token is required" }, 400);
+    }
+
+    let friendUserId: string;
+    try {
+      friendUserId = verifyLinkToken(body.token).userId;
+    } catch (err) {
+      if (err instanceof LinkTokenError) {
+        return c.json({ error: err.message }, 400);
+      }
+      throw err;
+    }
+
+    if (friendUserId === user.id) {
+      // Scanning your own QR makes no sense and would link your
+      // self-Profile to itself; reject with a stable message the UI
+      // can map to a "don't scan your own code" hint.
+      return c.json({ error: "Cannot link a profile to your own account" }, 400);
+    }
+
+    const target = await prisma.profile.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        ownerId: true,
+        linkedUserId: true,
+        alias: true,
+      },
+    });
+    if (!target) {
+      return c.json({ error: "Profile not found" }, 404);
+    }
+    if (target.ownerId !== user.id) {
+      return c.json({ error: "Only the owner can link this profile" }, 403);
+    }
+    if (target.linkedUserId !== null) {
+      // Already linked — either to this friend (idempotent no-op) or
+      // to someone else. Treat the same-friend case as a successful
+      // re-link so a queued retry doesn't error; otherwise reject.
+      if (target.linkedUserId === friendUserId) {
+        const profile = await prisma.profile.findUnique({
+          where: { id },
+          select: profileSelect,
+        });
+        return c.json({ status: "linked" as const, profile });
+      }
+      return c.json(
+        { error: "This profile is already linked to another account" },
+        409,
+      );
+    }
+
+    // Owner already has another profile linked to this same friend?
+    // Surface the merge-required branch rather than mutating, so the
+    // UI can prompt for confirmation before two histories collapse
+    // into one.
+    const existing = await prisma.profile.findFirst({
+      where: {
+        ownerId: user.id,
+        linkedUserId: friendUserId,
+        NOT: { id },
+      },
+      select: { id: true, alias: true },
+    });
+    if (existing) {
+      return c.json({
+        status: "merge_required" as const,
+        existing,
+        target: { id: target.id, alias: target.alias },
+      });
+    }
+
+    const profile = await prisma.profile.update({
+      where: { id },
+      data: { linkedUserId: friendUserId },
+      select: profileSelect,
+    });
+    return c.json({ status: "linked" as const, profile });
+  })
+  .post("/:id/unlink", async (c) => {
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    const target = await prisma.profile.findUnique({
+      where: { id },
+      select: { id: true, ownerId: true, linkedUserId: true },
+    });
+    if (!target) {
+      return c.json({ error: "Profile not found" }, 404);
+    }
+    // Either the owner OR the currently linked user can sever the
+    // link. The owner is the one who set it; the linked friend gets
+    // the same control over their own auth identity.
+    if (target.ownerId !== user.id && target.linkedUserId !== user.id) {
+      return c.json(
+        { error: "Only the owner or the linked user can unlink this profile" },
+        403,
+      );
+    }
+    if (target.linkedUserId === null) {
+      // Idempotent — return the current row so a queued retry succeeds.
+      const profile = await prisma.profile.findUnique({
+        where: { id },
+        select: profileSelect,
+      });
+      return c.json(profile);
+    }
+    // Linking and unlinking are owner/friend symmetric, but the
+    // self-Profile is special: it represents "you" in your own
+    // suggestions and history, and an unlink would orphan it from
+    // your auth account. Reject explicitly so the UI never offers it.
+    if (target.ownerId === target.linkedUserId) {
+      return c.json(
+        { error: "Cannot unlink your own self-profile" },
+        409,
+      );
+    }
+
+    const profile = await prisma.profile.update({
+      where: { id },
+      data: { linkedUserId: null },
+      select: profileSelect,
+    });
+    return c.json(profile);
   });
