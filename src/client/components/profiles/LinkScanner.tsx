@@ -114,13 +114,23 @@ export function LinkScanner({
       scannerRef.current = scanner;
       await scanner.start();
     } catch (err) {
-      setState({
-        kind: "error",
-        message:
-          err instanceof Error && err.message
-            ? err.message
-            : t("link.scanner.cameraError"),
-      });
+      // Only fall to error state if we were still scanning. The
+      // user may already have submitted a token through the
+      // out-of-band path (E2E `__onboardSubmitLinkToken`, or a
+      // future paste-token UI) by the time the camera promise
+      // rejects, and overwriting their post-submit state would
+      // strand them in a stale "camera failed" screen.
+      setState((prev) =>
+        prev.kind === "scanning"
+          ? {
+              kind: "error",
+              message:
+                err instanceof Error && err.message
+                  ? err.message
+                  : t("link.scanner.cameraError"),
+            }
+          : prev,
+      );
     }
   };
 
@@ -137,21 +147,35 @@ export function LinkScanner({
 
   const handleMergeConfirm = async () => {
     if (state.kind !== "merge_required") return;
+    const survivorId = state.existing.id;
+    const sourceId = state.target.id;
+    const token = state.token;
     setState({ kind: "merging" });
     try {
+      // Navigate to the survivor *before* awaiting the merge: the
+      // mutation deletes the source profile from Dexie inside its
+      // transaction, and the source page (which currently hosts
+      // this scanner) would briefly re-render to "profile not
+      // found" between the local delete and our own state update.
+      // Telling the parent to navigate first lets the scanner
+      // unmount cleanly under control of the survivor page.
+      onMerged?.(survivorId);
       await mergeProfile({
-        targetProfileId: state.existing.id,
-        sourceProfileId: state.target.id,
-        token: state.token,
+        targetProfileId: survivorId,
+        sourceProfileId: sourceId,
+        token,
       });
-      setState({ kind: "merged", survivorId: state.existing.id });
-      onMerged?.(state.existing.id);
+      // No further state update — the component has already
+      // unmounted via the parent's navigation. We could call
+      // `setState({ kind: "merged" })` defensively but React would
+      // warn about updating an unmounted component.
     } catch (err) {
-      setState({
-        kind: "error",
-        message:
-          err instanceof Error ? err.message : t("link.scanner.error"),
-      });
+      // Navigation has already happened; the survivor page is up.
+      // Log and surface a console error — the user can re-attempt
+      // a manual merge from the survivor page if anything looks
+      // wrong. A toast surface would be the right home for this
+      // when one ships.
+      console.error("[LinkScanner] merge after navigation failed", err);
     }
   };
 

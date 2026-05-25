@@ -59,7 +59,12 @@ function ProfileRow({
   viewerId: string | null;
 }) {
   const { t } = useTranslation();
-  const isSelf = profile.linkedUserId === viewerId;
+  // Self = both owner and linked target. After 6-C a friend-owned
+  // profile linked to me also satisfies `linkedUserId === viewerId`,
+  // so the composite check is required to keep the "you" pill on
+  // the single real self-profile.
+  const isSelf =
+    profile.linkedUserId === viewerId && profile.ownerId === viewerId;
   const isLinked = profile.linkedUserId !== null;
   const name = displayProfileName(profile, viewerId);
 

@@ -37,6 +37,9 @@ export type ApiProfileLinkedUser = {
   name: string;
   alias: string | null;
   avatarUrl: string | null;
+  /** Shown on the linked-friend card so the owner can verify the
+   * link target. Added in PR 6-C. */
+  email: string;
 };
 
 export type ApiProfile = {

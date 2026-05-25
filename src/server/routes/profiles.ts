@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { profileVisibilityWhere } from "../lib/profiles.js";
+import { ensureBilateralLink, profileVisibilityWhere } from "../lib/profiles.js";
 import {
   AVATAR_MAX_UPLOAD_BYTES,
   deleteAvatars,
@@ -46,6 +46,13 @@ const profileSelect = {
       name: true,
       alias: true,
       avatarUrl: true,
+      // The email is surfaced to the owner so they can confirm the
+      // QR they scanned belongs to the friend they expected. The
+      // friend's User row is otherwise opaque to other accounts;
+      // exposing email here is a deliberate, minimal disclosure
+      // gated by the visibility filter (only viewers who own or
+      // are the linked user see this projection at all).
+      email: true,
     },
   },
 } as const satisfies Prisma.ProfileSelect;
@@ -322,12 +329,26 @@ export const profilesRoutes = new Hono<AuthEnv>()
 
     try {
       const survivor = await prisma.$transaction(async (tx) => {
-        return mergeUnclaimedProfiles(tx, {
+        const survivorId = await mergeUnclaimedProfiles(tx, {
           callerId: user.id,
           targetProfileId: targetId,
           sourceProfileId,
           allowLinkedUserId,
         });
+        // If the merged profile is linked, make sure the friend has
+        // a reverse profile representing the caller. Covers pre-fix
+        // linked rows and the link-time collision branch.
+        const after = await tx.profile.findUnique({
+          where: { id: survivorId },
+          select: { ownerId: true, linkedUserId: true },
+        });
+        if (after?.linkedUserId && after.ownerId) {
+          await ensureBilateralLink(tx, {
+            ownerUserId: after.ownerId,
+            friendUserId: after.linkedUserId,
+          });
+        }
+        return survivorId;
       });
       const profile = await prisma.profile.findUnique({
         where: { id: survivor },
@@ -401,6 +422,15 @@ export const profilesRoutes = new Hono<AuthEnv>()
       // to someone else. Treat the same-friend case as a successful
       // re-link so a queued retry doesn't error; otherwise reject.
       if (target.linkedUserId === friendUserId) {
+        // Re-link path: still ensure the friend has a reverse
+        // profile. Pre-fix linked rows may have come from an
+        // earlier unilateral version of /link.
+        await prisma.$transaction(async (tx) => {
+          await ensureBilateralLink(tx, {
+            ownerUserId: user.id,
+            friendUserId,
+          });
+        });
         const profile = await prisma.profile.findUnique({
           where: { id },
           select: profileSelect,
@@ -433,10 +463,20 @@ export const profilesRoutes = new Hono<AuthEnv>()
       });
     }
 
-    const profile = await prisma.profile.update({
-      where: { id },
-      data: { linkedUserId: friendUserId },
-      select: profileSelect,
+    // Happy path — bind the target locally AND create the reverse
+    // profile in the friend's account in one transaction so the
+    // bilateral state is atomic.
+    const profile = await prisma.$transaction(async (tx) => {
+      const updated = await tx.profile.update({
+        where: { id },
+        data: { linkedUserId: friendUserId },
+        select: profileSelect,
+      });
+      await ensureBilateralLink(tx, {
+        ownerUserId: user.id,
+        friendUserId,
+      });
+      return updated;
     });
     return c.json({ status: "linked" as const, profile });
   })

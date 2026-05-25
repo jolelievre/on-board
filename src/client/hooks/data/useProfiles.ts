@@ -17,9 +17,13 @@ export type UseProfileResult = {
  * Reactive list of profiles visible to the given viewer — that is,
  * profiles they own OR profiles linked to their own auth account.
  *
- * The self-Profile (where `linkedUserId === viewerId`) is pinned to the
- * top regardless of `usedAt`; remaining rows are sorted by `usedAt`
- * descending so the most recently used profile appears first.
+ * The self-Profile (where `ownerId === linkedUserId === viewerId`) is
+ * pinned to the top regardless of `usedAt`; remaining rows are sorted
+ * by `usedAt` descending so the most recently used profile appears
+ * first. The composite check is load-bearing: after 6-C, a friend-
+ * owned profile that's linked to the viewer also satisfies
+ * `linkedUserId === viewerId`, and using that alone as the self-check
+ * would pin two different rows as "self".
  *
  * Pass `undefined` while session is still loading — the hook returns
  * `status: "loading"` until a real id is supplied.
@@ -40,9 +44,11 @@ export function useProfileList(viewerId: string | undefined): UseProfileListResu
       for (const p of owned) byId.set(p.id, p);
       for (const p of linked) byId.set(p.id, p);
       const rows = [...byId.values()];
+      const isSelfRow = (p: LocalProfile3) =>
+        p.linkedUserId === viewerId && p.ownerId === viewerId;
       rows.sort((a, b) => {
-        const aSelf = a.linkedUserId === viewerId ? 0 : 1;
-        const bSelf = b.linkedUserId === viewerId ? 0 : 1;
+        const aSelf = isSelfRow(a) ? 0 : 1;
+        const bSelf = isSelfRow(b) ? 0 : 1;
         if (aSelf !== bSelf) return aSelf - bSelf;
         // usedAt descending — most recent first.
         if (a.usedAt > b.usedAt) return -1;
@@ -235,7 +241,10 @@ export function useProfileSuggestions(
     .map((p) => ({
       id: p.id,
       alias: p.alias,
-      isSelf: p.linkedUserId === viewerId,
+      // 6-C: friend-owned profiles linked to me also satisfy
+      // `linkedUserId === viewerId`. The "you" hint in the new-match
+      // picker must only fire for the real self-profile.
+      isSelf: p.linkedUserId === viewerId && p.ownerId === viewerId,
       profile: p,
     }));
 }
@@ -371,7 +380,7 @@ export type HeadToHeadRecord = {
  * each profileId. Only `COMPLETED` matches feed the win/loss/draw
  * counters; the viewer-wins side reads `viewerSelfProfileId`, which the
  * caller is expected to derive from `useProfileList` (the self-Profile
- * is `linkedUserId === viewerId`).
+ * is `ownerId === linkedUserId === viewerId`).
  *
  * Returns `undefined` while Dexie reads are in flight. Returns a
  * record with `matches: 0` when the two profiles have never shared a

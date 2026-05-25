@@ -73,7 +73,12 @@ function ProfileDetailBody({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const isSelf = profile.linkedUserId === viewerId;
+  // Self = both ownerId and linkedUserId point at the viewer. After
+  // 6-C a friend's profile of you also has `linkedUserId === viewerId`
+  // (with `ownerId === friend.id`); without the composite check, two
+  // rows would render with the "you" badge in the Players tab.
+  const isSelf =
+    profile.linkedUserId === viewerId && profile.ownerId === viewerId;
   const isLinked = profile.linkedUserId !== null;
   const isOwner = profile.ownerId === viewerId;
   const name = displayProfileName(profile, viewerId);
@@ -89,7 +94,7 @@ function ProfileDetailBody({
   // it's already memoised in the page tree above.
   const { data: visibleProfiles } = useProfileList(viewerId ?? undefined);
   const selfProfileId = visibleProfiles?.find(
-    (p) => p.linkedUserId === viewerId,
+    (p) => p.linkedUserId === viewerId && p.ownerId === viewerId,
   )?.id;
   const headToHead = useHeadToHead(
     isSelf ? undefined : profile.id,
@@ -372,6 +377,28 @@ function LinkSection({
   //  - Linked + viewer owns or is the linked friend → linked card + unlink.
   if (!isOwner && profile.linkedUserId !== viewerId) return null;
 
+  // Keep the scanner mounted across the link transition. Without
+  // this, the moment `linkProfile` writes to Dexie and `useProfile`
+  // re-fires, `isLinked` flips true and the linked-friend branch
+  // below swaps the scanner out — the "Linked!" success message
+  // (and the merge-required confirmation, when applicable) never
+  // gets seen. The scanner only closes via the in-component Done
+  // button (which calls `onDone` → setScannerOpen(false)).
+  if (scannerOpen && isOwner) {
+    return (
+      <Group title={t("link.unclaimedTitle")}>
+        <LinkScanner
+          profile={profile}
+          onDone={() => setScannerOpen(false)}
+          onMerged={(survivorId) => {
+            setScannerOpen(false);
+            onMergedTo(survivorId);
+          }}
+        />
+      </Group>
+    );
+  }
+
   const handleUnlink = async () => {
     setUnlinkError(null);
     setUnlinking(true);
@@ -412,6 +439,9 @@ function LinkSection({
             <span className={styles.linkedName}>
               {linked?.alias || linked?.name || t("link.linkedUnknown")}
             </span>
+            {linked?.email && (
+              <span className={styles.linkedEmail}>{linked.email}</span>
+            )}
           </div>
         </div>
         {unlinkError && <p className={styles.linkError}>{unlinkError}</p>}
@@ -430,32 +460,21 @@ function LinkSection({
     );
   }
 
-  // Unclaimed + owner: offer the link-by-QR flow.
+  // Unclaimed + owner: offer the link-by-QR flow. The scanner-open
+  // case is handled by the early return above so the success state
+  // survives the `isLinked` transition.
   return (
     <Group title={t("link.unclaimedTitle")}>
-      {scannerOpen ? (
-        <LinkScanner
-          profile={profile}
-          onDone={() => setScannerOpen(false)}
-          onMerged={(survivorId) => {
-            setScannerOpen(false);
-            onMergedTo(survivorId);
-          }}
-        />
-      ) : (
-        <>
-          <p className={styles.linkHint}>{t("link.unclaimedHint")}</p>
-          <Button
-            type="button"
-            variant="secondary"
-            iconBefore={<Icon name="link" size={16} />}
-            onClick={() => setScannerOpen(true)}
-            data-testid="profile-link"
-          >
-            {t("link.link")}
-          </Button>
-        </>
-      )}
+      <p className={styles.linkHint}>{t("link.unclaimedHint")}</p>
+      <Button
+        type="button"
+        variant="secondary"
+        iconBefore={<Icon name="link" size={16} />}
+        onClick={() => setScannerOpen(true)}
+        data-testid="profile-link"
+      >
+        {t("link.link")}
+      </Button>
     </Group>
   );
 }

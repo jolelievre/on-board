@@ -19,6 +19,10 @@ export type LocalProfileLinkedUser = {
   name: string;
   alias: string | null;
   avatarUrl: string | null;
+  /** Added in 6-C so the linked-friend card can show which Google
+   * account the profile binds to. Optional for legacy mirrors that
+   * predate this projection. */
+  email?: string;
 };
 
 /** Server-mirrored Profile row (Phase 6-A). One per person the user knows.

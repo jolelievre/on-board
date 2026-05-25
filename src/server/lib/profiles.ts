@@ -2,6 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { resolveSelfAlias } from "../../shared/players.js";
 
+type TxClient = Prisma.TransactionClient;
+
 /**
  * Idempotently provision the self-Profile for a User.
  *
@@ -72,4 +74,53 @@ export function profileVisibilityWhere(userId: string): Prisma.ProfileWhereInput
   return {
     OR: [{ ownerId: userId }, { linkedUserId: userId }],
   };
+}
+
+/**
+ * Ensure that user `friendUserId` has a Profile in their own account
+ * representing user `ownerUserId` (and vice-versa). Called from the
+ * link and merge handlers so a successful link/merge always leaves
+ * both users with a record of each other — the friendship is
+ * symmetric from the user's perspective, even though storage is
+ * per-owner.
+ *
+ * Idempotent thanks to the composite `@@unique([ownerId, linkedUserId])`.
+ * The alias for a newly created reverse profile is the other user's
+ * canonical display name (alias → name → "Me" fallback). We never
+ * overwrite an existing reverse profile's alias — the owner of that
+ * row may have chosen their own nickname.
+ */
+export async function ensureBilateralLink(
+  tx: TxClient,
+  pair: { ownerUserId: string; friendUserId: string },
+): Promise<void> {
+  const [owner, friend] = await Promise.all([
+    tx.user.findUnique({
+      where: { id: pair.ownerUserId },
+      select: { name: true, alias: true },
+    }),
+    tx.user.findUnique({
+      where: { id: pair.friendUserId },
+      select: { name: true, alias: true },
+    }),
+  ]);
+  if (!owner || !friend) return;
+
+  // Friend's account → reverse profile representing the owner.
+  // The friend hasn't acted yet, so don't clobber whatever profile
+  // (if any) they already have for the owner.
+  await tx.profile.upsert({
+    where: {
+      ownerId_linkedUserId: {
+        ownerId: pair.friendUserId,
+        linkedUserId: pair.ownerUserId,
+      },
+    },
+    create: {
+      ownerId: pair.friendUserId,
+      linkedUserId: pair.ownerUserId,
+      alias: resolveSelfAlias(owner),
+    },
+    update: {},
+  });
 }

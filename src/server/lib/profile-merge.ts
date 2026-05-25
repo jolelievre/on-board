@@ -97,24 +97,47 @@ export async function mergeUnclaimedProfiles(
       403,
     );
   }
-  // A profile is acceptable when either it's unclaimed OR its
-  // `linkedUserId` matches the token-verified allowLinkedUserId the
-  // caller passed in. Anything else (a different linked friend, or no
-  // token at all on a linked profile) is rejected here so the link
-  // and standalone paths share one source of truth.
-  const targetOk =
-    target.linkedUserId === null ||
-    (allowLinkedUserId !== undefined &&
-      target.linkedUserId === allowLinkedUserId);
-  const sourceOk =
-    source.linkedUserId === null ||
-    (allowLinkedUserId !== undefined &&
-      source.linkedUserId === allowLinkedUserId);
-  if (!targetOk || !sourceOk) {
+  // Allowed merge shapes (both profiles already verified to be owned
+  // by the caller above):
+  //
+  //   1. Both unclaimed → trivial. (6-B baseline.)
+  //   2. Target linked, source unclaimed → preserve target's link.
+  //      Useful when the user has an unclaimed profile they typed
+  //      during a match and wants to fold it into the bilaterally-
+  //      auto-created linked profile.
+  //   3. Both linked to the same friend → preserve that link.
+  //      Standalone resolution of the same friend appearing twice.
+  //   4. Both linked to *different* friends → silently swallowing
+  //      one link is risky. Require `allowLinkedUserId` to match
+  //      one side (the link-collision branch passes the friend's
+  //      verified token; standalone callers must explicitly
+  //      acknowledge the collision).
+  //   5. Target unclaimed, source linked → would silently drop a
+  //      link. Reject; the caller should swap directions.
+  if (
+    source.linkedUserId !== null &&
+    target.linkedUserId === null
+  ) {
     throw new ProfileMergeError(
-      "Linked profiles cannot be merged via this endpoint",
+      "Cannot merge a linked profile into an unclaimed one — swap source and target",
       409,
     );
+  }
+  if (
+    target.linkedUserId !== null &&
+    source.linkedUserId !== null &&
+    target.linkedUserId !== source.linkedUserId
+  ) {
+    if (
+      allowLinkedUserId === undefined ||
+      (allowLinkedUserId !== target.linkedUserId &&
+        allowLinkedUserId !== source.linkedUserId)
+    ) {
+      throw new ProfileMergeError(
+        "Merging profiles linked to different accounts requires a confirming token",
+        409,
+      );
+    }
   }
 
   await tx.player.updateMany({
