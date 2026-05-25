@@ -354,15 +354,27 @@ test.describe("Profile detail — QR link flow", () => {
         "/api/games/7-wonders-duel",
       );
       const game = (await gameRes.json()) as { id: string };
+      // No explicit `userId` here — the UI new-match form doesn't
+      // set it either, so the server must auto-attribute the
+      // creator's seat itself when the resolved profile is the
+      // self-profile. Otherwise the `Player.userId` column stays
+      // null and `collectPersonPlayers` on the friend's side can't
+      // pick the match up.
+      const friendProfilesList = (await (
+        await friendCtx.request.get("/api/profiles")
+      ).json()) as { id: string; ownerId: string; linkedUserId: string | null }[];
+      const friendSelfId = friendProfilesList.find(
+        (p) => p.ownerId === friendMe.id && p.linkedUserId === friendMe.id,
+      )!.id;
       const matchRes = await friendCtx.request.post("/api/matches", {
         data: {
           gameId: game.id,
           players: [
-            // Friend's own seat — server self-attributes via
-            // `userId` and sets `Player.userId = friend.id`.
+            // Friend's own seat — referenced by profileId, exactly
+            // as the picker would. No `userId` passed; server has
+            // to recognise the self-profile and set it itself.
             {
-              name: friendMe.name,
-              userId: friendMe.id,
+              profileId: friendSelfId,
               position: 0,
             },
             {
@@ -427,6 +439,141 @@ test.describe("Profile detail — QR link flow", () => {
     }
   });
 
+  test("matches created before linking become mutually visible after the link", async ({
+    browser,
+  }) => {
+    // The natural pre-link state: each user has typed the other's
+    // alias during a match → an unclaimed owned profile per side.
+    // After the link, those past matches must flow into the
+    // bilateral visibility so each side sees the other's history.
+    // Without the auto-merge-on-link step the matches stay tied to
+    // unclaimed profiles and the friend-side visibility filter
+    // never picks them up.
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      const friend = await signUp(friendCtx);
+      const owner = await signUp(ownerCtx);
+      const ownerMe = await getMe(ownerCtx.request);
+
+      const game = (await (
+        await ownerCtx.request.get("/api/games/7-wonders-duel")
+      ).json()) as { id: string };
+
+      // Pre-link: each side creates a match including the *typed*
+      // alias of the other. The new-match form's free-text path
+      // is what users hit when they don't have a linked friend
+      // yet, so simulating it via plain `name:` strings is the
+      // right shape.
+      const ownerPreMatchRes = await ownerCtx.request.post("/api/matches", {
+        data: {
+          gameId: game.id,
+          players: [
+            { name: owner.name, position: 0 },
+            { name: friend.name, position: 1 },
+          ],
+        },
+      });
+      expect(ownerPreMatchRes.status()).toBe(201);
+      const ownerPreMatchId = (await ownerPreMatchRes.json()).id as string;
+
+      const friendPreMatchRes = await friendCtx.request.post("/api/matches", {
+        data: {
+          gameId: game.id,
+          players: [
+            { name: friend.name, position: 0 },
+            { name: owner.name, position: 1 },
+          ],
+        },
+      });
+      expect(friendPreMatchRes.status()).toBe(201);
+      const friendPreMatchId = (await friendPreMatchRes.json()).id as string;
+
+      // Now link. Owner picks the profile they typed earlier (the
+      // server's alias resolver returned the unclaimed one created
+      // by the match POST, so it's already in their owned-profiles
+      // list) and links it to the friend.
+      const ownerProfiles = (await (
+        await ownerCtx.request.get("/api/profiles")
+      ).json()) as {
+        id: string;
+        alias: string;
+        ownerId: string;
+        linkedUserId: string | null;
+      }[];
+      const ownerFriendProfile = ownerProfiles.find(
+        (p) =>
+          p.ownerId === ownerMe.id &&
+          p.alias.toLowerCase() === friend.name.toLowerCase(),
+      )!;
+      expect(ownerFriendProfile).toBeDefined();
+
+      const ownerPage = await ownerCtx.newPage();
+      await openProfile(ownerPage, ownerFriendProfile.id);
+      await ownerPage.click("[data-testid='profile-link']");
+      await submitTokenViaHook(
+        ownerPage,
+        await getLinkToken(friendCtx.request),
+      );
+      await expect(
+        ownerPage.locator("[data-testid='link-scanner-linked']"),
+      ).toBeVisible();
+      await ownerPage.click("[data-testid='link-scanner'] >> text=Done");
+
+      // Both pre-link matches must now be mutually visible. The
+      // owner sees the friend's pre-link match; the friend sees
+      // the owner's pre-link match. Without bug 1 fixed, the
+      // friend's match would stay tied to a friend-owned
+      // unclaimed profile (no visibility for the owner), so the
+      // owner's /api/matches response wouldn't include it.
+      await expect
+        .poll(
+          async () => {
+            const list = (await (
+              await ownerCtx.request.get("/api/matches")
+            ).json()) as { id: string }[];
+            return list.some((m) => m.id === friendPreMatchId);
+          },
+          { timeout: 5_000 },
+        )
+        .toBe(true);
+
+      await expect
+        .poll(
+          async () => {
+            const list = (await (
+              await friendCtx.request.get("/api/matches")
+            ).json()) as { id: string }[];
+            return list.some((m) => m.id === ownerPreMatchId);
+          },
+          { timeout: 5_000 },
+        )
+        .toBe(true);
+
+      // …and the bilateral reverse profile's recent-matches list
+      // on the owner side also includes the friend's pre-link
+      // match. This requires the auto-merge to have folded the
+      // friend's typed-alias profile (now linked to the owner)
+      // into the bilateral state.
+      await ownerPage.evaluate(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await openProfile(ownerPage, ownerFriendProfile.id);
+      const recentLinks = ownerPage.locator(
+        "[data-testid='profile-recent-match']",
+      );
+      await expect(recentLinks).not.toHaveCount(0, { timeout: 10_000 });
+      // Sanity that we're not just seeing the bidirectional
+      // (post-link) match — neither was created, so the only
+      // candidate is the pre-link one.
+      const count = await recentLinks.count();
+      expect(count).toBeGreaterThanOrEqual(1);
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
   test("unlinking severs both directions and prunes friend-only matches from local Dexie", async ({
     browser,
   }) => {
@@ -464,11 +611,15 @@ test.describe("Profile detail — QR link flow", () => {
       const game = (await (
         await friendCtx.request.get("/api/games/7-wonders-duel")
       ).json()) as { id: string };
+      // Match the new-match form payload exactly: typed name only,
+      // no explicit `userId`. The server is responsible for
+      // recognising the creator's self-seat and setting
+      // `Player.userId` accordingly.
       const matchRes = await friendCtx.request.post("/api/matches", {
         data: {
           gameId: game.id,
           players: [
-            { name: friendMe.name, userId: friendMe.id, position: 0 },
+            { name: friendMe.name, position: 0 },
             { name: ownerMe.name, position: 1 },
           ],
         },
