@@ -77,6 +77,89 @@ export function profileVisibilityWhere(userId: string): Prisma.ProfileWhereInput
 }
 
 /**
+ * Fold any of the owner's unclaimed profiles whose alias matches a
+ * known label for the friend (the just-linked profile's alias, or
+ * the friend's User name/alias) into the linked profile. Called
+ * after a successful link so the user's pre-link "Bob" / "Mom" /
+ * etc. profiles — created by typing the friend's name during past
+ * matches — fold into the linked one. Without this, those past
+ * matches keep referencing unclaimed profiles whose `linkedUserId`
+ * is null, so the friend's visibility filter never picks them up.
+ *
+ * Case-insensitive exact alias match only — a fuzzy match would
+ * sweep up genuinely-different friends who happen to share part of
+ * a name. Even with the exact match a user with two unrelated
+ * friends named "Bob" would see both folded into the linked one,
+ * but: (a) that's the meaning of identical aliases, and (b) they
+ * can always re-create the second "Bob" by typing it in a future
+ * match.
+ *
+ * The merge uses the standard `mergeUnclaimedProfiles` helper with
+ * `allowLinkedUserId` set to the friend so the linked target
+ * passes the "target unclaimed OR linked to verified user" check.
+ */
+export async function autoFoldUnclaimedDuplicates(
+  tx: TxClient,
+  pair: {
+    ownerUserId: string;
+    friendUserId: string;
+    linkedProfileId: string;
+  },
+): Promise<void> {
+  // Cyclical import-style would be unavoidable if we imported the
+  // merge helper at module top; calling it inline via a dynamic
+  // import keeps the layering clean.
+  const { mergeUnclaimedProfiles } = await import("./profile-merge.js");
+
+  const linked = await tx.profile.findUnique({
+    where: { id: pair.linkedProfileId },
+    select: { id: true, alias: true },
+  });
+  const friend = await tx.user.findUnique({
+    where: { id: pair.friendUserId },
+    select: { name: true, alias: true },
+  });
+  if (!linked || !friend) return;
+
+  // Build the set of aliases that should resolve to this friend:
+  // the linked profile's own display name, the friend's User name,
+  // and (if set) the friend's User alias. Lowercased for the
+  // case-insensitive match.
+  const targets = new Set<string>();
+  for (const raw of [linked.alias, friend.name, friend.alias]) {
+    const trimmed = raw?.trim().toLowerCase();
+    if (trimmed) targets.add(trimmed);
+  }
+  if (targets.size === 0) return;
+
+  const candidates = await tx.profile.findMany({
+    where: {
+      ownerId: pair.ownerUserId,
+      linkedUserId: null,
+      NOT: { id: pair.linkedProfileId },
+    },
+    select: { id: true, alias: true },
+  });
+
+  for (const c of candidates) {
+    if (!targets.has(c.alias.trim().toLowerCase())) continue;
+    try {
+      await mergeUnclaimedProfiles(tx, {
+        callerId: pair.ownerUserId,
+        targetProfileId: pair.linkedProfileId,
+        sourceProfileId: c.id,
+        allowLinkedUserId: pair.friendUserId,
+      });
+    } catch {
+      // Best-effort: if any single auto-merge raises (e.g. a race
+      // with a concurrent merge already in flight), skip it and
+      // keep going. The user can always merge manually from the
+      // standalone MergeDialog afterwards.
+    }
+  }
+}
+
+/**
  * Ensure that user `friendUserId` has a Profile in their own account
  * representing user `ownerUserId` (and vice-versa). Called from the
  * link and merge handlers so a successful link/merge always leaves
@@ -93,7 +176,7 @@ export function profileVisibilityWhere(userId: string): Prisma.ProfileWhereInput
 export async function ensureBilateralLink(
   tx: TxClient,
   pair: { ownerUserId: string; friendUserId: string },
-): Promise<void> {
+): Promise<{ reverseProfileId: string } | null> {
   const [owner, friend] = await Promise.all([
     tx.user.findUnique({
       where: { id: pair.ownerUserId },
@@ -104,12 +187,12 @@ export async function ensureBilateralLink(
       select: { name: true, alias: true },
     }),
   ]);
-  if (!owner || !friend) return;
+  if (!owner || !friend) return null;
 
   // Friend's account → reverse profile representing the owner.
   // The friend hasn't acted yet, so don't clobber whatever profile
   // (if any) they already have for the owner.
-  await tx.profile.upsert({
+  const reverse = await tx.profile.upsert({
     where: {
       ownerId_linkedUserId: {
         ownerId: pair.friendUserId,
@@ -122,5 +205,7 @@ export async function ensureBilateralLink(
       alias: resolveSelfAlias(owner),
     },
     update: {},
+    select: { id: true },
   });
+  return { reverseProfileId: reverse.id };
 }
