@@ -31,10 +31,12 @@ model User {
 
   // Profiles owned by this user (i.e. people they've added).
   ownedProfiles  Profile[]      @relation("ProfileOwner")
-  // The Profile linked to this auth account (1:1). Null until either the
-  // user signs in for the first time (auto-created self-Profile) or a
-  // friend links one of their owned profiles via QR (Phase 6-C).
-  linkedProfile  Profile?       @relation("ProfileLinked")
+  // Profiles linked to this auth account. Includes the user's own
+  // self-Profile (auto-created on first login) and any profile that a
+  // friend has linked to this account via QR (Phase 6-C). Multiple
+  // friends can independently maintain their own linked Profile for
+  // the same person — uniqueness is per-owner, not global.
+  linkedProfiles Profile[]      @relation("ProfileLinked")
   ownedGroups    ProfileGroup[] @relation("ProfileGroupOwner")
 }
 
@@ -160,7 +162,7 @@ model Player {
 model Profile {
   id              String   @id @default(cuid())
   ownerId         String   /// The User who created this Profile.
-  linkedUserId    String?  @unique /// Set when bound to an auth account (1:1).
+  linkedUserId    String?  /// Set when bound to an auth account. Uniqueness is per-owner (see `@@unique` below) so different owners can each maintain their own linked Profile for the same friend; an owner can hold at most one linked Profile per friend.
   alias           String   /// Primary display name. Owner-editable even when linked.
   customAvatarUrl String?  /// Owner-uploaded avatar (ships in 6-B).
   useLinkedAvatar Boolean  @default(true) /// When linked: prefer linkedUser.avatarUrl over customAvatarUrl.
@@ -173,6 +175,7 @@ model Profile {
   players      Player[]
   groupMembers ProfileGroupMember[]
 
+  @@unique([ownerId, linkedUserId])
   @@index([ownerId])
   @@index([linkedUserId])
 }

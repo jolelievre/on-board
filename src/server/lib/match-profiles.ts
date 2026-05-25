@@ -57,7 +57,15 @@ export async function resolvePlayerProfileId(
   // Path 1: self-Profile.
   if (playerUserId && playerUserId === creatorId) {
     let self = await tx.profile.findUnique({
-      where: { linkedUserId: creatorId },
+      // The self-Profile has ownerId === linkedUserId === creatorId.
+      // After 6-C scoped `linkedUserId` uniqueness to (ownerId,
+      // linkedUserId), the composite is the right lookup key.
+      where: {
+        ownerId_linkedUserId: {
+          ownerId: creatorId,
+          linkedUserId: creatorId,
+        },
+      },
       select: { id: true, alias: true },
     });
     if (!self) {

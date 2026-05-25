@@ -19,7 +19,10 @@ export async function ensureSelfProfile(user: {
 }): Promise<void> {
   const alias = resolveSelfAlias(user);
   await prisma.profile.upsert({
-    where: { linkedUserId: user.id },
+    // 6-C scoped `linkedUserId` uniqueness to (ownerId, linkedUserId),
+    // so the self-profile lookup keys on the composite — same row
+    // since `ownerId === linkedUserId === user.id` for a self-Profile.
+    where: { ownerId_linkedUserId: { ownerId: user.id, linkedUserId: user.id } },
     create: {
       ownerId: user.id,
       linkedUserId: user.id,
