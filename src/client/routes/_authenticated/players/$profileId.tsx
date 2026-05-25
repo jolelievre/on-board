@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../../lib/auth-client";
-import { patchProfile } from "../../../lib/mutations";
+import { patchProfile, unlinkProfile } from "../../../lib/mutations";
 import {
   useProfile,
   useProfileList,
@@ -20,6 +20,8 @@ import { Icon } from "../../../components/ui/Icon";
 import { Button } from "../../../components/ui/Button";
 import { AvatarUploader } from "../../../components/profiles/AvatarUploader";
 import { MergeDialog } from "../../../components/profiles/MergeDialog";
+import { LinkScanner } from "../../../components/profiles/LinkScanner";
+import { LinkCodeDisplay } from "../../../components/profiles/LinkCodeDisplay";
 import { displayProfileName } from "../../../../shared/players";
 import styles from "./$profileId.module.css";
 
@@ -160,6 +162,20 @@ function ProfileDetailBody({
           </Group>
         )}
 
+        <LinkSection
+          profile={profile}
+          viewerId={viewerId}
+          isOwner={isOwner}
+          isSelf={isSelf}
+          isLinked={isLinked}
+          onMergedTo={(survivorId) =>
+            void navigate({
+              to: "/players/$profileId",
+              params: { profileId: survivorId },
+            })
+          }
+        />
+
         {!isSelf && headToHead && headToHead.matches > 0 && (
           <Group title={t("players.headToHead.title")}>
             <div className={styles.statsGrid}>
@@ -292,6 +308,155 @@ function ProfileDetailBody({
         />
       )}
     </>
+  );
+}
+
+function LinkSection({
+  profile,
+  viewerId,
+  isOwner,
+  isSelf,
+  isLinked,
+  onMergedTo,
+}: {
+  profile: LocalProfile3;
+  viewerId: string | null;
+  isOwner: boolean;
+  isSelf: boolean;
+  isLinked: boolean;
+  onMergedTo: (survivorId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [selfCodeOpen, setSelfCodeOpen] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+  const [unlinkError, setUnlinkError] = useState<string | null>(null);
+
+  // Self-profile path: show the user's own QR so a friend's owner-app
+  // can scan it. This is a duplicate entry point to Settings' link
+  // code, intentionally discoverable from the Players tab too.
+  if (isSelf) {
+    return (
+      <Group title={t("link.selfTitle")}>
+        <p className={styles.linkHint}>{t("link.selfHint")}</p>
+        {selfCodeOpen ? (
+          <>
+            <LinkCodeDisplay />
+            <div className={styles.linkActions}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setSelfCodeOpen(false)}
+              >
+                {t("common.done")}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <Button
+            type="button"
+            variant="secondary"
+            iconBefore={<Icon name="link" size={16} />}
+            onClick={() => setSelfCodeOpen(true)}
+            data-testid="self-show-link-code"
+          >
+            {t("link.showCode")}
+          </Button>
+        )}
+      </Group>
+    );
+  }
+
+  // Friend-profile path:
+  //  - Unclaimed + viewer owns it → "Link to a Google account" → scanner.
+  //  - Linked + viewer owns or is the linked friend → linked card + unlink.
+  if (!isOwner && profile.linkedUserId !== viewerId) return null;
+
+  const handleUnlink = async () => {
+    setUnlinkError(null);
+    setUnlinking(true);
+    try {
+      await unlinkProfile({
+        profileId: profile.id,
+        // The linked friend (not the owner) loses visibility on
+        // success — the mutation deletes the local mirror so the
+        // Players list updates without waiting for a full re-pull.
+        asLinkedUser: !isOwner && profile.linkedUserId === viewerId,
+      });
+    } catch (err) {
+      setUnlinkError(
+        err instanceof Error ? err.message : t("link.unlinkError"),
+      );
+    } finally {
+      setUnlinking(false);
+    }
+  };
+
+  if (isLinked) {
+    const linked = profile.linkedUser;
+    return (
+      <Group title={t("link.linkedTitle")}>
+        <div className={styles.linkedCard}>
+          {linked?.avatarUrl ? (
+            <img
+              src={linked.avatarUrl}
+              alt=""
+              className={styles.linkedAvatar}
+            />
+          ) : (
+            <span className={styles.linkedAvatarFallback}>
+              {(linked?.alias || linked?.name || "·").slice(0, 1).toUpperCase()}
+            </span>
+          )}
+          <div className={styles.linkedMeta}>
+            <span className={styles.linkedName}>
+              {linked?.alias || linked?.name || t("link.linkedUnknown")}
+            </span>
+          </div>
+        </div>
+        {unlinkError && <p className={styles.linkError}>{unlinkError}</p>}
+        <div className={styles.linkActions}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => void handleUnlink()}
+            disabled={unlinking}
+            data-testid="profile-unlink"
+          >
+            {unlinking ? t("link.unlinking") : t("link.unlink")}
+          </Button>
+        </div>
+      </Group>
+    );
+  }
+
+  // Unclaimed + owner: offer the link-by-QR flow.
+  return (
+    <Group title={t("link.unclaimedTitle")}>
+      {scannerOpen ? (
+        <LinkScanner
+          profile={profile}
+          onDone={() => setScannerOpen(false)}
+          onMerged={(survivorId) => {
+            setScannerOpen(false);
+            onMergedTo(survivorId);
+          }}
+        />
+      ) : (
+        <>
+          <p className={styles.linkHint}>{t("link.unclaimedHint")}</p>
+          <Button
+            type="button"
+            variant="secondary"
+            iconBefore={<Icon name="link" size={16} />}
+            onClick={() => setScannerOpen(true)}
+            data-testid="profile-link"
+          >
+            {t("link.link")}
+          </Button>
+        </>
+      )}
+    </Group>
   );
 }
 

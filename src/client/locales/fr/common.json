@@ -38,6 +38,11 @@
       "hint": "Ajoutez OnBoard à votre écran d'accueil pour un accès rapide",
       "cta": "Ajouter à l'écran d'accueil",
       "iosHint": "Sur iOS, appuyez sur le bouton Partager dans Safari, puis « Sur l'écran d'accueil »."
+    },
+    "linkCode": {
+      "title": "Code de liaison",
+      "hint": "Affichez votre code de liaison pour qu'un ami puisse rattacher le profil qu'il a créé pour vous à votre compte.",
+      "cta": "Afficher mon code de liaison"
     }
   },
   "games": {
@@ -305,6 +310,40 @@
     "confirm": "Fusionner",
     "confirming": "Fusion en cours…",
     "success": "Profils fusionnés.",
-    "linkedBlocked": "Les profils liés ne peuvent pas encore être fusionnés — fonction prévue en PR 6-C."
+    "linkedBlocked": "Utilisez la liaison par QR sur la page du profil pour fusionner des profils liés."
+  },
+  "link": {
+    "selfTitle": "Votre code de liaison",
+    "selfHint": "Montrez ce QR à un ami pour qu'il rattache à votre compte le profil qu'il a créé pour vous. Vos parties communes deviennent alors visibles pour vous deux.",
+    "showCode": "Afficher mon code",
+    "unclaimedTitle": "Lier à un compte Google",
+    "unclaimedHint": "Scannez le code de liaison d'un ami pour rattacher ce profil à son compte. Il verra alors toutes les parties où ce profil a joué.",
+    "link": "Scanner un code",
+    "linkedTitle": "Compte lié",
+    "linkedUnknown": "Utilisateur lié",
+    "unlink": "Délier",
+    "unlinking": "Déliaison…",
+    "unlinkError": "Impossible de délier",
+    "code": {
+      "loading": "Génération du code…",
+      "expiresIn": "Expire dans {{seconds}} s",
+      "expired": "Ce code a expiré.",
+      "refresh": "Afficher un nouveau code",
+      "retry": "Réessayer",
+      "error": "Impossible de générer un code de liaison.",
+      "hint": "L'application de votre ami va scanner ce code. Il est valide pendant 60 secondes."
+    },
+    "scanner": {
+      "hint": "Pointez la caméra sur le code de liaison de votre ami.",
+      "submitting": "Liaison…",
+      "linked": "Lié !",
+      "error": "Impossible de lier",
+      "cameraError": "Impossible d'ouvrir la caméra. Autorisez l'accès à la caméra et réessayez.",
+      "retry": "Réessayer",
+      "mergePrompt": "Vous avez déjà un profil « {{existing}} » lié à cet ami. Fusionner « {{target}} » dans « {{existing}} » ? Toutes les parties sous « {{target}} » seront déplacées vers « {{existing}} ».",
+      "mergeConfirm": "Fusionner",
+      "merging": "Fusion…",
+      "merged": "Profils fusionnés."
+    }
   }
 }

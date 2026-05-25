@@ -12,6 +12,7 @@ import { Group } from "../../components/ui/Group";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
+import { LinkCodeDisplay } from "../../components/profiles/LinkCodeDisplay";
 import styles from "./settings.module.css";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -82,6 +83,8 @@ function SettingsPage() {
             <ThemeToggle />
           </Group>
 
+          <LinkCodeSection />
+
           {canInstall && (
             <Group title={t("settings.install.title", { defaultValue: "Install app" })}>
               <p className={styles.hint}>
@@ -126,6 +129,42 @@ function SettingsPage() {
         </div>
       </div>
     </>
+  );
+}
+
+function LinkCodeSection() {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  return (
+    <Group title={t("settings.linkCode.title")}>
+      <p className={styles.hint}>{t("settings.linkCode.hint")}</p>
+      {open ? (
+        <>
+          <LinkCodeDisplay />
+          <Button
+            type="button"
+            onClick={() => setOpen(false)}
+            variant="ghost"
+            size="md"
+            fullWidth
+          >
+            {t("common.done")}
+          </Button>
+        </>
+      ) : (
+        <Button
+          type="button"
+          onClick={() => setOpen(true)}
+          variant="secondary"
+          size="md"
+          fullWidth
+          iconBefore={<Icon name="link" size={16} />}
+          data-testid="settings-show-link-code"
+        >
+          {t("settings.linkCode.cta")}
+        </Button>
+      )}
+    </Group>
   );
 }
 

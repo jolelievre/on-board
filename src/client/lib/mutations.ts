@@ -451,6 +451,16 @@ export async function clearCustomAvatar(input: {
 export async function mergeProfile(input: {
   targetProfileId: string;
   sourceProfileId: string;
+  /**
+   * Link-time merge token: required by the server when either profile
+   * is linked. The standalone (unclaimed) merge path leaves it
+   * undefined and the server rejects linked profiles outright.
+   * Caller obtains the token via {@link requestLinkToken} executed by
+   * the friend's session (or, in the link-collision branch, by
+   * forwarding the very same token the friend already minted for the
+   * link attempt).
+   */
+  token?: string;
 }): Promise<void> {
   const ts = nowIso();
   const target = await db.profiles.get(input.targetProfileId);
@@ -481,7 +491,10 @@ export async function mergeProfile(input: {
       await db.syncQueue.add({
         method: "POST",
         url: `/api/profiles/${input.targetProfileId}/merge`,
-        body: JSON.stringify({ sourceProfileId: input.sourceProfileId }),
+        body: JSON.stringify({
+          sourceProfileId: input.sourceProfileId,
+          ...(input.token ? { token: input.token } : {}),
+        }),
         createdAt: ts,
         retries: 0,
         status: "pending",
@@ -490,6 +503,123 @@ export async function mergeProfile(input: {
   );
 
   scheduleFlush();
+}
+
+// ─── Profile link / unlink (Phase 6-C) ───
+//
+// The link flow can't ride the offline sync queue: tokens expire after
+// 60s, so a queued request that fires after a reconnect would always
+// fail verification. These mutations therefore POST directly and
+// surface network errors to the caller, which renders them inline in
+// the link UI ("token expired — ask your friend to refresh the QR").
+
+export type LinkTokenResponse = {
+  token: string;
+  expiresAt: string;
+};
+
+/**
+ * Ask the server to mint a short-lived signed token attesting that the
+ * caller is themselves. The friend will scan this and POST it to bind
+ * one of their local profiles to the caller's auth User. The server
+ * pulls the User id from the session — there is no parameter.
+ */
+export async function requestLinkToken(): Promise<LinkTokenResponse> {
+  if (!navigator.onLine) {
+    throw new Error("A network connection is required to show a link code");
+  }
+  const res = await fetch("/api/profiles/link-token", {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new Error(`Could not mint link token (${res.status})`);
+  }
+  return (await res.json()) as LinkTokenResponse;
+}
+
+/**
+ * Bind an owned, unclaimed Profile to the friend's auth User. Returns
+ * either `{ status: "linked", profile }` (happy path — server updated
+ * the row) or `{ status: "merge_required", existing, target }` when
+ * the owner already has another Profile linked to the same friend.
+ *
+ * The caller's UI handles the `merge_required` branch by confirming
+ * the merge with the user and calling {@link mergeProfile} with the
+ * same token (the server re-verifies it).
+ */
+export type LinkProfileResponse =
+  | { status: "linked"; profile: LocalProfile3 }
+  | {
+      status: "merge_required";
+      existing: { id: string; alias: string };
+      target: { id: string; alias: string };
+    };
+
+export async function linkProfile(input: {
+  profileId: string;
+  token: string;
+}): Promise<LinkProfileResponse> {
+  if (!navigator.onLine) {
+    throw new Error("A network connection is required to link a profile");
+  }
+  const res = await fetch(`/api/profiles/${input.profileId}/link`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: input.token }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Link failed (${res.status})`);
+  }
+  const body = (await res.json()) as
+    | { status: "linked"; profile: LocalProfile3 }
+    | LinkProfileResponse;
+  if (body.status === "linked") {
+    // Mirror the server's authoritative row immediately so the
+    // Players tab flips from "unclaimed" → "linked" without waiting
+    // for the next pullSync.
+    await db.profiles.put(body.profile);
+  }
+  return body;
+}
+
+/**
+ * Sever the link between a Profile and an auth User. Either the owner
+ * or the linked user can call this. Self-Profiles cannot be unlinked
+ * — the server enforces that and returns 409.
+ *
+ * On success we mirror the updated row into Dexie so the UI flips
+ * back to the unclaimed badge immediately. When the linked user
+ * unlinks themself, the Profile drops out of their visibility filter
+ * server-side; we also delete it locally so it disappears from the
+ * Players tab without waiting for a full pullSync.
+ */
+export async function unlinkProfile(input: {
+  profileId: string;
+  /** True when the *linked friend* (not the owner) is the one calling.
+   * Used to delete the local mirror on success, since the profile is
+   * about to drop out of the caller's `/api/profiles` response. */
+  asLinkedUser?: boolean;
+}): Promise<void> {
+  if (!navigator.onLine) {
+    throw new Error("A network connection is required to unlink a profile");
+  }
+  const res = await fetch(`/api/profiles/${input.profileId}/unlink`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Unlink failed (${res.status})`);
+  }
+  const updated = (await res.json()) as LocalProfile3;
+  if (input.asLinkedUser) {
+    await db.profiles.delete(input.profileId);
+  } else {
+    await db.profiles.put(updated);
+  }
 }
 
 export type PatchProfileInput = {

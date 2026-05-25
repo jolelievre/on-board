@@ -38,6 +38,11 @@
       "hint": "Add OnBoard to your home screen for quick access",
       "cta": "Add to home screen",
       "iosHint": "On iOS, tap the Share button in Safari, then \"Add to Home Screen\"."
+    },
+    "linkCode": {
+      "title": "Link code",
+      "hint": "Show your link code so a friend can attach the profile they keep for you to your account.",
+      "cta": "Show my link code"
     }
   },
   "games": {
@@ -305,6 +310,40 @@
     "confirm": "Merge",
     "confirming": "Merging…",
     "success": "Profiles merged.",
-    "linkedBlocked": "Linked profiles can't be merged yet — that ships in PR 6-C."
+    "linkedBlocked": "Use the QR link flow on the profile page to consolidate linked profiles."
+  },
+  "link": {
+    "selfTitle": "Your link code",
+    "selfHint": "Show this QR to a friend so they can attach their record of you to your account. Your past matches together become visible to both of you.",
+    "showCode": "Show my link code",
+    "unclaimedTitle": "Link to a Google account",
+    "unclaimedHint": "Scan a friend's link code to attach this profile to their account. They'll see every match where this profile played.",
+    "link": "Scan a link code",
+    "linkedTitle": "Linked account",
+    "linkedUnknown": "Linked user",
+    "unlink": "Unlink",
+    "unlinking": "Unlinking…",
+    "unlinkError": "Could not unlink",
+    "code": {
+      "loading": "Generating code…",
+      "expiresIn": "Expires in {{seconds}}s",
+      "expired": "This code has expired.",
+      "refresh": "Show a new code",
+      "retry": "Try again",
+      "error": "Could not generate a link code.",
+      "hint": "Your friend's app will scan this. The code is valid for 60 seconds."
+    },
+    "scanner": {
+      "hint": "Point the camera at your friend's link code.",
+      "submitting": "Linking…",
+      "linked": "Linked!",
+      "error": "Could not link",
+      "cameraError": "Could not open the camera. Allow camera access and try again.",
+      "retry": "Try again",
+      "mergePrompt": "You already have a profile «{{existing}}» linked to this friend. Merge «{{target}}» into «{{existing}}»? All matches under «{{target}}» will move to «{{existing}}».",
+      "mergeConfirm": "Merge",
+      "merging": "Merging…",
+      "merged": "Profiles merged."
+    }
   }
 }

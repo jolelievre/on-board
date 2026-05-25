@@ -238,6 +238,18 @@ async function mergeProfiles(rows: ApiProfile[]): Promise<void> {
   if (toPut.length > 0) await db.profiles.bulkPut(toPut);
 }
 
+// NOTE — server-side profile deletions (link-time merge, friend-side
+// unlink) intentionally rely on the optimistic local deletion in the
+// `mergeProfile` and `unlinkProfile` mutations rather than a
+// pull-sync prune step. A naive prune races with optimistically
+// created profiles that haven't yet been pushed to the server: the
+// `?since=` delta doesn't include them, a full re-pull then wipes
+// them, and the queued POST resurrects a phantom row. The corner
+// case where a merge/unlink happens on another device while this one
+// is offline shows the stale profile until the user explicitly
+// triggers a merge or unlink locally; that's a documented
+// limitation, not a regression to fix here.
+
 async function mergeGames(rows: ApiGame[]): Promise<void> {
   const toPut: LocalGame[] = rows.map((g) => ({
     id: g.id,
