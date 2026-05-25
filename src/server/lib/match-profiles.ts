@@ -94,12 +94,18 @@ export async function resolvePlayerProfileId(
     return { profileId: self.id, alias: self.alias };
   }
 
-  // Path 2: unclaimed alias match.
+  // Path 2: alias match against every profile owned by the creator
+  // — including linked ones. Excluding linked profiles (the 6-A
+  // behaviour) meant that typing a friend's name on the new-match
+  // form would silently create a parallel unclaimed profile next
+  // to the bilateral reverse profile created by `/api/profiles/:id/link`,
+  // splitting the friend's match history across two rows. Folding
+  // linked profiles into the candidate set lets the typed-name
+  // path resolve to the linked friend's profile when there is one,
+  // which is the only sensible interpretation of "type the same
+  // alias you see in your friends list".
   const candidates = await tx.profile.findMany({
-    where: {
-      ownerId: creatorId,
-      linkedUserId: null,
-    },
+    where: { ownerId: creatorId },
     select: { id: true, alias: true },
   });
   const target = trimmed.toLowerCase();

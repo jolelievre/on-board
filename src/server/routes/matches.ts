@@ -222,11 +222,35 @@ export const matchesRoutes = new Hono<AuthEnv>()
       sinceDate = parsed;
     }
 
+    // Phase 6-C: matches are visible to the creator *and* to anyone
+    // who has a Profile they own or are linked to among the players.
+    // The PLAN specifies this filter so a linked friend's matches
+    // become mutually visible after the QR-link flow; without it,
+    // friend-side matches that include the bilateral reverse profile
+    // would be invisible to the owner even though their profile is
+    // a Player in the match.
+    const visibilityClause: Prisma.MatchWhereInput = {
+      OR: [
+        { createdById: user.id },
+        {
+          players: {
+            some: {
+              profile: {
+                OR: [{ ownerId: user.id }, { linkedUserId: user.id }],
+              },
+            },
+          },
+        },
+      ],
+    };
+
     const matches = await prisma.match.findMany({
       where: {
-        createdById: user.id,
-        ...(gameId ? { gameId } : {}),
-        ...(sinceDate ? { updatedAt: { gt: sinceDate } } : {}),
+        AND: [
+          visibilityClause,
+          ...(gameId ? [{ gameId }] : []),
+          ...(sinceDate ? [{ updatedAt: { gt: sinceDate } }] : []),
+        ],
       },
       include: {
         // id needed so the client can hydrate `["matches", id]` cache keys
@@ -250,7 +274,21 @@ export const matchesRoutes = new Hono<AuthEnv>()
     const id = c.req.param("id");
 
     const match = await prisma.match.findFirst({
-      where: { id, createdById: user.id },
+      where: {
+        id,
+        OR: [
+          { createdById: user.id },
+          {
+            players: {
+              some: {
+                profile: {
+                  OR: [{ ownerId: user.id }, { linkedUserId: user.id }],
+                },
+              },
+            },
+          },
+        ],
+      },
       include: {
         game: true,
         players: {

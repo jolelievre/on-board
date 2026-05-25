@@ -519,10 +519,30 @@ export const profilesRoutes = new Hono<AuthEnv>()
       );
     }
 
-    const profile = await prisma.profile.update({
-      where: { id },
-      data: { linkedUserId: null },
-      select: profileSelect,
+    // Bilateral unlink mirrors the bilateral link path: the
+    // counterpart row on the *other* user's account (same pair of
+    // user ids, swapped) gets its `linkedUserId` cleared too.
+    // Without this the link is asymmetric — matches that were only
+    // visible via the counterpart would keep flowing one direction,
+    // which contradicts the user's "we're not connected anymore"
+    // mental model. The counterpart is identified by the composite
+    // unique (owner, linked) the bilateral upsert keys on.
+    const ownerSideUserId = target.ownerId;
+    const linkedSideUserId = target.linkedUserId;
+    const profile = await prisma.$transaction(async (tx) => {
+      const updated = await tx.profile.update({
+        where: { id },
+        data: { linkedUserId: null },
+        select: profileSelect,
+      });
+      await tx.profile.updateMany({
+        where: {
+          ownerId: linkedSideUserId,
+          linkedUserId: ownerSideUserId,
+        },
+        data: { linkedUserId: null },
+      });
+      return updated;
     });
     return c.json(profile);
   });
