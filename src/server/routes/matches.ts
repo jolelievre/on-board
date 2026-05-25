@@ -152,7 +152,18 @@ export const matchesRoutes = new Hono<AuthEnv>()
               ...(p.id ? { id: p.id } : {}),
               name: resolution.alias,
               position: p.position,
-              userId: p.userId || null,
+              // Auto-attribute the creator's seat: if the resolved
+              // profile is the creator's self-profile, set
+              // `Player.userId` to the creator's id even when the
+              // client didn't pass it. The new-match form doesn't
+              // bother sending `userId`, but the client-side
+              // `collectPersonPlayers` aggregation needs this
+              // column populated to surface the friend's matches
+              // under their bilateral linked profile on the
+              // *other* user's device.
+              userId: resolution.isSelfProfile
+                ? user.id
+                : (p.userId || null),
               profileId: resolution.profileId,
             };
           }),

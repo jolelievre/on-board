@@ -25,6 +25,15 @@ type ProfileResolution = {
    * legacy `Player.name` column so older clients that still read it (and
    * the dormant column itself, until 6-E) stay coherent. */
   alias: string;
+  /** True iff the resolved profile is the creator's self-profile
+   * (`ownerId === linkedUserId === creatorId`). The matches POST
+   * handler uses this to set `Player.userId = creatorId` even when
+   * the client didn't pass it — without that auto-attribution,
+   * matches created via the new-match form would have a creator
+   * seat with `userId = null`, and the `collectPersonPlayers`
+   * client-side aggregation that picks up the friend's matches on
+   * the *other* user's device couldn't find them. */
+  isSelfProfile: boolean;
 };
 
 /**
@@ -91,7 +100,7 @@ export async function resolvePlayerProfileId(
         data: { usedAt: now },
       });
     }
-    return { profileId: self.id, alias: self.alias };
+    return { profileId: self.id, alias: self.alias, isSelfProfile: true };
   }
 
   // Path 2: alias match against every profile owned by the creator
@@ -106,7 +115,7 @@ export async function resolvePlayerProfileId(
   // alias you see in your friends list".
   const candidates = await tx.profile.findMany({
     where: { ownerId: creatorId },
-    select: { id: true, alias: true },
+    select: { id: true, alias: true, linkedUserId: true },
   });
   const target = trimmed.toLowerCase();
   const hit = candidates.find((p) => p.alias.trim().toLowerCase() === target);
@@ -115,10 +124,14 @@ export async function resolvePlayerProfileId(
       where: { id: hit.id },
       data: { usedAt: now },
     });
-    return { profileId: hit.id, alias: hit.alias };
+    return {
+      profileId: hit.id,
+      alias: hit.alias,
+      isSelfProfile: hit.linkedUserId === creatorId,
+    };
   }
 
-  // Path 3: create.
+  // Path 3: create. Always unclaimed, so never the self-profile.
   const created = await tx.profile.create({
     data: {
       ownerId: creatorId,
@@ -127,7 +140,7 @@ export async function resolvePlayerProfileId(
     },
     select: { id: true, alias: true },
   });
-  return { profileId: created.id, alias: created.alias };
+  return { profileId: created.id, alias: created.alias, isSelfProfile: false };
 }
 
 /**
@@ -162,7 +175,12 @@ export async function resolvePlayerByProfileId(
     where: { id: profile.id },
     data: { usedAt: new Date() },
   });
-  return { profileId: profile.id, alias: profile.alias };
+  return {
+    profileId: profile.id,
+    alias: profile.alias,
+    isSelfProfile:
+      profile.ownerId === creatorId && profile.linkedUserId === creatorId,
+  };
 }
 
 export class ProfileAuthorizationError extends Error {
