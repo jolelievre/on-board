@@ -1,11 +1,7 @@
 import { Hono } from "hono";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import {
-  autoFoldUnclaimedDuplicates,
-  ensureBilateralLink,
-  profileVisibilityWhere,
-} from "../lib/profiles.js";
+import { ensureBilateralLink, profileVisibilityWhere } from "../lib/profiles.js";
 import {
   AVATAR_MAX_UPLOAD_BYTES,
   deleteAvatars,
@@ -347,28 +343,10 @@ export const profilesRoutes = new Hono<AuthEnv>()
           select: { ownerId: true, linkedUserId: true },
         });
         if (after?.linkedUserId && after.ownerId) {
-          const bilateral = await ensureBilateralLink(tx, {
+          await ensureBilateralLink(tx, {
             ownerUserId: after.ownerId,
             friendUserId: after.linkedUserId,
           });
-          // After a link-time collision merge, the survivor is
-          // linked — fold any *other* unclaimed duplicates the
-          // caller owns under the same alias into it (same as the
-          // direct /link path does), and mirror the fold on the
-          // friend's side too so the friendship is symmetric in
-          // both data and history.
-          await autoFoldUnclaimedDuplicates(tx, {
-            ownerUserId: after.ownerId,
-            friendUserId: after.linkedUserId,
-            linkedProfileId: survivorId,
-          });
-          if (bilateral) {
-            await autoFoldUnclaimedDuplicates(tx, {
-              ownerUserId: after.linkedUserId,
-              friendUserId: after.ownerId,
-              linkedProfileId: bilateral.reverseProfileId,
-            });
-          }
         }
         return survivorId;
       });
@@ -444,29 +422,14 @@ export const profilesRoutes = new Hono<AuthEnv>()
       // to someone else. Treat the same-friend case as a successful
       // re-link so a queued retry doesn't error; otherwise reject.
       if (target.linkedUserId === friendUserId) {
-        // Re-link path: ensure the friend has a reverse profile
-        // *and* re-run the unclaimed-duplicates fold on *both*
-        // sides — pre-fix linked rows can have come from an
-        // earlier unilateral version of /link, and the user (or
-        // the friend) may have typed-and-saved fresh duplicates
-        // in the interim.
+        // Re-link path: still ensure the friend has a reverse
+        // profile. Pre-fix linked rows may have come from an
+        // earlier unilateral version of /link.
         await prisma.$transaction(async (tx) => {
-          const bilateral = await ensureBilateralLink(tx, {
+          await ensureBilateralLink(tx, {
             ownerUserId: user.id,
             friendUserId,
           });
-          await autoFoldUnclaimedDuplicates(tx, {
-            ownerUserId: user.id,
-            friendUserId,
-            linkedProfileId: id,
-          });
-          if (bilateral) {
-            await autoFoldUnclaimedDuplicates(tx, {
-              ownerUserId: friendUserId,
-              friendUserId: user.id,
-              linkedProfileId: bilateral.reverseProfileId,
-            });
-          }
         });
         const profile = await prisma.profile.findUnique({
           where: { id },
@@ -500,49 +463,20 @@ export const profilesRoutes = new Hono<AuthEnv>()
       });
     }
 
-    // Happy path — bind the target locally, create the reverse
-    // profile in the friend's account, AND fold each side's
-    // unclaimed duplicates of the other into the matching linked
-    // profile. All steps share one transaction so the post-link
-    // state is atomic.
+    // Happy path — bind the target locally AND create the reverse
+    // profile in the friend's account in one transaction so the
+    // bilateral state is atomic.
     const profile = await prisma.$transaction(async (tx) => {
-      await tx.profile.update({
+      const updated = await tx.profile.update({
         where: { id },
         data: { linkedUserId: friendUserId },
-      });
-      const bilateral = await ensureBilateralLink(tx, {
-        ownerUserId: user.id,
-        friendUserId,
-      });
-      // Owner-side fold: sweep up unclaimed profiles the owner
-      // created earlier for this same friend (typed aliases
-      // during pre-link matches) into the just-linked profile.
-      await autoFoldUnclaimedDuplicates(tx, {
-        ownerUserId: user.id,
-        friendUserId,
-        linkedProfileId: id,
-      });
-      // Friend-side fold: same operation symmetrically, against
-      // the bilateral reverse profile in the friend's account.
-      // Without this, the friend's pre-link matches that include
-      // the owner stay tied to a friend-owned unclaimed profile
-      // (linkedUserId null), which the owner's visibility filter
-      // can't see. Linking is meant to be bilateral; this makes
-      // the past-history flow bilateral too.
-      if (bilateral) {
-        await autoFoldUnclaimedDuplicates(tx, {
-          ownerUserId: friendUserId,
-          friendUserId: user.id,
-          linkedProfileId: bilateral.reverseProfileId,
-        });
-      }
-      // The linked profile may have absorbed players/alias from a
-      // freshly-merged duplicate; re-fetch so the response
-      // reflects the current canonical state.
-      return tx.profile.findUniqueOrThrow({
-        where: { id },
         select: profileSelect,
       });
+      await ensureBilateralLink(tx, {
+        ownerUserId: user.id,
+        friendUserId,
+      });
+      return updated;
     });
     return c.json({ status: "linked" as const, profile });
   })
