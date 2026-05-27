@@ -776,37 +776,116 @@ Each PR is sized to land in one Claude session, ships an end-to-end testable cha
 - Profile detail page shows correct head-to-head: wins, losses, win rate per game.
 - Standalone merge: create a second unclaimed profile "Ali" by mistake → use "Merge into another profile…" → all match references collapse onto "Alice".
 
-#### PR 6-C — Link-to-account via QR + merge-on-collision (`feat/profiles-link-qr`, ~1.5 days)
+#### PR 6-C — Link-to-account via QR + single-Profile model refactor (`feat/profiles-link-qr`, ~3 days)
 
-**Goal**: deliver the full link-to-account flow with merge fallback.
+**Goal**: deliver the full link-to-account flow with merge fallback, **AND** collapse the mirror-profile model to a single Profile. Both ship in the same PR.
+
+**Scope note (expanded mid-PR)**: the original 6-C scope was just the QR + merge flow on top of the existing mirror-profile model. During implementation we hit a class of sharing/sync bugs (matches visible to one user but not the other depending on who created them, partial sync after linking, duplicate Profiles drifting apart) that traced back to the mirror model itself — every `link` creates a second Profile on the linked user's side, and the two rows go out of sync as soon as anyone edits or merges. We decided to fix the model rather than band-aid each symptom. The refactor sections below (Schema / Legacy path removal / Display rule / Visibility query) describe that work; everything else is the original 6-C link-flow scope. No prod data exists yet (single-user dogfooding), so the migration is a clean db reset.
 
 **Requires**: PR 6-B merged.
 
-**Schema**: no change (`linkedUserId` already exists since 6-A).
+**Schema** (`prisma/schema.prisma` + migration):
+- Drop `Player.userId` (denormalization — Profile.linkedUserId is the source of truth; the only path from Match to "user X participated" is Match → Player → Profile → linkedUserId). Single Dexie + server query collapses, see audit in conversation: removes `collectPersonPlayers` union, removes `refreshLocalAliases` Player walk, removes `5dabc1d` self-attribution workaround.
+- Drop `Player.name` (already legacy from 6-A — name lives on Profile.alias now).
+- Add `NOT NULL` on `Player.profileId`. **A Player without a Profile is not a valid state** — closes the "in-between two models" gap where a match created via the legacy name-only path produced Player rows that were addressable by name but not by Profile.
+- Keep `Profile.linkedUserId` (already exists from 6-A).
+- Keep `@@unique([ownerId, linkedUserId])` on Profile — already enforces "one Profile per (owner, linked friend)".
+- No `migrate reset` needed in code — manual reset of dev/integration DBs is fine; preview DBs are short-lived per-PR; no prod.
 
-**Server**:
+**Mental model (post-refactor)**:
+- A `Profile` is "a person someone has played with". Owned by the creator (`ownerId`). If that person is also a user of the app, link it via `linkedUserId`. Linking does not create a second Profile — the row is shared.
+- "My matches" = matches where I'm the owner OR any participating Profile has `ownerId = me` OR `linkedUserId = me`. (The first term is redundant with the second since the creator is always a player on their own match, but kept for query simplicity / index use.)
+- "My self-Profile" = the Profile auto-created on signup with `ownerId = me` (and conventionally `linkedUserId = null`; the existing 6-A code sets `linkedUserId = me` for the self-row, which the visibility filter must continue to handle). Edited from Settings, not the Players tab.
+- Players tab shows friends only: `WHERE ownerId = me AND linkedUserId IS NOT me` — never my self-Profile, never a profile that represents me from a friend's perspective.
+
+**Display rule (viewer-aware, no schema cost)**: a Profile's `alias` + `customAvatarUrl` belong to the owner — only the owner ever sees them. When the *linked* user (`profile.linkedUserId === viewer.userId`) encounters that Profile in their own match history, the renderer ignores the Profile's display fields entirely and uses the viewer's own `User.name` / `User.avatarUrl` instead. This is how identity is supposed to work: each user controls their own appearance via Settings; the friend's Profile is just a join key in their view. No per-viewer customization is lost compared to the mirror model, because the linked user never wanted the owner's nickname for them in the first place; they wanted their own identity. Corollary: the linked user does NOT navigate to "their" Profile detail page from the owner's side — they have no view of that page at all (no edit affordances needed because the page is owner-only).
+
+**Server-side legacy path removal** (the "two models" residue):
+- `POST /api/matches`: stop accepting `players[].name` and `players[].userId`. Validation rejects payloads that don't carry a `profileId` for every seat (HTTP 400). The client is expected to resolve every seat to a Profile *before* submit, via the picker / autocomplete / "create new" flow. This was already best-practice from 6-B but the legacy fallback kept the gap open.
+- Delete `resolvePlayerProfileId` from `src/server/lib/match-profiles.ts` (the name-based resolver that creates a Profile inline at match-create time, plus any alias-normalization helpers it owns). Keep `resolvePlayerByProfileId` in the same file — that's the only path now. Single caller is `matches.ts:146`, which collapses to a direct `resolvePlayerByProfileId` call.
+- Delete `/api/players/suggestions` (already deprecated post-6-A; was scheduled for 6-E, pull it forward).
+- Audit `src/client/lib/mutations.ts:createMatch` and any new-match form code that still constructs a `{ name, userId }` payload — replace with `{ profileId }`.
+
+**Server (link-flow + refactor combined)**:
 - HMAC token helpers in `src/server/lib/link-tokens.ts` (reuse `BETTER_AUTH_SECRET` as signing key, 60s expiry).
 - `POST /api/profiles/link-token` — caller requests a signed token for *their own* User. Returns `{ token, expiresAt }`.
-- `POST /api/profiles/:id/link` — owner submits `{ token }`. Returns `{ status: "linked", profile }` or `{ status: "merge_required", existing: { id, alias }, target: { id, alias } }` (HTTP 200 in both branches).
-- `POST /api/profiles/:targetId/merge` — extended to accept `{ sourceProfileId, token }`. Token required (and verified) when either profile has `linkedUserId` set; reuses unclaimed-only path from 6-B when both are unclaimed.
-- `POST /api/profiles/:id/unlink` — owner OR linked user clears `linkedUserId`.
+- `POST /api/profiles/:id/link` — owner submits `{ token }`. Validates the token, then **just sets `linkedUserId`** on the existing Profile (no mirror creation). Returns `{ status: "linked", profile }`. Returns `{ status: "merge_required", existing, target }` only when the owner already has *another* of their own profiles linked to the same friend (the `@@unique([ownerId, linkedUserId])` collision case). Reject linking a profile to its own owner (HTTP 400).
+- `POST /api/profiles/:targetId/merge` — owner-side only. Token requirement removed (no more linked-side merge concept). Atomically rewrites `Player.profileId` + `ProfileGroupMember.profileId` from source → target, then deletes source. **Important**: if either profile has `linkedUserId` set, the surviving profile must carry it forward. If the source has `linkedUserId` and the target doesn't, copy it onto target before deleting source. If both have one (shouldn't happen under the unique constraint, but defend), refuse with HTTP 409.
+- `POST /api/profiles/:id/unlink` — owner OR linked user clears `linkedUserId`. After unlink, the formerly-linked user immediately loses read access to past matches via the visibility filter — confirm in tests.
+- **Match list query** (`GET /api/matches`): rewrite to `WHERE Match.ownerId = me OR EXISTS(Player JOIN Profile WHERE Match.id = Player.matchId AND (Profile.ownerId = me OR Profile.linkedUserId = me))`. Centralize this filter in `src/server/lib/profile-scope.ts` (currently exists; extend) so every place that lists matches uses the same predicate.
+- **Profile list query** (`GET /api/profiles`): owned by me, filtered to exclude self-Profile (callers can pass `?include=self` if a screen needs the self-Profile). Linked-to-me profiles are *not* my profiles — they belong to my friend who owns them; I see them implicitly via match participation, never in my own Players list.
+- Audit `src/server/routes/profiles.ts` and `src/server/routes/matches.ts` for any code path that creates a mirror Profile on link or writes `Player.userId` — delete.
 
-**Client**:
-- Add `qr-scanner` (~13KB) and `qrcode` deps.
-- `src/client/lib/mutations.ts`: add `requestLinkToken`, `linkProfile`, `unlinkProfile`. Extend `mergeProfile` to forward a token for linked-side merges.
+**Client (link-flow + refactor combined)**:
+- Deps: add `qr-scanner` (~13KB) and `qrcode`.
+- `src/client/lib/mutations.ts`: add `requestLinkToken`, `linkProfile`, `unlinkProfile`. Extend `mergeProfile` to handle the simplified owner-side merge (drop token forwarding). Remove `Player.userId` / `Player.name` from the `createMatch` payload type.
 - New components: `src/client/components/profiles/{LinkScanner, LinkCodeDisplay}.tsx`. `LinkScanner` integrates `qr-scanner` reusing the `useCamera` stream from 6-B. On `status: "merge_required"`, opens the `MergeDialog` from 6-B.
 - `settings.tsx`: add "Show my link code" entry.
-- Profile detail page: "Link to a Google account" button (unclaimed) / linked-friend card + "Unlink" button (linked) / "Use linked friend's photo" toggle.
-- E2E: `e2e/link-qr.spec.ts` with a test-only injected-token bypass for the scan step (Playwright can't easily render+rescan a real QR, so the test exercises the API flow directly while the UI mounts the scanner). Cover both the happy path and the merge-required branch.
+- Profile detail page: "Link to a Google account" button (unclaimed) / linked-friend card + "Unlink" button (linked) / "Use linked friend's photo" toggle. **Page is owner-only** — if accessed by a non-owner (URL nav), redirect to Players tab.
+- `displayProfileName.ts` (+ avatar resolver): viewer-aware override — when `profile.linkedUserId === viewer.userId`, return `viewer.name` / `viewer.avatarUrl` instead of `profile.alias` / `profile.customAvatarUrl`.
+- Players tab: filter out self-Profile and `linkedUserId === me` from the listing.
+- New-match form: when picking "myself", always resolve to my self-Profile. Friends resolve to owned Profiles. Drop any code that builds a `{ name, userId }` payload — every seat resolves to a `profileId` before submit.
+- `src/client/hooks/data/useProfiles.ts:collectPersonPlayers`: collapse to a single `db.players.where("profileId").equals(profile.id)` query. The `userId`-union widening is no longer necessary (the very bug it works around can't happen after the refactor). Audit `useHeadToHead` for the same widening (lines 470-496) and simplify.
+- `src/client/lib/pull-sync.ts:refreshLocalAliases`: drop the `db.players.where("userId")` walk and the `player.user.alias` patch. Only the Profile-row patch remains. The pull-sync downstream verifies the new visibility filter delivers friend-owned matches to linked users end-to-end.
+- Dexie schema bump (v4): drop `userId` and `name` from the Player row type, mark `profileId` required.
+- `usePlayedWith` and any other "my matches with X" derived view: rewrite against the new query / new types.
+
+**Tests** (per CLAUDE.md: UI-driven, no API shortcuts):
+- E2E `link-qr.spec.ts` (already planned): owner-scans-friend happy path; merge-required branch when owner has two of their own profiles for the same friend. Uses a test-only injected-token bypass for the scan step (Playwright can't easily render+rescan a real QR).
+- E2E `link-shares-matches.spec.ts`: A creates a match with friend B's Profile → A links Profile to B → B logs in on another browser context → B sees the match in their Games list and the Game's match list.
+- E2E `match-created-by-friend-visible.spec.ts`: A and B have linked each other's profiles → B creates a match picking A's profile (B's own owned Profile with `linkedUserId = A`) → A sees the match. Closes the symmetry-bug class.
+- E2E `unlink-removes-access.spec.ts`: link, verify shared visibility, unlink, verify visibility drops on the next pull.
+- E2E `players-tab-excludes-self.spec.ts`: my Players tab never lists my self-Profile and never lists a Profile whose `linkedUserId` is me.
+- Integration tests on the new server queries (`matches.ts` visibility filter, `profiles.ts` link/unlink/merge).
+- Drop the obsolete mirror-creation tests in `e2e/api/profiles.spec.ts` and friends.
 
 **Acceptance** (manual, two real devices):
 - Friend logs in on their phone → opens "Show my link code" → QR rendered with 60s countdown.
 - Owner on their phone → Players tab → tap profile "Alice" → "Link to a Google account" → camera opens → scans friend's QR → confirmation.
-- Friend's next `pullSync` brings down every Match where "Alice" is a Player.
-- Owner toggles "Use linked friend's photo" → avatar swaps to Google photo; previously uploaded custom retained.
-- Owner attempts to link "Alice2" to the same friend → merge-required prompt → confirm → "Alice2" matches collapse onto "Alice".
-- Either side unlinks → friend loses read access on next pull.
+- Friend's next `pullSync` brings down every Match where "Alice" is a Player. Friend's UI shows themselves (their `User.name` + avatar) in those match histories, not "Alice".
+- Whoever creates a subsequent match, both participants see it after sync. No "depending on who created it" gaps.
+- A renames Profile "Alice" → "Aleece" → B's match history still shows B's `User.name`, not "Aleece" (display override holds).
+- Owner attempts to link "Alice2" (a second profile they also own for the same friend) → merge-required prompt → confirm → "Alice2" matches collapse onto "Alice" (merge preserves `linkedUserId` on the survivor).
+- Owner toggles "Use linked friend's photo" → avatar swaps to Google photo for the owner's view; B continues to see B's own avatar.
+- Either side unlinks → other side loses read access on next pull.
 - Token expiry: friend's QR stale after 60s → owner scan fails with clear error.
+
+**Out of scope (explicitly)**:
+- Per-viewer aliases or per-viewer avatars beyond the display rule above. No schema field for "what owner calls friend privately" — the owner's `alias` IS their private nickname (only they see it).
+- Multi-link (one Profile linked to many Users). Not a feature.
+- "Bidirectional auto-link": if A links Profile-of-B to user B, the symmetric Profile (B's profile of A) is *not* auto-linked. B does that themselves. Mirroring auto-link is precisely the kind of inference we're moving away from (see [[feedback_ui_provides_data_not_server_inference]]).
+- Linked-user view of "their" Profile detail page: simply doesn't exist — page is owner-only.
+
+**Critical files**:
+
+| File | Action |
+|---|---|
+| `prisma/schema.prisma` | Drop `Player.userId`, `Player.name`; `Player.profileId NOT NULL` |
+| `prisma/migrations/*` | New migration |
+| `src/server/routes/profiles.ts` | Mirror-on-link removal; merge preserves `linkedUserId` on survivor; unlink endpoint |
+| `src/server/routes/matches.ts` | Stop accepting `name`/`userId` in player payload; stop writing `Player.userId`; use scope filter from `profile-scope.ts` |
+| `src/server/lib/match-profiles.ts` | Delete `resolvePlayerProfileId` + name-resolution helpers; keep `resolvePlayerByProfileId` only |
+| `src/server/lib/profile-scope.ts` | Central match-visibility predicate (`ownerId OR linkedUserId joined via Player`) |
+| `src/server/lib/profile-merge.ts` | Owner-side only; carry `linkedUserId` from source to target if present; drop token requirement |
+| `src/server/lib/link-tokens.ts` | Still used by `/profiles/link`; untouched |
+| `src/server/routes/players.ts` | Delete (`/api/players/suggestions` retired) |
+| `src/client/lib/db.ts` | Dexie v4: drop `userId`/`name` on Player row; `profileId` required |
+| `src/client/lib/displayProfileName.ts` | Viewer-aware override (+ avatar resolver) |
+| `src/client/lib/mutations.ts` | Add `requestLinkToken`/`linkProfile`/`unlinkProfile`; drop `userId`/`name` from `createMatch` payload |
+| `src/client/lib/pull-sync.ts` | Drop `db.players.where("userId")` walk in `refreshLocalAliases`; verify new visibility filter end-to-end |
+| `src/client/hooks/data/useProfiles.ts` | Collapse `collectPersonPlayers` to single `profileId` query; simplify `useHeadToHead` |
+| `src/client/components/profiles/LinkScanner.tsx` | New |
+| `src/client/components/profiles/LinkCodeDisplay.tsx` | New |
+| `src/client/routes/_authenticated/players/index.tsx` | Filter self + linked-to-me from listing |
+| `src/client/routes/_authenticated/players/$profileId.tsx` | Owner-only page; redirect non-owners |
+| `src/client/routes/_authenticated/games/$slug_.new.tsx` | Drop `userId`/`name` enrichment; resolve self via self-Profile |
+| `src/client/routes/_authenticated/settings.tsx` | "Show my link code" entry |
+| `e2e/link-qr.spec.ts` | Happy path + merge-required |
+| `e2e/link-shares-matches.spec.ts` | New |
+| `e2e/match-created-by-friend-visible.spec.ts` | New |
+| `e2e/unlink-removes-access.spec.ts` | New |
+| `e2e/players-tab-excludes-self.spec.ts` | New |
+| `e2e/api/profiles.spec.ts` | Drop mirror-flow assertions; add new visibility tests |
 
 #### PR 6-D — Favorite player groups (`feat/profiles-groups`, ~1 day)
 
@@ -840,16 +919,13 @@ Each PR is sized to land in one Claude session, ships an end-to-end testable cha
 - Delete the group → chip disappears from new-match form.
 - Offline: create group → reload → group persists; reconnect → server has it with the client CUID.
 
-#### PR 6-E (optional, hold) — Schema cleanup (`chore/drop-player-legacy-columns`, ~half day)
+#### PR 6-E (optional, hold) — Cosmetic Dexie type rename (`chore/rename-localprofile3`, ~15 min)
 
-After 6-A → 6-D have soaked in production and analytics confirm no client is writing the legacy fields:
-- Mark `Player.profileId` `NOT NULL`.
-- Drop `Player.userId`, `Player.name`.
-- Remove `/api/players/suggestions` (already unused after 6-A).
-- Tighten client types now that `Player.name` is gone.
-- Rename the Dexie row type `LocalProfile3` → `LocalProfile` once the legacy `LocalProfile` is fully removed (the `3` suffix only exists because both names coexisted during 6-A through 6-D).
+Phase 6-E was originally scoped as a soak-window cleanup PR: drop `Player.userId` / `Player.name`, mark `Player.profileId NOT NULL`, retire `/api/players/suggestions`, tighten client types. **All of that landed in PR 6-C as part of the single-Profile refactor** — the legacy columns weren't compatible with the new model so we couldn't keep them dormant.
 
-**Hold this PR unless cleanup matters more than the small risk of a soak-window regression** — dead columns are cheap; the work above is mostly aesthetic.
+What's left is one purely cosmetic rename: the Dexie row type is still named `LocalProfile3` because the v3 schema bump introduced it alongside a legacy `LocalProfile` that's since been removed. The `3` suffix no longer adds information; rename to `LocalProfile`. Pure search-and-replace across the client code, no behavior change.
+
+**Skip this entirely if not bothered by the suffix** — it's the only thing left in this slot and has zero runtime impact.
 
 ### Critical files
 

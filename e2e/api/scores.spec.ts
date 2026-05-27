@@ -6,12 +6,21 @@ async function createTestMatch(
   const gamesRes = await request.get("/api/games/7-wonders-duel");
   const game = await gamesRes.json();
 
+  const aliceRes = await request.post("/api/profiles", {
+    data: { alias: "Alice" },
+  });
+  const alice = await aliceRes.json();
+  const bobRes = await request.post("/api/profiles", {
+    data: { alias: "Bob" },
+  });
+  const bob = await bobRes.json();
+
   const createRes = await request.post("/api/matches", {
     data: {
       gameId: game.id,
       players: [
-        { name: "Alice", position: 0 },
-        { name: "Bob", position: 1 },
+        { profileId: alice.id, position: 0 },
+        { profileId: bob.id, position: 1 },
       ],
     },
   });

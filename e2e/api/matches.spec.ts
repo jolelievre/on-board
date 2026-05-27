@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 import { createAndSignIn } from "../helpers/auth";
 
 // CUID-shaped id (lowercase a-z prefix + 24 hex chars). Matches the regex
@@ -11,19 +11,36 @@ function makeClientId(): string {
   return `c${hex}`;
 }
 
-test.describe("API: Matches (authenticated)", () => {
-  // These tests use the stored auth state from the setup project
+async function createProfile(
+  request: APIRequestContext,
+  alias: string,
+): Promise<{ id: string; alias: string }> {
+  const res = await request.post("/api/profiles", { data: { alias } });
+  if (!res.ok())
+    throw new Error(`profile create failed: ${res.status()} ${await res.text()}`);
+  return (await res.json()) as { id: string; alias: string };
+}
 
+async function createProfilePair(
+  request: APIRequestContext,
+): Promise<[{ id: string; alias: string }, { id: string; alias: string }]> {
+  const a = await createProfile(request, "Alice");
+  const b = await createProfile(request, "Bob");
+  return [a, b];
+}
+
+test.describe("API: Matches (authenticated)", () => {
   test("POST /api/matches creates a match", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const res = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -40,11 +57,12 @@ test.describe("API: Matches (authenticated)", () => {
   }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const alice = await createProfile(request, "Alice");
 
     const res = await request.post("/api/matches", {
       data: {
         gameId: game.id,
-        players: [{ name: "Alice", position: 0 }],
+        players: [{ profileId: alice.id, position: 0 }],
       },
     });
 
@@ -52,8 +70,9 @@ test.describe("API: Matches (authenticated)", () => {
   });
 
   test("POST /api/matches rejects missing gameId", async ({ request }) => {
+    const alice = await createProfile(request, "Alice");
     const res = await request.post("/api/matches", {
-      data: { players: [{ name: "Alice", position: 0 }] },
+      data: { players: [{ profileId: alice.id, position: 0 }] },
     });
 
     expect(res.status()).toBe(400);
@@ -62,13 +81,14 @@ test.describe("API: Matches (authenticated)", () => {
   test("GET /api/matches lists user matches", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -83,13 +103,14 @@ test.describe("API: Matches (authenticated)", () => {
   test("GET /api/matches/:id returns match details", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const createRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -107,13 +128,14 @@ test.describe("API: Matches (authenticated)", () => {
   test("PUT /api/matches/:id updates match status", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const createRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -140,13 +162,14 @@ test.describe("API: Matches (authenticated)", () => {
   }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const createRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -164,6 +187,7 @@ test.describe("API: Matches (authenticated)", () => {
   }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const matchId = makeClientId();
     const playerIds = [makeClientId(), makeClientId()];
@@ -171,8 +195,8 @@ test.describe("API: Matches (authenticated)", () => {
       id: matchId,
       gameId: game.id,
       players: [
-        { id: playerIds[0], name: "Alice", position: 0 },
-        { id: playerIds[1], name: "Bob", position: 1 },
+        { id: playerIds[0], profileId: alice.id, position: 0 },
+        { id: playerIds[1], profileId: bob.id, position: 1 },
       ],
     };
 
@@ -201,6 +225,7 @@ test.describe("API: Matches (authenticated)", () => {
   }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [aliceOwner, bobOwner] = await createProfilePair(request);
 
     const matchId = makeClientId();
     const ownerRes = await request.post("/api/matches", {
@@ -208,8 +233,8 @@ test.describe("API: Matches (authenticated)", () => {
         id: matchId,
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: aliceOwner.id, position: 0 },
+          { profileId: bobOwner.id, position: 1 },
         ],
       },
     });
@@ -218,14 +243,16 @@ test.describe("API: Matches (authenticated)", () => {
     // Switch identity to a fresh user (replaces the session cookie on
     // `request`) and re-attempt to POST with the same match id.
     await createAndSignIn(request);
+    const carol = await createProfile(request, "Carol");
+    const dave = await createProfile(request, "Dave");
 
     const conflictRes = await request.post("/api/matches", {
       data: {
         id: matchId,
         gameId: game.id,
         players: [
-          { name: "Carol", position: 0 },
-          { name: "Dave", position: 1 },
+          { profileId: carol.id, position: 0 },
+          { profileId: dave.id, position: 1 },
         ],
       },
     });
@@ -235,14 +262,15 @@ test.describe("API: Matches (authenticated)", () => {
   test("POST /api/matches rejects a malformed id", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const res = await request.post("/api/matches", {
       data: {
         id: "draft_not_a_cuid",
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -256,16 +284,16 @@ test.describe("API: Matches (authenticated)", () => {
     const game = await gamesRes.json();
 
     // Isolate this test from any pre-existing matches by signing in as a
-    // fresh user: the test-DB reset before the run is per-suite, not
-    // per-test, so other tests have populated the default user's history.
+    // fresh user.
     await createAndSignIn(request);
+    const [alice, bob] = await createProfilePair(request);
 
     const beforeRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -275,12 +303,14 @@ test.describe("API: Matches (authenticated)", () => {
     // `updatedAt > since` (strict), so the first match must not come back.
     const cursor = beforeMatch.updatedAt as string;
 
+    const carol = await createProfile(request, "Carol");
+    const dave = await createProfile(request, "Dave");
     const afterRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Carol", position: 0 },
-          { name: "Dave", position: 1 },
+          { profileId: carol.id, position: 0 },
+          { profileId: dave.id, position: 1 },
         ],
       },
     });
@@ -306,13 +336,14 @@ test.describe("API: Matches (authenticated)", () => {
   test("POST /api/matches stores and returns metadata", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const res = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
         metadata: { skullKing: { dealerStart: 1 } },
       },
@@ -323,24 +354,15 @@ test.describe("API: Matches (authenticated)", () => {
     expect(match.metadata).toEqual({ skullKing: { dealerStart: 1 } });
   });
 
-  test("POST /api/matches accepts profileId and snapshots alias to Player.name", async ({
+  test("POST /api/matches accepts profileId and projects Profile.alias on the player row", async ({
     request,
   }) => {
     await createAndSignIn(request);
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
-    const profileARes = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    expect(profileARes.status()).toBe(201);
-    const profileA = await profileARes.json();
-
-    const profileBRes = await request.post("/api/profiles", {
-      data: { alias: "Bob" },
-    });
-    expect(profileBRes.status()).toBe(201);
-    const profileB = await profileBRes.json();
+    const profileA = await createProfile(request, "Alice");
+    const profileB = await createProfile(request, "Bob");
 
     const res = await request.post("/api/matches", {
       data: {
@@ -352,12 +374,16 @@ test.describe("API: Matches (authenticated)", () => {
       },
     });
     expect(res.status()).toBe(201);
-    const match = await res.json();
+    const match = (await res.json()) as {
+      players: { profileId: string; profile: { alias: string }; position: number }[];
+    };
     expect(match.players).toHaveLength(2);
-    expect(match.players[0].profileId).toBe(profileA.id);
-    expect(match.players[0].name).toBe("Alice");
-    expect(match.players[1].profileId).toBe(profileB.id);
-    expect(match.players[1].name).toBe("Bob");
+    const p0 = match.players.find((p) => p.position === 0)!;
+    const p1 = match.players.find((p) => p.position === 1)!;
+    expect(p0.profileId).toBe(profileA.id);
+    expect(p0.profile.alias).toBe("Alice");
+    expect(p1.profileId).toBe(profileB.id);
+    expect(p1.profile.alias).toBe("Bob");
   });
 
   test("POST /api/matches rejects a profileId not visible to the caller", async ({
@@ -367,38 +393,36 @@ test.describe("API: Matches (authenticated)", () => {
     const game = await ownerGamesRes.json();
 
     await createAndSignIn(request);
-    const ownerProfileRes = await request.post("/api/profiles", {
-      data: { alias: "Private" },
-    });
-    expect(ownerProfileRes.status()).toBe(201);
-    const ownerProfile = await ownerProfileRes.json();
+    const ownerProfile = await createProfile(request, "Private");
 
     // Switch identity — the new user can't see ownerProfile.
     await createAndSignIn(request);
+    const bob = await createProfile(request, "Bob");
     const res = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
           { profileId: ownerProfile.id, position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
     expect(res.status()).toBe(403);
   });
 
-  test("POST /api/matches rejects a player payload with neither profileId nor name", async ({
+  test("POST /api/matches rejects a player payload without profileId", async ({
     request,
   }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const bob = await createProfile(request, "Bob");
 
     const res = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
           { position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -408,13 +432,14 @@ test.describe("API: Matches (authenticated)", () => {
   test("POST /api/matches rejects a malformed profileId", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const bob = await createProfile(request, "Bob");
 
     const res = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
           { profileId: "not-a-cuid", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -426,13 +451,14 @@ test.describe("API: Matches (authenticated)", () => {
   }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const bob = await createProfile(request, "Bob");
 
     const res = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
           { profileId: makeClientId(), position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -444,13 +470,14 @@ test.describe("API: PATCH /api/matches/:id (authenticated)", () => {
   test("updates metadata", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const createRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -469,66 +496,68 @@ test.describe("API: PATCH /api/matches/:id (authenticated)", () => {
   test("reorders players", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const createRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
     const created = await createRes.json();
-    const alice = created.players.find(
-      (p: { name: string }) => p.name === "Alice",
+    const alicePlayer = created.players.find(
+      (p: { profileId: string }) => p.profileId === alice.id,
     )!;
-    const bob = created.players.find(
-      (p: { name: string }) => p.name === "Bob",
+    const bobPlayer = created.players.find(
+      (p: { profileId: string }) => p.profileId === bob.id,
     )!;
 
     const res = await request.patch(`/api/matches/${created.id}`, {
       data: {
         playerOrder: [
-          { playerId: alice.id, position: 1 },
-          { playerId: bob.id, position: 0 },
+          { playerId: alicePlayer.id, position: 1 },
+          { playerId: bobPlayer.id, position: 0 },
         ],
       },
     });
 
     expect(res.ok()).toBeTruthy();
     const match = await res.json();
-    expect(match.players[0].id).toBe(bob.id);
-    expect(match.players[1].id).toBe(alice.id);
+    expect(match.players[0].id).toBe(bobPlayer.id);
+    expect(match.players[1].id).toBe(alicePlayer.id);
   });
 
   test("updates metadata and player order together", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const createRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
     const created = await createRes.json();
-    const alice = created.players.find(
-      (p: { name: string }) => p.name === "Alice",
+    const alicePlayer = created.players.find(
+      (p: { profileId: string }) => p.profileId === alice.id,
     )!;
-    const bob = created.players.find(
-      (p: { name: string }) => p.name === "Bob",
+    const bobPlayer = created.players.find(
+      (p: { profileId: string }) => p.profileId === bob.id,
     )!;
 
     const res = await request.patch(`/api/matches/${created.id}`, {
       data: {
         metadata: { gameVariant: "classic" },
         playerOrder: [
-          { playerId: alice.id, position: 1 },
-          { playerId: bob.id, position: 0 },
+          { playerId: alicePlayer.id, position: 1 },
+          { playerId: bobPlayer.id, position: 0 },
         ],
       },
     });
@@ -536,20 +565,21 @@ test.describe("API: PATCH /api/matches/:id (authenticated)", () => {
     expect(res.ok()).toBeTruthy();
     const match = await res.json();
     expect(match.metadata).toEqual({ gameVariant: "classic" });
-    expect(match.players[0].id).toBe(bob.id);
-    expect(match.players[1].id).toBe(alice.id);
+    expect(match.players[0].id).toBe(bobPlayer.id);
+    expect(match.players[1].id).toBe(alicePlayer.id);
   });
 
   test("rejects editing a completed match", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const createRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
@@ -573,24 +603,25 @@ test.describe("API: PATCH /api/matches/:id (authenticated)", () => {
   test("rejects playerOrder missing a player", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const createRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
     const created = await createRes.json();
-    const alice = created.players.find(
-      (p: { name: string }) => p.name === "Alice",
+    const alicePlayer = created.players.find(
+      (p: { profileId: string }) => p.profileId === alice.id,
     )!;
 
     const res = await request.patch(`/api/matches/${created.id}`, {
       data: {
-        playerOrder: [{ playerId: alice.id, position: 0 }],
+        playerOrder: [{ playerId: alicePlayer.id, position: 0 }],
       },
     });
 
@@ -600,26 +631,27 @@ test.describe("API: PATCH /api/matches/:id (authenticated)", () => {
   test("rejects playerOrder with unknown player id", async ({ request }) => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
+    const [alice, bob] = await createProfilePair(request);
 
     const createRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
     const created = await createRes.json();
-    const bob = created.players.find(
-      (p: { name: string }) => p.name === "Bob",
+    const bobPlayer = created.players.find(
+      (p: { profileId: string }) => p.profileId === bob.id,
     )!;
 
     const res = await request.patch(`/api/matches/${created.id}`, {
       data: {
         playerOrder: [
           { playerId: "nonexistent-id", position: 0 },
-          { playerId: bob.id, position: 1 },
+          { playerId: bobPlayer.id, position: 1 },
         ],
       },
     });

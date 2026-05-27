@@ -14,16 +14,19 @@ export type UseProfileResult = {
 };
 
 /**
- * Reactive list of profiles visible to the given viewer — that is,
- * profiles they own OR profiles linked to their own auth account.
+ * Reactive list of profiles for the Players tab — friends only.
  *
- * The self-Profile (where `ownerId === linkedUserId === viewerId`) is
- * pinned to the top regardless of `usedAt`; remaining rows are sorted
- * by `usedAt` descending so the most recently used profile appears
- * first. The composite check is load-bearing: after 6-C, a friend-
- * owned profile that's linked to the viewer also satisfies
- * `linkedUserId === viewerId`, and using that alone as the self-check
- * would pin two different rows as "self".
+ * Under the single-Profile model, the Players tab shows people the
+ * viewer has played with. That excludes:
+ *   - the viewer's self-Profile (ownerId === linkedUserId === me) —
+ *     editing your own identity lives in Settings, not here.
+ *   - profiles representing me from someone else's side
+ *     (linkedUserId === me but ownerId !== me) — those rows belong to
+ *     a friend who has me linked; I have no editorial role there.
+ *
+ * What's left: profiles I own where the linkedUserId is not me. That
+ * captures unclaimed profiles ("Bob" I added before he signed up) and
+ * linked friends (the same "Bob" once I scanned his QR).
  *
  * Pass `undefined` while session is still loading — the hook returns
  * `status: "loading"` until a real id is supplied.
@@ -32,35 +35,10 @@ export function useProfileList(viewerId: string | undefined): UseProfileListResu
   const data = useLiveQuery(
     async (): Promise<LocalProfile3[] | null> => {
       if (!viewerId) return null;
-      // Dexie can't express OR across two columns natively. Two scans
-      // joined in memory is fine at this scale — every Profile a user
-      // can see is in their owned set or their linked set, and both
-      // sets are tiny (10s, not 1000s).
-      const [owned, linked] = await Promise.all([
-        db.profiles.where("ownerId").equals(viewerId).toArray(),
-        db.profiles.where("linkedUserId").equals(viewerId).toArray(),
-      ]);
-      const byId = new Map<string, LocalProfile3>();
-      for (const p of owned) byId.set(p.id, p);
-      for (const p of linked) byId.set(p.id, p);
-      // Hide friend-owned profiles that point back at me: those rows
-      // represent ME inside the friend's account, not a friend in
-      // mine. The bilateral upsert on `/link` creates a viewer-owned
-      // reverse profile that already covers the "friend in my list"
-      // role, so showing this one too would render a confusing
-      // duplicate (two rows badged with my own name on linked-side,
-      // see PR 6-C feedback). They stay visible to the rest of the
-      // app (Dexie still holds them) — only the list view is filtered.
-      const rows = [...byId.values()].filter(
-        (p) => !(p.linkedUserId === viewerId && p.ownerId !== viewerId),
-      );
-      const isSelfRow = (p: LocalProfile3) =>
-        p.linkedUserId === viewerId && p.ownerId === viewerId;
+      const owned = await db.profiles.where("ownerId").equals(viewerId).toArray();
+      const rows = owned.filter((p) => p.linkedUserId !== viewerId);
+      // usedAt descending — most recently used friend first.
       rows.sort((a, b) => {
-        const aSelf = isSelfRow(a) ? 0 : 1;
-        const bSelf = isSelfRow(b) ? 0 : 1;
-        if (aSelf !== bSelf) return aSelf - bSelf;
-        // usedAt descending — most recent first.
         if (a.usedAt > b.usedAt) return -1;
         if (a.usedAt < b.usedAt) return 1;
         return a.alias.localeCompare(b.alias);
@@ -77,49 +55,26 @@ export function useProfileList(viewerId: string | undefined): UseProfileListResu
 
 /**
  * Collect every Player row that represents the same *person* as the
- * given profile. After 6-C the same auth user can be represented by
- * multiple Profile rows on the same client (the local owner's
- * representation + any profile linked to that user), so a naive
- * `db.players.where('profileId').equals(p.id)` query under-counts:
+ * given profile.
  *
- *   - Matches I create where I pick the friend → Player.profileId is
- *     the friend's bilateral reverse profile (owned by me, linked to
- *     them). Covered by the direct query.
- *   - Matches the friend creates where they include themselves →
- *     Player.profileId is the friend's *self-profile* (which my
- *     account never pulls — visibility filter excludes it) but
- *     `Player.userId` is set to the friend's auth id by the server's
- *     creator-self attribution path. Covered by the `userId` query.
- *
- * The union surfaces matches under the friend's profile in the
- * Players tab regardless of who created them.
+ * Under the single-Profile model, a person is represented by one or
+ * more Profile rows sharing the same `linkedUserId`. The Player row
+ * carries `profileLinkedUserId` (denormalized from the pull-sync
+ * projection of `Profile.linkedUserId`) so we can find every Player
+ * row representing this person across owners with a single indexed
+ * read. Unclaimed profiles (no `linkedUserId`) only match the direct
+ * `profileId` query — there's no shared person to widen to.
  */
 async function collectPersonPlayers(
   profile: { id: string; linkedUserId: string | null },
 ): Promise<{ id: string; matchId: string }[]> {
-  const direct = await db.players
-    .where("profileId")
-    .equals(profile.id)
-    .toArray();
-  if (!profile.linkedUserId) return direct;
-
-  const byUserId = await db.players
-    .where("userId")
+  if (!profile.linkedUserId) {
+    return db.players.where("profileId").equals(profile.id).toArray();
+  }
+  return db.players
+    .where("profileLinkedUserId")
     .equals(profile.linkedUserId)
     .toArray();
-  const seen = new Set<string>();
-  const out: { id: string; matchId: string }[] = [];
-  for (const p of direct) {
-    if (seen.has(p.id)) continue;
-    seen.add(p.id);
-    out.push(p);
-  }
-  for (const p of byUserId) {
-    if (seen.has(p.id)) continue;
-    seen.add(p.id);
-    out.push(p);
-  }
-  return out;
 }
 
 /** Reactive read of one profile by id. Returns `status: "missing"` when
@@ -286,7 +241,27 @@ export function useProfileSuggestions(
   query: string,
   excludeIds: Set<string>,
 ): ProfileSuggestion[] | undefined {
-  const { data } = useProfileList(viewerId);
+  const data = useLiveQuery(
+    async (): Promise<LocalProfile3[] | null> => {
+      if (!viewerId) return null;
+      // The picker needs every owned profile *including the self-
+      // Profile* (so "me" appears as a suggestion in match creation).
+      // The Players tab listing in `useProfileList` separately filters
+      // out the self-Profile because the tab is friend-only — keep
+      // these two consumers' filters distinct.
+      const owned = await db.profiles.where("ownerId").equals(viewerId).toArray();
+      owned.sort((a, b) => {
+        const aSelf = a.linkedUserId === viewerId ? 0 : 1;
+        const bSelf = b.linkedUserId === viewerId ? 0 : 1;
+        if (aSelf !== bSelf) return aSelf - bSelf;
+        if (a.usedAt > b.usedAt) return -1;
+        if (a.usedAt < b.usedAt) return 1;
+        return a.alias.localeCompare(b.alias);
+      });
+      return owned;
+    },
+    [viewerId],
+  );
   if (!data) return undefined;
   const needle = query.trim().toLowerCase();
   return data
@@ -297,9 +272,6 @@ export function useProfileSuggestions(
     .map((p) => ({
       id: p.id,
       alias: p.alias,
-      // 6-C: friend-owned profiles linked to me also satisfy
-      // `linkedUserId === viewerId`. The "you" hint in the new-match
-      // picker must only fire for the real self-profile.
       isSelf: p.linkedUserId === viewerId && p.ownerId === viewerId,
       profile: p,
     }));
@@ -464,11 +436,10 @@ export function useHeadToHead(
         return { matches: 0, subjectWins: 0, viewerWins: 0, draws: 0 };
       }
 
-      // Use the same "all player rows for this person" widening as
-      // the recent-matches view, so head-to-head picks up matches
-      // the friend created (where the friend's seat is identified
-      // by `Player.userId` rather than the bilateral reverse
-      // profile's id).
+      // Collect every Player row representing the subject across
+      // owners — `collectPersonPlayers` widens via
+      // `Player.profileLinkedUserId`, so head-to-head picks up
+      // matches the friend created with their own self-Profile too.
       const subjectPlayers = await collectPersonPlayers(subjectProfile);
       const matchIds = [...new Set(subjectPlayers.map((p) => p.matchId))];
       if (matchIds.length === 0) {
@@ -488,10 +459,7 @@ export function useHeadToHead(
       }
 
       const subjectPlayerIds = new Set(subjectPlayers.map((p) => p.id));
-      // Mirror the same widening on the viewer side, so a match the
-      // viewer created with `userId === me` (server self-attribution)
-      // still counts toward "your wins" even if their bilateral
-      // reverse profile didn't exist at the time of that match.
+      // Same widening on the viewer side.
       const viewerPlayers = await collectPersonPlayers(viewerProfile);
       const viewerPlayerIds = new Set(viewerPlayers.map((p) => p.id));
 

@@ -14,7 +14,6 @@ type ScannerState =
   | { kind: "linked" }
   | {
       kind: "merge_required";
-      token: string;
       existing: { id: string; alias: string };
       target: { id: string; alias: string };
     }
@@ -70,7 +69,6 @@ export function LinkScanner({
       } else {
         setState({
           kind: "merge_required",
-          token,
           existing: res.existing,
           target: res.target,
         });
@@ -149,7 +147,6 @@ export function LinkScanner({
     if (state.kind !== "merge_required") return;
     const survivorId = state.existing.id;
     const sourceId = state.target.id;
-    const token = state.token;
     setState({ kind: "merging" });
     try {
       // Navigate to the survivor *before* awaiting the merge: the
@@ -163,7 +160,6 @@ export function LinkScanner({
       await mergeProfile({
         targetProfileId: survivorId,
         sourceProfileId: sourceId,
-        token,
       });
       // No further state update — the component has already
       // unmounted via the parent's navigation. We could call

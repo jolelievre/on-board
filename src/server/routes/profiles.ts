@@ -1,14 +1,13 @@
 import { Hono } from "hono";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { ensureBilateralLink, profileVisibilityWhere } from "../lib/profiles.js";
 import {
   AVATAR_MAX_UPLOAD_BYTES,
   deleteAvatars,
   writeAvatar,
 } from "../lib/avatar-storage.js";
 import {
-  mergeUnclaimedProfiles,
+  mergeProfiles,
   ProfileMergeError,
 } from "../lib/profile-merge.js";
 import {
@@ -71,9 +70,15 @@ export const profilesRoutes = new Hono<AuthEnv>()
       sinceDate = parsed;
     }
 
+    // Under the single-Profile model, only owned profiles are listed.
+    // Friend-owned profiles linked to me are theirs to manage, not
+    // mine — I see them implicitly when they appear in matches
+    // (the Player row embeds the Profile projection), never in my own
+    // listing. The owner check covers both my self-Profile and every
+    // friend I've added.
     const profiles = await prisma.profile.findMany({
       where: {
-        ...profileVisibilityWhere(user.id),
+        ownerId: user.id,
         ...(sinceDate ? { updatedAt: { gt: sinceDate } } : {}),
       },
       select: profileSelect,
@@ -295,12 +300,9 @@ export const profilesRoutes = new Hono<AuthEnv>()
     const user = c.get("user");
     const targetId = c.req.param("targetId");
 
-    let body: { sourceProfileId?: string; token?: string };
+    let body: { sourceProfileId?: string };
     try {
-      body = (await c.req.json()) as {
-        sourceProfileId?: string;
-        token?: string;
-      };
+      body = (await c.req.json()) as { sourceProfileId?: string };
     } catch {
       return c.json({ error: "JSON body required" }, 400);
     }
@@ -312,46 +314,16 @@ export const profilesRoutes = new Hono<AuthEnv>()
       return c.json({ error: "Invalid profile id format" }, 400);
     }
 
-    // A token unlocks linked-side merges (PR 6-C). We verify it here so
-    // the merge helper only sees a trusted User id, never a raw token.
-    let allowLinkedUserId: string | undefined;
-    if (typeof body.token === "string" && body.token.length > 0) {
-      try {
-        const payload = verifyLinkToken(body.token);
-        allowLinkedUserId = payload.userId;
-      } catch (err) {
-        if (err instanceof LinkTokenError) {
-          return c.json({ error: err.message }, 400);
-        }
-        throw err;
-      }
-    }
-
     try {
-      const survivor = await prisma.$transaction(async (tx) => {
-        const survivorId = await mergeUnclaimedProfiles(tx, {
+      const survivorId = await prisma.$transaction(async (tx) => {
+        return mergeProfiles(tx, {
           callerId: user.id,
           targetProfileId: targetId,
           sourceProfileId,
-          allowLinkedUserId,
         });
-        // If the merged profile is linked, make sure the friend has
-        // a reverse profile representing the caller. Covers pre-fix
-        // linked rows and the link-time collision branch.
-        const after = await tx.profile.findUnique({
-          where: { id: survivorId },
-          select: { ownerId: true, linkedUserId: true },
-        });
-        if (after?.linkedUserId && after.ownerId) {
-          await ensureBilateralLink(tx, {
-            ownerUserId: after.ownerId,
-            friendUserId: after.linkedUserId,
-          });
-        }
-        return survivorId;
       });
       const profile = await prisma.profile.findUnique({
-        where: { id: survivor },
+        where: { id: survivorId },
         select: profileSelect,
       });
       return c.json({ status: "merged" as const, profile });
@@ -418,19 +390,10 @@ export const profilesRoutes = new Hono<AuthEnv>()
       return c.json({ error: "Only the owner can link this profile" }, 403);
     }
     if (target.linkedUserId !== null) {
-      // Already linked — either to this friend (idempotent no-op) or
-      // to someone else. Treat the same-friend case as a successful
-      // re-link so a queued retry doesn't error; otherwise reject.
+      // Already linked — to this friend (idempotent no-op) or to
+      // someone else. Treat same-friend as a successful re-link so a
+      // queued retry succeeds; reject the cross-friend case.
       if (target.linkedUserId === friendUserId) {
-        // Re-link path: still ensure the friend has a reverse
-        // profile. Pre-fix linked rows may have come from an
-        // earlier unilateral version of /link.
-        await prisma.$transaction(async (tx) => {
-          await ensureBilateralLink(tx, {
-            ownerUserId: user.id,
-            friendUserId,
-          });
-        });
         const profile = await prisma.profile.findUnique({
           where: { id },
           select: profileSelect,
@@ -443,10 +406,11 @@ export const profilesRoutes = new Hono<AuthEnv>()
       );
     }
 
-    // Owner already has another profile linked to this same friend?
-    // Surface the merge-required branch rather than mutating, so the
-    // UI can prompt for confirmation before two histories collapse
-    // into one.
+    // Owner already has another of their own profiles linked to this
+    // same friend? Surface the merge-required branch rather than
+    // mutating, so the UI can prompt for confirmation before two
+    // histories collapse into one. This is the only remaining merge
+    // path now that linking no longer creates mirror profiles.
     const existing = await prisma.profile.findFirst({
       where: {
         ownerId: user.id,
@@ -463,20 +427,14 @@ export const profilesRoutes = new Hono<AuthEnv>()
       });
     }
 
-    // Happy path — bind the target locally AND create the reverse
-    // profile in the friend's account in one transaction so the
-    // bilateral state is atomic.
-    const profile = await prisma.$transaction(async (tx) => {
-      const updated = await tx.profile.update({
-        where: { id },
-        data: { linkedUserId: friendUserId },
-        select: profileSelect,
-      });
-      await ensureBilateralLink(tx, {
-        ownerUserId: user.id,
-        friendUserId,
-      });
-      return updated;
+    // Happy path — set linkedUserId on the existing Profile. No
+    // mirror creation. The friend's view of this Profile (and the
+    // matches it appears in) is granted purely through the
+    // linkedUserId join used by the match-visibility filter.
+    const profile = await prisma.profile.update({
+      where: { id },
+      data: { linkedUserId: friendUserId },
+      select: profileSelect,
     });
     return c.json({ status: "linked" as const, profile });
   })
@@ -508,10 +466,10 @@ export const profilesRoutes = new Hono<AuthEnv>()
       });
       return c.json(profile);
     }
-    // Linking and unlinking are owner/friend symmetric, but the
-    // self-Profile is special: it represents "you" in your own
-    // suggestions and history, and an unlink would orphan it from
-    // your auth account. Reject explicitly so the UI never offers it.
+    // The self-Profile (ownerId === linkedUserId) is special: it
+    // represents "you" in your own suggestions and history. Unlinking
+    // would orphan it from your auth account; reject explicitly so
+    // the UI never offers it.
     if (target.ownerId === target.linkedUserId) {
       return c.json(
         { error: "Cannot unlink your own self-profile" },
@@ -519,30 +477,14 @@ export const profilesRoutes = new Hono<AuthEnv>()
       );
     }
 
-    // Bilateral unlink mirrors the bilateral link path: the
-    // counterpart row on the *other* user's account (same pair of
-    // user ids, swapped) gets its `linkedUserId` cleared too.
-    // Without this the link is asymmetric — matches that were only
-    // visible via the counterpart would keep flowing one direction,
-    // which contradicts the user's "we're not connected anymore"
-    // mental model. The counterpart is identified by the composite
-    // unique (owner, linked) the bilateral upsert keys on.
-    const ownerSideUserId = target.ownerId;
-    const linkedSideUserId = target.linkedUserId;
-    const profile = await prisma.$transaction(async (tx) => {
-      const updated = await tx.profile.update({
-        where: { id },
-        data: { linkedUserId: null },
-        select: profileSelect,
-      });
-      await tx.profile.updateMany({
-        where: {
-          ownerId: linkedSideUserId,
-          linkedUserId: ownerSideUserId,
-        },
-        data: { linkedUserId: null },
-      });
-      return updated;
+    // Clear linkedUserId on this single row. Under the single-Profile
+    // model there is no mirror row to keep in sync — visibility for
+    // the formerly-linked user drops out of the match-visibility
+    // filter on the next pull-sync.
+    const profile = await prisma.profile.update({
+      where: { id },
+      data: { linkedUserId: null },
+      select: profileSelect,
     });
     return c.json(profile);
   });

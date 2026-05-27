@@ -4,8 +4,8 @@ import { prisma } from "../lib/prisma.js";
 import {
   ProfileAuthorizationError,
   resolvePlayerByProfileId,
-  resolvePlayerProfileId,
 } from "../lib/match-profiles.js";
+import { matchVisibilityWhere } from "../lib/profile-scope.js";
 import type { AuthUser } from "../middleware/auth.js";
 
 type AuthEnv = {
@@ -19,13 +19,38 @@ type AuthEnv = {
 // lowercase alphanumeric.
 const CUID_RE = /^[a-z][a-z0-9]{19,31}$/;
 
+// Player serialization projects the full Profile shape so clients can
+// render any player regardless of whether they have visibility into the
+// Profile row standalone. Without this, a friend-created match would
+// arrive on the owner's side with Player rows pointing at Profiles the
+// owner can't see (e.g. the friend's self-Profile), and the UI would
+// have no name/avatar to render.
+const playerProfileInclude = {
+  profile: {
+    select: {
+      id: true,
+      ownerId: true,
+      linkedUserId: true,
+      alias: true,
+      customAvatarUrl: true,
+      useLinkedAvatar: true,
+      linkedUser: {
+        select: {
+          id: true,
+          name: true,
+          alias: true,
+          avatarUrl: true,
+        },
+      },
+    },
+  },
+} as const satisfies Prisma.PlayerInclude;
+
 const matchInclude = {
   game: true,
   players: {
     orderBy: { position: "asc" },
-    include: {
-      user: { select: { name: true, alias: true } },
-    },
+    include: playerProfileInclude,
   },
   scores: true,
 } as const satisfies Prisma.MatchInclude;
@@ -45,8 +70,6 @@ export const matchesRoutes = new Hono<AuthEnv>()
       gameId?: string;
       players?: {
         id?: string;
-        name?: string;
-        userId?: string;
         profileId?: string;
         position: number;
       }[];
@@ -75,16 +98,15 @@ export const matchesRoutes = new Hono<AuthEnv>()
       );
     }
 
-    // Validate player payload. As of PR 6-B clients send `profileId`
-    // (the picker output); legacy clients still send `name` + optional
-    // `userId`. Exactly one of those two paths is required.
+    // Every Player must reference an existing Profile. The legacy
+    // name-only / userId attribution paths were removed in 6-C — clients
+    // resolve each seat to a Profile via the picker/autocomplete before
+    // submit. Reject any payload that still uses the old shape so the
+    // failure mode is loud rather than producing rows we can't render.
     for (const p of players) {
-      const hasProfileId = typeof p.profileId === "string";
-      const hasName =
-        typeof p.name === "string" && p.name.trim().length > 0;
-      if (!hasProfileId && !hasName) {
+      if (typeof p.profileId !== "string" || !CUID_RE.test(p.profileId)) {
         return c.json(
-          { error: "Each player needs profileId or name" },
+          { error: "Each player must include a valid profileId" },
           400,
         );
       }
@@ -93,18 +115,6 @@ export const matchesRoutes = new Hono<AuthEnv>()
       }
       if (p.id !== undefined && !CUID_RE.test(p.id)) {
         return c.json({ error: "Invalid player id format" }, 400);
-      }
-      if (hasProfileId && !CUID_RE.test(p.profileId as string)) {
-        return c.json({ error: "Invalid profileId format" }, 400);
-      }
-      // userId attribution is opt-in by the client and only allowed for the
-      // currently authenticated user. Name-based auto-linking would mis-attach
-      // a friend who happens to share the user's name.
-      if (p.userId && p.userId !== user.id) {
-        return c.json(
-          { error: "Players can only be linked to your own user account" },
-          403,
-        );
       }
     }
 
@@ -125,34 +135,21 @@ export const matchesRoutes = new Hono<AuthEnv>()
       }
     }
 
-    // Phase 6-A: every Player gets a Profile alongside the legacy fields.
-    // Resolve each player to a Profile owned by the match creator BEFORE
-    // creating the Match so we can write `profileId` in the same insert.
-    // Phase 6-B: clients pass `profileId` directly when the picker
-    // selected an existing profile; otherwise we still fall through to
-    // the name-based resolver for legacy callers.
-    // Wrapped in a transaction so a per-player resolution failure can't
-    // leave orphan Profile rows.
+    // Resolve each player to a Profile owned by, or linked to, the
+    // creator before inserting the Match so we can verify visibility
+    // and bump `Profile.usedAt` in the same transaction.
     let match: Prisma.MatchGetPayload<{ include: typeof matchInclude }>;
     try {
       match = await prisma.$transaction(async (tx) => {
         const playersWithProfile = await Promise.all(
           players.map(async (p) => {
-            const resolution = p.profileId
-              ? await resolvePlayerByProfileId(tx, {
-                  creatorId: user.id,
-                  profileId: p.profileId,
-                })
-              : await resolvePlayerProfileId(tx, {
-                  creatorId: user.id,
-                  playerName: p.name as string,
-                  playerUserId: p.userId ?? null,
-                });
+            const resolution = await resolvePlayerByProfileId(tx, {
+              creatorId: user.id,
+              profileId: p.profileId as string,
+            });
             return {
               ...(p.id ? { id: p.id } : {}),
-              name: resolution.alias,
               position: p.position,
-              userId: p.userId || null,
               profileId: resolution.profileId,
             };
           }),
@@ -174,19 +171,15 @@ export const matchesRoutes = new Hono<AuthEnv>()
         });
       });
     } catch (err) {
-      // A profileId the caller can't see (or doesn't exist) surfaces as
-      // a typed error from the resolver — translate to the right 4xx
-      // rather than letting it become a 500.
       if (err instanceof ProfileAuthorizationError) {
         return c.json({ error: err.message }, err.status);
       }
       // Idempotency race: when two replays of the same queued POST
       // arrive concurrently, both can pass the `findUnique` check above
       // before either commits, and the second `match.create` trips the
-      // unique-id constraint. We treat that exactly like a successful
+      // unique-id constraint. Treat that exactly like a successful
       // idempotent replay — re-fetch the row that the racing request
-      // just wrote and return it as 200. Without this catch the second
-      // caller would see a 500 and the noise would mask real issues.
+      // just wrote and return it as 200.
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === "P2002" &&
@@ -222,45 +215,19 @@ export const matchesRoutes = new Hono<AuthEnv>()
       sinceDate = parsed;
     }
 
-    // Phase 6-C: matches are visible to the creator *and* to anyone
-    // who has a Profile they own or are linked to among the players.
-    // The PLAN specifies this filter so a linked friend's matches
-    // become mutually visible after the QR-link flow; without it,
-    // friend-side matches that include the bilateral reverse profile
-    // would be invisible to the owner even though their profile is
-    // a Player in the match.
-    const visibilityClause: Prisma.MatchWhereInput = {
-      OR: [
-        { createdById: user.id },
-        {
-          players: {
-            some: {
-              profile: {
-                OR: [{ ownerId: user.id }, { linkedUserId: user.id }],
-              },
-            },
-          },
-        },
-      ],
-    };
-
     const matches = await prisma.match.findMany({
       where: {
         AND: [
-          visibilityClause,
+          matchVisibilityWhere(user.id),
           ...(gameId ? [{ gameId }] : []),
           ...(sinceDate ? [{ updatedAt: { gt: sinceDate } }] : []),
         ],
       },
       include: {
-        // id needed so the client can hydrate `["matches", id]` cache keys
-        // from the list response without an extra detail fetch.
         game: { select: { id: true, name: true, slug: true } },
         players: {
           orderBy: { position: "asc" },
-          include: {
-            user: { select: { name: true, alias: true } },
-          },
+          include: playerProfileInclude,
         },
         scores: true,
       },
@@ -275,27 +242,13 @@ export const matchesRoutes = new Hono<AuthEnv>()
 
     const match = await prisma.match.findFirst({
       where: {
-        id,
-        OR: [
-          { createdById: user.id },
-          {
-            players: {
-              some: {
-                profile: {
-                  OR: [{ ownerId: user.id }, { linkedUserId: user.id }],
-                },
-              },
-            },
-          },
-        ],
+        AND: [{ id }, matchVisibilityWhere(user.id)],
       },
       include: {
         game: true,
         players: {
           orderBy: { position: "asc" },
-          include: {
-            user: { select: { name: true, alias: true } },
-          },
+          include: playerProfileInclude,
         },
         scores: true,
       },

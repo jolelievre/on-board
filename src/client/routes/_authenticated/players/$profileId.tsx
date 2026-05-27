@@ -73,10 +73,26 @@ function ProfileDetailBody({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  // Self = both ownerId and linkedUserId point at the viewer. After
-  // 6-C a friend's profile of you also has `linkedUserId === viewerId`
-  // (with `ownerId === friend.id`); without the composite check, two
-  // rows would render with the "you" badge in the Players tab.
+
+  // Owner-only page: every profile in the Players tab is one the
+  // viewer owns. Direct URL navigation to a profile we don't own (or
+  // the self-Profile, which is edited via Settings) sends the user
+  // back to the listing. Belt-and-braces guard — the same constraint
+  // is enforced server-side on every mutation.
+  useEffect(() => {
+    if (!viewerId) return;
+    if (profile.ownerId !== viewerId) {
+      navigate({ to: "/players", replace: true });
+      return;
+    }
+    if (profile.linkedUserId === viewerId) {
+      navigate({ to: "/settings", replace: true });
+    }
+  }, [profile.ownerId, profile.linkedUserId, viewerId, navigate]);
+
+  // Effectively always false after the redirect above lands, but kept
+  // for the brief pre-redirect render so isSelf-conditional UI doesn't
+  // flash incorrect badges.
   const isSelf =
     profile.linkedUserId === viewerId && profile.ownerId === viewerId;
   const isLinked = profile.linkedUserId !== null;

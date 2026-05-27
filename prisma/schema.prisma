@@ -27,7 +27,6 @@ model User {
   accounts       Account[]
   sessions       Session[]
   createdMatches Match[]   @relation("MatchCreator")
-  players        Player[]
 
   // Profiles owned by this user (i.e. people they've added).
   ownedProfiles  Profile[]      @relation("ProfileOwner")
@@ -120,22 +119,19 @@ model Match {
   scores  Score[]
 }
 
-/// A participant in a match.
-/// Post-Phase 6-A, every Player points to a Profile (the domain entity for
-/// "the person who played"). The legacy `userId` and `name` fields are kept
-/// alongside as dormant columns for backward compatibility with older
-/// clients; they're populated server-side on every create. PR 6-E drops
-/// them after the soak window.
+/// A participant in a match. Always points to a Profile (the domain
+/// entity for "the person who played"). Identity, display name, and
+/// linked-User attribution all flow through `profile` — there is no
+/// denormalized snapshot on the Player row. After PR 6-C's
+/// single-Profile refactor, Player.userId / Player.name (legacy
+/// columns from 6-A) are gone; the only join key is `profileId`.
 model Player {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   matchId   String
-  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  profileId String?  /// The person who played. Nullable until 6-E.
-  profile   Profile? @relation(fields: [profileId], references: [id])
-  userId    String?  /// Legacy: linked User account (kept dormant until 6-E)
-  user      User?    @relation(fields: [userId], references: [id])
-  name      String   /// Legacy: display-name snapshot (kept dormant until 6-E)
-  position  Int      /// Seat/turn order (0-indexed)
+  match     Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  profileId String  /// The person who played.
+  profile   Profile @relation(fields: [profileId], references: [id])
+  position  Int     /// Seat/turn order (0-indexed)
   updatedAt DateTime @updatedAt
 
   scores Score[]

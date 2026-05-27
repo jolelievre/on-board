@@ -23,17 +23,12 @@ function scheduleFlush(): void {
 export type CreateMatchInput = {
   gameId: string;
   /**
-   * Per-slot resolution. As of PR 6-B every entry should carry a
-   * `profileId` — the picker either selected an existing profile or
-   * created one inline before submit. `name` + `userId` remain for the
-   * narrow rematch path that hits a pre-6-A Dexie row whose profileId
-   * is still null; on submit the server falls back to the legacy
-   * name-resolver for that single slot.
+   * Per-slot resolution. Every entry must carry a `profileId`; the
+   * picker (or "create new" inline flow) resolves each seat to a
+   * Profile before submit. There is no longer a name-only fallback.
    */
   players: {
-    profileId?: string | null;
-    name?: string;
-    userId?: string | null;
+    profileId: string;
   }[];
   /** Pre-supplied id (tests/replay). Otherwise generated. */
   id?: string;
@@ -58,25 +53,43 @@ export async function createMatch(
   const matchId = input.id ?? createId();
   const ts = nowIso();
 
-  // Hydrate each slot to the row we want to mirror locally. The picker
-  // passes `profileId`; legacy callers (rematch from pre-6-A rows) still
-  // pass `name`. We look up the local Profile to snapshot its alias into
-  // `Player.name` so the UI has something to render even before the
-  // server response comes back.
+  // Snapshot the local Profile rows so each Player row carries the
+  // embedded `profile` projection the UI reads from. Pull-sync will
+  // overwrite these snapshots with the server's canonical projection
+  // on the next round-trip.
   const players: LocalPlayer[] = await Promise.all(
     input.players.map(async (p, position) => {
-      let name = p.name ?? "";
-      if (p.profileId) {
-        const profile = await db.profiles.get(p.profileId);
-        if (profile) name = profile.alias;
+      const profile = await db.profiles.get(p.profileId);
+      if (!profile) {
+        // Should never happen — the picker only surfaces local profiles
+        // and the inline-create flow writes the row before submitting.
+        throw new Error(
+          `createMatch: profile ${p.profileId} missing from local Dexie`,
+        );
       }
+      const playerProfile = {
+        id: profile.id,
+        ownerId: profile.ownerId,
+        linkedUserId: profile.linkedUserId,
+        alias: profile.alias,
+        customAvatarUrl: profile.customAvatarUrl,
+        useLinkedAvatar: profile.useLinkedAvatar,
+        linkedUser: profile.linkedUser
+          ? {
+              id: profile.linkedUser.id,
+              name: profile.linkedUser.name,
+              alias: profile.linkedUser.alias,
+              avatarUrl: profile.linkedUser.avatarUrl,
+            }
+          : null,
+      };
       return {
         id: createId(),
         matchId,
-        name,
         position,
-        userId: p.userId ?? null,
-        profileId: p.profileId ?? null,
+        profileId: p.profileId,
+        profileLinkedUserId: profile.linkedUserId,
+        profile: playerProfile,
         updatedAt: ts,
       };
     }),
@@ -110,10 +123,7 @@ export async function createMatch(
           players: players.map((p) => ({
             id: p.id,
             position: p.position,
-            ...(p.profileId
-              ? { profileId: p.profileId }
-              : { name: p.name }),
-            ...(p.userId ? { userId: p.userId } : {}),
+            profileId: p.profileId,
           })),
         }),
         createdAt: ts,
@@ -435,54 +445,57 @@ export async function clearCustomAvatar(input: {
 }
 
 /**
- * Collapse `sourceProfileId` into `targetProfileId` for the unclaimed
- * variant (6-B). Optimistically rewrites Dexie's Player rows + deletes
- * the source Profile before the POST returns so the UI updates
- * immediately, then queues the POST so an offline merge replays on
- * reconnect.
+ * Collapse `sourceProfileId` into `targetProfileId`. Optimistically
+ * rewrites Dexie's Player rows + deletes the source Profile before
+ * the POST returns so the UI updates immediately, then queues the
+ * POST so an offline merge replays on reconnect.
  *
- * The 6-B server endpoint rejects linked profiles outright; we don't
- * pre-check here because the UI surface (MergeDialog) only shows
- * unclaimed candidates. A server rejection therefore implies a sync
- * race (target became linked between dialog render and submit) — the
- * queued POST flips to `failed` and the user can retry from a fresh
- * dialog.
+ * Under the single-Profile model (6-C) a merge is always an
+ * owner-side consolidation of two profiles the caller owns. The
+ * server preserves any `linkedUserId` from the source onto the
+ * surviving target when the target lacks one.
  */
 export async function mergeProfile(input: {
   targetProfileId: string;
   sourceProfileId: string;
-  /**
-   * Link-time merge token: required by the server when either profile
-   * is linked. The standalone (unclaimed) merge path leaves it
-   * undefined and the server rejects linked profiles outright.
-   * Caller obtains the token via {@link requestLinkToken} executed by
-   * the friend's session (or, in the link-collision branch, by
-   * forwarding the very same token the friend already minted for the
-   * link attempt).
-   */
-  token?: string;
 }): Promise<void> {
   const ts = nowIso();
   const target = await db.profiles.get(input.targetProfileId);
-  const survivingAlias = target?.alias ?? "";
 
   await db.transaction(
     "rw",
     [db.profiles, db.players, db.syncQueue],
     async () => {
-      // Rewrite every local Player from source → target. We carry the
-      // surviving alias forward into the legacy `name` column so the
-      // dormant value matches what the server is about to snapshot.
+      // Rewrite every local Player from source → target so the UI
+      // flips immediately. The embedded `profile` projection on each
+      // row gets refreshed by the next pullSync.
       const players = await db.players
         .where("profileId")
         .equals(input.sourceProfileId)
         .toArray();
-      for (const p of players) {
-        p.profileId = input.targetProfileId;
-        if (survivingAlias) p.name = survivingAlias;
-        p.updatedAt = ts;
-      }
-      if (players.length > 0) {
+      if (players.length > 0 && target) {
+        const targetProjection = {
+          id: target.id,
+          ownerId: target.ownerId,
+          linkedUserId: target.linkedUserId,
+          alias: target.alias,
+          customAvatarUrl: target.customAvatarUrl,
+          useLinkedAvatar: target.useLinkedAvatar,
+          linkedUser: target.linkedUser
+            ? {
+                id: target.linkedUser.id,
+                name: target.linkedUser.name,
+                alias: target.linkedUser.alias,
+                avatarUrl: target.linkedUser.avatarUrl,
+              }
+            : null,
+        };
+        for (const p of players) {
+          p.profileId = input.targetProfileId;
+          p.profileLinkedUserId = target.linkedUserId;
+          p.profile = targetProjection;
+          p.updatedAt = ts;
+        }
         await db.players.bulkPut(players);
       }
 
@@ -491,10 +504,7 @@ export async function mergeProfile(input: {
       await db.syncQueue.add({
         method: "POST",
         url: `/api/profiles/${input.targetProfileId}/merge`,
-        body: JSON.stringify({
-          sourceProfileId: input.sourceProfileId,
-          ...(input.token ? { token: input.token } : {}),
-        }),
+        body: JSON.stringify({ sourceProfileId: input.sourceProfileId }),
         createdAt: ts,
         retries: 0,
         status: "pending",

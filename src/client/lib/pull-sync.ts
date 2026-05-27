@@ -29,72 +29,49 @@ const MIN_PULL_INTERVAL_MS = 5_000;
  * fills the post-reload cold cache regardless. */
 let lastPullStartedAt = 0;
 
-/** Patch the cached `player.user.alias` and the self-Profile's
- * `alias` + `linkedUser.alias` on every local row tied to the given
- * user id.
+/** Patch the cached Profile rows for the self-Profile and any profile
+ * the given user is the linked target of, after a Settings alias edit.
+ *
+ * Under the single-Profile model, the Player row carries the embedded
+ * Profile projection — so when a Profile's `linkedUser.alias` changes,
+ * the Player rows that reference that Profile already see the new
+ * value on the next pull-sync (the server re-projects from the live
+ * join). We only need to refresh the Profile rows themselves locally
+ * so the Settings flip is visible without waiting for the next pull.
  *
  * Alias edits don't bump `Match.updatedAt` on the server (they only
  * touch the User row), so a subsequent `pullSync()` would LWW-skip
- * every match and leave Dexie's mirrored values stale. Settings calls
- * this directly after `updateProfile` so the UI sees the new alias on
- * the next render without waiting for any external bump.
- *
- * Phase 6-A: also updates `profiles` rows. The history list now reads
- * Profile.alias (via the Player → Profile join in `useMatchList`), so
- * leaving Dexie profiles stale would break retroactive renames in the
- * exact way the legacy player.user.alias mirror was designed to fix. */
+ * every match and leave Dexie's player projection stale. We force a
+ * full match re-pull in Settings after this function returns to
+ * refresh the embedded `profile.linkedUser.alias` snapshots.
+ */
 export async function refreshLocalAliases(
   userId: string,
   newAlias: string | null,
 ): Promise<void> {
   const ts = new Date().toISOString();
-
-  const players = await db.players.where("userId").equals(userId).toArray();
-  if (players.length > 0) {
-    for (const p of players) {
-      p.user = {
-        name: p.user?.name ?? p.name,
-        alias: newAlias,
-      };
-      p.updatedAt = ts;
-    }
-    await db.players.bulkPut(players);
-  }
-
-  // Update profile rows for the self-Profile (ownerId === linkedUserId
-  // === userId) AND any profile this user is the linked target of.
-  // The first case keeps the user's own display name in sync; the
-  // second is forward-compat with the 6-C link feature, where a
-  // friend's profile would carry our auth alias in its linkedUser
-  // projection. Both queries are no-ops when nothing matches.
   const linkedProfiles = await db.profiles
     .where("linkedUserId")
     .equals(userId)
     .toArray();
-  if (linkedProfiles.length > 0) {
-    for (const profile of linkedProfiles) {
-      if (profile.linkedUser) {
-        profile.linkedUser = {
-          ...profile.linkedUser,
-          alias: newAlias,
-        };
-      }
-      // For the self-Profile, the canonical display alias is the user's
-      // own choice. Mirror it so all viewers (including third parties
-      // post-6-C) get the fresh value. When the user clears their alias,
-      // resolveSelfAlias picks the server's fallback (User.name → "Me")
-      // so the local Profile.alias stays in lockstep with what
-      // `syncSelfProfileAlias` wrote on the server.
-      if (profile.ownerId === userId) {
-        profile.alias = resolveSelfAlias({
-          name: profile.linkedUser?.name ?? "",
-          alias: newAlias,
-        });
-      }
-      profile.updatedAt = ts;
+  if (linkedProfiles.length === 0) return;
+
+  for (const profile of linkedProfiles) {
+    if (profile.linkedUser) {
+      profile.linkedUser = {
+        ...profile.linkedUser,
+        alias: newAlias,
+      };
     }
-    await db.profiles.bulkPut(linkedProfiles);
+    if (profile.ownerId === userId) {
+      profile.alias = resolveSelfAlias({
+        name: profile.linkedUser?.name ?? "",
+        alias: newAlias,
+      });
+    }
+    profile.updatedAt = ts;
   }
+  await db.profiles.bulkPut(linkedProfiles);
 }
 
 /** Read a key from the singleton syncMeta keystore. */
@@ -327,11 +304,10 @@ async function mergeMatches(rows: ApiMatch[]): Promise<void> {
       playersToPut.push({
         id: p.id,
         matchId: m.id,
-        profileId: p.profileId ?? null,
-        userId: p.userId ?? null,
-        name: p.name,
+        profileId: p.profileId,
+        profileLinkedUserId: p.profile.linkedUserId,
         position: p.position,
-        user: p.user ?? null,
+        profile: p.profile,
         updatedAt: p.updatedAt ?? incomingUpdatedAt,
       });
     }

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
 import { useGame } from "../../../hooks/data/useGame";
 import { useMatchList } from "../../../hooks/data/useMatchList";
+import type { Player } from "../../../types/match";
 import {
   computeTotalsByPlayer,
   type SevenWondersVictoryType,
@@ -21,12 +22,6 @@ export const Route = createFileRoute("/_authenticated/games/$slug")({
   component: GameDetailPage,
 });
 
-type Player = {
-  id: string;
-  name: string;
-  position: number;
-  user?: { name: string; alias: string | null } | null;
-};
 type ScoreRow = { playerId: string; category: string; value: number };
 type MatchListItem = {
   id: string;

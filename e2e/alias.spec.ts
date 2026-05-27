@@ -85,17 +85,22 @@ test.describe("Alias — settings + propagation", () => {
 
     // Wait for the server to actually report the cleared alias before
     // navigating. The savedBadge means the PATCH 200 came back, but
-    // better-auth's per-process session cache can still serve the old user
-    // payload to the next /api/players/suggestions request for a brief
-    // window — observed flake when parallel workers contend for the dev
-    // server. Poll the API directly so the UI assertion below has stable
-    // state to render against.
+    // better-auth's per-process session cache can still serve the old
+    // user payload to the next /api/profiles request for a brief window.
+    // Poll the API directly so the UI assertion below has stable state.
     await expect
       .poll(
         async () => {
-          const res = await page.request.get("/api/players/suggestions");
-          const list = (await res.json()) as { name: string; isSelf: boolean }[];
-          return list.find((s) => s.isSelf)?.name;
+          const res = await page.request.get("/api/profiles");
+          const list = (await res.json()) as {
+            ownerId: string;
+            linkedUserId: string | null;
+            alias: string;
+          }[];
+          const self = list.find(
+            (p) => p.ownerId === user.id && p.linkedUserId === user.id,
+          );
+          return self?.alias;
         },
         { timeout: 10000 },
       )
@@ -115,42 +120,6 @@ test.describe("Alias — settings + propagation", () => {
     ).toHaveCount(0);
   });
 
-  test("editing the alias via the Players tab updates the new-match self suggestion", async ({
-    page,
-  }) => {
-    // Reproduces the bug where renaming via /players/<self> didn't
-    // refresh the new-match self suggestion because the legacy hook
-    // read the alias from the auth session (only updated by the
-    // Settings page) instead of from Dexie's self-Profile (updated by
-    // patchProfile too). 6-B's picker reads from Dexie directly, so the
-    // refresh is automatic — this test guards against regression.
-    await signUpFresh(page);
-
-    // Open the self-Profile detail page. The list is sorted with self
-    // pinned at the top, so the first row is the self entry.
-    await page.goto("/players");
-    await page.waitForLoadState("domcontentloaded");
-    await page.locator("[data-testid='player-row']").first().click();
-    await page.waitForURL(/\/players\/[^/?#]+$/);
-
-    const aliasInput = page.locator("[data-testid='profile-alias-input']");
-    await expect(aliasInput).toBeVisible();
-    await aliasInput.fill("Captain");
-    await aliasInput.blur();
-    await expect(
-      page.locator("[data-testid='profile-alias-saved']"),
-    ).toBeVisible();
-
-    // The new alias must now appear as the self suggestion chip in the
-    // new-match form, just like it does when edited via Settings.
-    await page.goto("/games/7-wonders-duel/new");
-    await page.waitForLoadState("domcontentloaded");
-    await page.click("[data-testid='new-match-player-0']");
-    await expect(
-      page.locator("[data-testid='new-match-suggestion-0-Captain']"),
-    ).toBeVisible();
-  });
-
   test("alias retroactively updates match history for linked players", async ({
     page,
   }) => {
@@ -160,9 +129,9 @@ test.describe("Alias — settings + propagation", () => {
     // /api/matches directly. This way the test exercises the same code path
     // a real user takes — including the Dexie write + sync-queue enqueue
     // that mutations.createMatch performs — instead of bypassing it.
-    // Clicking the self-suggestion chip is what attaches the player to the
-    // User row (sends userId), so the alias propagation logic has something
-    // to link to.
+    // Clicking the self-suggestion chip resolves the slot to the self-
+    // Profile (ownerId === linkedUserId === me), so the alias propagation
+    // logic has the right join key to find this match later.
     await page.goto("/games/7-wonders-duel/new");
     await page.waitForLoadState("domcontentloaded");
 
@@ -185,8 +154,9 @@ test.describe("Alias — settings + propagation", () => {
 
     // Use client-side navigation (BottomNav → game card) instead of
     // page.goto so the in-memory React/Dexie state carries over. After
-    // refreshLocalAliases updates Dexie's player.user.alias rows, the
-    // game detail's useLiveQuery picks up the new alias on next render.
+    // refreshLocalAliases updates Dexie's self-Profile alias and the
+    // pull-sync refreshes the match projection, the game detail's
+    // useLiveQuery picks up the new alias on next render.
     await page.click("nav[aria-label='Primary'] a[href='/games']");
     await page.waitForURL("**/games");
     await page.click("a[href='/games/7-wonders-duel']");

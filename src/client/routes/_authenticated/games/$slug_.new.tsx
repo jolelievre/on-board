@@ -116,8 +116,8 @@ function NewMatchPage() {
       return {
         gameId: match.gameId,
         players: players.map((p) => ({
-          name: p.name,
-          profileId: p.profileId ?? null,
+          name: p.profile.alias,
+          profileId: p.profileId,
         })),
         metadata: (match.metadata ?? null) as Record<string, unknown> | null,
       };
@@ -141,18 +141,12 @@ function NewMatchPage() {
   const validRematchSource =
     rematchSource && rematchSource.gameId === game.id ? rematchSource : null;
 
-  const sessionUser = session.user as {
-    id: string;
-    name: string;
-    alias?: string | null;
-  };
+  const sessionUser = session.user as { id: string };
   return (
     <NewMatchForm
       slug={slug}
       game={game}
       viewerId={sessionUser.id}
-      viewerName={sessionUser.name}
-      viewerAlias={sessionUser.alias ?? null}
       rematchSource={validRematchSource}
     />
   );
@@ -162,19 +156,11 @@ function NewMatchForm({
   slug,
   game,
   viewerId,
-  viewerName,
-  viewerAlias,
   rematchSource,
 }: {
   slug: string;
   game: LocalGame;
   viewerId: string;
-  /** The viewer's auth `User.name`, used to detect typed-self
-   * (when the user free-types their own name in a slot). */
-  viewerName: string;
-  /** The viewer's auth `User.alias` if they've set one — same
-   * purpose as `viewerName`. */
-  viewerAlias: string | null;
   rematchSource: RematchSource | null;
 }) {
   const { t } = useTranslation();
@@ -299,32 +285,8 @@ function NewMatchForm({
     try {
       const visibleProfiles = await readVisibleProfiles(viewerId);
       const aliasIndex = new Map<string, string>();
-      // Track which profile ids represent the viewer themselves so
-      // the create-match payload can carry `userId: viewerId` on
-      // that slot. The server needs `Player.userId` set on the
-      // creator's seat — without it, the friend-side
-      // `collectPersonPlayers` aggregation can't find the match
-      // under their bilateral linked profile. The picker already
-      // computes `isSelf` per suggestion; this is the submit-time
-      // mirror of that signal.
-      const selfProfileIds = new Set<string>();
       for (const p of visibleProfiles) {
         aliasIndex.set(p.alias.trim().toLowerCase(), p.id);
-        if (p.ownerId === viewerId && p.linkedUserId === viewerId) {
-          selfProfileIds.add(p.id);
-        }
-      }
-      // Free-typed text that case-insensitively matches the
-      // viewer's own User name or alias also counts as "me" — the
-      // user is referring to themselves under a label that doesn't
-      // happen to be their self-Profile's alias (e.g. typed full
-      // name when the alias is a nickname). Keeps the form
-      // forgiving without leaking alias-matching anywhere outside
-      // this single client-side branch.
-      const selfTypedAliases = new Set<string>();
-      for (const raw of [viewerName, viewerAlias]) {
-        const trimmed = raw?.trim().toLowerCase();
-        if (trimmed) selfTypedAliases.add(trimmed);
       }
 
       const resolved = await Promise.all(
@@ -348,21 +310,7 @@ function NewMatchForm({
         }),
       );
 
-      const players = resolved.map((profileId, i) => {
-        // Two ways this slot represents the viewer:
-        //   1. The resolved profile *is* the self-profile.
-        //   2. The user free-typed their own name/alias and the
-        //      resolver mapped it to some other owned profile of
-        //      theirs (or just created one). Same semantic
-        //      intent.
-        const typed = queries[i].toLowerCase();
-        const isSelf =
-          selfProfileIds.has(profileId) || selfTypedAliases.has(typed);
-        return {
-          profileId,
-          ...(isSelf ? { userId: viewerId } : {}),
-        };
-      });
+      const players = resolved.map((profileId) => ({ profileId }));
 
       const metadata =
         rematchSource && game.slug === "skull-king"
