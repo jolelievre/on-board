@@ -58,23 +58,47 @@ export function useProfileList(viewerId: string | undefined): UseProfileListResu
  * given profile.
  *
  * Under the single-Profile model, a person is represented by one or
- * more Profile rows sharing the same `linkedUserId`. The Player row
- * carries `profileLinkedUserId` (denormalized from the pull-sync
- * projection of `Profile.linkedUserId`) so we can find every Player
- * row representing this person across owners with a single indexed
- * read. Unclaimed profiles (no `linkedUserId`) only match the direct
- * `profileId` query — there's no shared person to widen to.
+ * more Profile rows sharing the same `linkedUserId`. We mirror the
+ * server's match-visibility predicate (`matchVisibilityWhere`) and
+ * union two queries:
+ *   - `profileId === profile.id` catches every Player row pointing
+ *     directly at this Profile (the owner-side history, including
+ *     rows written before the Profile was linked — their denormalised
+ *     `profileLinkedUserId` is stale and the link transition does not
+ *     bump `Match.updatedAt`, so pull-sync won't refresh them either).
+ *   - `profileLinkedUserId === profile.linkedUserId` catches Player
+ *     rows from matches created on another device under a *different*
+ *     Profile row that shares the same linked auth user (the friend's
+ *     own self-Profile).
+ *
+ * Without this union, freshly-linked profiles would lose their entire
+ * pre-link match history from the UI until a full pull-sync rewrote
+ * every affected Player row.
  */
 async function collectPersonPlayers(
   profile: { id: string; linkedUserId: string | null },
 ): Promise<{ id: string; matchId: string }[]> {
-  if (!profile.linkedUserId) {
-    return db.players.where("profileId").equals(profile.id).toArray();
-  }
-  return db.players
-    .where("profileLinkedUserId")
-    .equals(profile.linkedUserId)
+  const directPromise = db.players
+    .where("profileId")
+    .equals(profile.id)
     .toArray();
+  if (!profile.linkedUserId) return directPromise;
+
+  const [direct, viaLinkedUser] = await Promise.all([
+    directPromise,
+    db.players
+      .where("profileLinkedUserId")
+      .equals(profile.linkedUserId)
+      .toArray(),
+  ]);
+  const seen = new Set<string>();
+  const merged: { id: string; matchId: string }[] = [];
+  for (const p of [...direct, ...viaLinkedUser]) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    merged.push(p);
+  }
+  return merged;
 }
 
 /** Reactive read of one profile by id. Returns `status: "missing"` when

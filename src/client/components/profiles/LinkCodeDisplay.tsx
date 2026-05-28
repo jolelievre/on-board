@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import QRCode from "qrcode";
 import { requestLinkToken } from "../../lib/mutations";
+import { db, type LocalProfile3 } from "../../lib/db";
 import { Button } from "../ui/Button";
+import { LinkCelebration } from "./LinkCelebration";
 import styles from "./LinkCodeDisplay.module.css";
 
 type FetchState =
@@ -10,23 +12,38 @@ type FetchState =
   | { kind: "loading" }
   | { kind: "ready"; token: string; expiresAt: number }
   | { kind: "expired" }
+  | { kind: "celebrating" }
   | { kind: "error"; message: string };
 
 /**
  * Render the caller's link token as a scannable QR. The friend points
- * their owner-app's scanner at this surface to bind one of their
- * profiles to the caller's auth account.
+ * their owner-app's scanner at this surface to bilaterally link their
+ * own profile with the one this display is anchored to.
  *
  * Token lifecycle (matches server `LINK_TOKEN_TTL_MS = 60_000`):
- *   - On mount, request a fresh token; render QR.
+ *   - On mount, request a fresh token scoped to `profile.id`; render QR.
  *   - Tick a 1 s countdown; at expiry, swap the QR for an explicit
  *     "Refresh" button — minting silently would risk a stale display
  *     between renders.
- *   - On unmount, the in-flight token simply lapses; no server cleanup.
- *
- * No prop for the User id: the server reads it from the session.
+ *   - While the QR is live, poll `/api/profiles/:id` every 2 s. The
+ *     moment the scanner POSTs and the server flips `linkedUserId` on
+ *     our row, we mirror it into Dexie, swap the QR for a celebration
+ *     overlay, then signal the parent via `onLinked` so it can collapse
+ *     into the linked card.
+ *   - Polling stops automatically on link success, on token expiry, on
+ *     unmount, and on a fetch failure (we don't loop forever on a
+ *     network error).
  */
-export function LinkCodeDisplay() {
+export function LinkCodeDisplay({
+  profile,
+  onLinked,
+}: {
+  profile: LocalProfile3;
+  /** Called when the bilateral link lands. Parent typically collapses
+   * the QR panel + the linked-card view takes over (which is driven by
+   * Dexie's reactive read of the profile). */
+  onLinked?: (linkedProfile: LocalProfile3) => void;
+}) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [state, setState] = useState<FetchState>({ kind: "idle" });
@@ -35,7 +52,7 @@ export function LinkCodeDisplay() {
   const mint = async () => {
     setState({ kind: "loading" });
     try {
-      const res = await requestLinkToken();
+      const res = await requestLinkToken({ sourceProfileId: profile.id });
       setState({
         kind: "ready",
         token: res.token,
@@ -85,10 +102,60 @@ export function LinkCodeDisplay() {
     return () => window.clearInterval(id);
   }, [state]);
 
+  // Poll for the bilateral link landing. Active only while we have a
+  // live QR on screen; the moment we detect `linkedUserId` on our own
+  // profile flipped from null → set, we mirror Dexie and flip to the
+  // celebration overlay. The parent's reactive `useProfile` query
+  // already drives the linked-card render once Dexie updates, so all
+  // we owe here is the brief celebration window.
+  useEffect(() => {
+    if (state.kind !== "ready") return;
+    let cancelled = false;
+    const id = window.setInterval(async () => {
+      try {
+        const res = await fetch(`/api/profiles/${profile.id}`, {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const fresh = (await res.json()) as LocalProfile3;
+        if (cancelled) return;
+        if (fresh.linkedUserId !== null) {
+          await db.profiles.put(fresh);
+          setState({ kind: "celebrating" });
+        }
+      } catch {
+        // Network blip — try again on the next tick. We don't surface
+        // a transient poll failure as an error state because the QR
+        // is still valid and the next interval may succeed.
+      }
+    }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [state.kind, profile.id]);
+
   if (state.kind === "loading" || state.kind === "idle") {
     return (
       <div className={styles.root} data-testid="link-code-display">
         <p className={styles.hint}>{t("link.code.loading")}</p>
+      </div>
+    );
+  }
+
+  if (state.kind === "celebrating") {
+    return (
+      <div className={styles.root} data-testid="link-code-display">
+        <LinkCelebration
+          onDone={() => {
+            // Hand control back to the parent — Dexie already holds the
+            // linked row, so the linked-card branch of the parent's
+            // reactive render will display immediately.
+            void db.profiles.get(profile.id).then((linked) => {
+              if (linked) onLinked?.(linked);
+            });
+          }}
+        />
       </div>
     );
   }
@@ -141,7 +208,6 @@ export function LinkCodeDisplay() {
       >
         {t("link.code.expiresIn", { seconds: secondsLeft })}
       </p>
-      <p className={styles.hint}>{t("link.code.hint")}</p>
     </div>
   );
 }

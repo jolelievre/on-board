@@ -5,6 +5,7 @@ import { linkProfile, mergeProfile } from "../../lib/mutations";
 import type { LocalProfile3 } from "../../lib/db";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
+import { LinkCelebration } from "./LinkCelebration";
 import styles from "./LinkScanner.module.css";
 
 type ScannerState =
@@ -13,9 +14,14 @@ type ScannerState =
   | { kind: "submitting"; token: string }
   | { kind: "linked" }
   | {
-      kind: "merge_required";
+      kind: "merge_required_scanner";
       existing: { id: string; alias: string };
       target: { id: string; alias: string };
+    }
+  | {
+      kind: "merge_required_shower";
+      existingAlias: string;
+      targetAlias: string;
     }
   | { kind: "merging" }
   | { kind: "merged"; survivorId: string }
@@ -66,11 +72,17 @@ export function LinkScanner({
       const res = await linkProfile({ profileId: profile.id, token });
       if (res.status === "linked") {
         setState({ kind: "linked" });
-      } else {
+      } else if (res.side === "scanner") {
         setState({
-          kind: "merge_required",
+          kind: "merge_required_scanner",
           existing: res.existing,
           target: res.target,
+        });
+      } else {
+        setState({
+          kind: "merge_required_shower",
+          existingAlias: res.existingAlias,
+          targetAlias: res.targetAlias,
         });
       }
     } catch (err) {
@@ -144,7 +156,7 @@ export function LinkScanner({
   }, []);
 
   const handleMergeConfirm = async () => {
-    if (state.kind !== "merge_required") return;
+    if (state.kind !== "merge_required_scanner") return;
     const survivorId = state.existing.id;
     const sourceId = state.target.id;
     setState({ kind: "merging" });
@@ -223,19 +235,12 @@ export function LinkScanner({
       )}
 
       {state.kind === "linked" && (
-        <>
-          <p className={styles.status} data-testid="link-scanner-linked">
-            {t("link.scanner.linked")}
-          </p>
-          <div className={styles.actions}>
-            <Button type="button" variant="primary" onClick={onDone}>
-              {t("common.done")}
-            </Button>
-          </div>
-        </>
+        <div data-testid="link-scanner-linked">
+          <LinkCelebration onDone={onDone} />
+        </div>
       )}
 
-      {state.kind === "merge_required" && (
+      {state.kind === "merge_required_scanner" && (
         <>
           <p
             className={styles.hint}
@@ -263,6 +268,25 @@ export function LinkScanner({
               iconBefore={<Icon name="merge" size={16} />}
             >
               {t("link.scanner.mergeConfirm")}
+            </Button>
+          </div>
+        </>
+      )}
+
+      {state.kind === "merge_required_shower" && (
+        <>
+          <p
+            className={styles.error}
+            data-testid="link-scanner-shower-merge"
+          >
+            {t("link.scanner.showerMergeNeeded", {
+              existing: state.existingAlias,
+              target: state.targetAlias,
+            })}
+          </p>
+          <div className={styles.actions}>
+            <Button type="button" variant="primary" onClick={onDone}>
+              {t("common.done")}
             </Button>
           </div>
         </>

@@ -529,19 +529,25 @@ export type LinkTokenResponse = {
 };
 
 /**
- * Ask the server to mint a short-lived signed token attesting that the
- * caller is themselves. The friend will scan this and POST it to bind
- * one of their local profiles to the caller's auth User. The server
- * pulls the User id from the session — there is no parameter.
+ * Ask the server to mint a short-lived signed token anchored on the
+ * caller's owned profile `sourceProfileId`. The friend's app scans
+ * this and POSTs it to their own owned profile — the link is bilateral
+ * by construction. The caller's User id is read from the session, so
+ * the only parameter is the source profile id.
  */
-export async function requestLinkToken(): Promise<LinkTokenResponse> {
+export async function requestLinkToken(input: {
+  sourceProfileId: string;
+}): Promise<LinkTokenResponse> {
   if (!navigator.onLine) {
     throw new Error("A network connection is required to show a link code");
   }
-  const res = await fetch("/api/profiles/link-token", {
-    method: "POST",
-    credentials: "include",
-  });
+  const res = await fetch(
+    `/api/profiles/${input.sourceProfileId}/link-token`,
+    {
+      method: "POST",
+      credentials: "include",
+    },
+  );
   if (!res.ok) {
     throw new Error(`Could not mint link token (${res.status})`);
   }
@@ -549,21 +555,37 @@ export async function requestLinkToken(): Promise<LinkTokenResponse> {
 }
 
 /**
- * Bind an owned, unclaimed Profile to the friend's auth User. Returns
- * either `{ status: "linked", profile }` (happy path — server updated
- * the row) or `{ status: "merge_required", existing, target }` when
- * the owner already has another Profile linked to the same friend.
+ * Bilaterally link two unclaimed Profiles representing the same person:
+ * `profileId` (the scanner's owned profile) and the token-embedded
+ * `sourceProfileId` (the shower's owned profile). On the happy path,
+ * the server returns both updated rows in one shot and we mirror both
+ * into Dexie so the scanner's Players tab + the shower's own profile
+ * (if they're on this device) flip to linked without a pull-sync.
  *
- * The caller's UI handles the `merge_required` branch by confirming
- * the merge with the user and calling {@link mergeProfile} with the
- * same token (the server re-verifies it).
+ * Two merge-required branches surface:
+ *  - `side: "scanner"` → the caller already has another profile linked
+ *    to the shower; UI prompts to merge.
+ *  - `side: "shower"` → the shower already has another profile linked
+ *    to the caller; UI surfaces a non-actionable message and the
+ *    caller asks their friend to merge first.
  */
 export type LinkProfileResponse =
-  | { status: "linked"; profile: LocalProfile3 }
+  | {
+      status: "linked";
+      profile: LocalProfile3;
+      sourceProfile: LocalProfile3;
+    }
   | {
       status: "merge_required";
+      side: "scanner";
       existing: { id: string; alias: string };
       target: { id: string; alias: string };
+    }
+  | {
+      status: "merge_required";
+      side: "shower";
+      existingAlias: string;
+      targetAlias: string;
     };
 
 export async function linkProfile(input: {
@@ -583,28 +605,31 @@ export async function linkProfile(input: {
     const text = await res.text();
     throw new Error(text || `Link failed (${res.status})`);
   }
-  const body = (await res.json()) as
-    | { status: "linked"; profile: LocalProfile3 }
-    | LinkProfileResponse;
+  const body = (await res.json()) as LinkProfileResponse;
   if (body.status === "linked") {
-    // Mirror the server's authoritative row immediately so the
-    // Players tab flips from "unclaimed" → "linked" without waiting
-    // for the next pullSync.
+    // Mirror both authoritative rows immediately so the local Dexie
+    // matches the server. The shower's `sourceProfile` may or may not
+    // exist locally (it does if the shower is the same user on this
+    // device, e.g. two browser profiles); putting it is a no-op when
+    // the row isn't reachable through other queries.
     await db.profiles.put(body.profile);
+    await db.profiles.put(body.sourceProfile);
   }
   return body;
 }
 
 /**
- * Sever the link between a Profile and an auth User. Either the owner
- * or the linked user can call this. Self-Profiles cannot be unlinked
- * — the server enforces that and returns 409.
+ * Bilaterally sever a link. The server clears `linkedUserId` on both
+ * `:id` and the counterpart profile (the other side of the bilateral
+ * pair) in one transaction; we mirror both into Dexie so the local
+ * Players tab reflects the change without waiting for the next
+ * pull-sync. Either the owner or the linked user can call this; the
+ * server enforces that authorization. Self-Profiles cannot be
+ * unlinked — the server returns 409.
  *
- * On success we mirror the updated row into Dexie so the UI flips
- * back to the unclaimed badge immediately. When the linked user
- * unlinks themself, the Profile drops out of their visibility filter
- * server-side; we also delete it locally so it disappears from the
- * Players tab without waiting for a full pullSync.
+ * Matches that were only visible via the now-broken bilateral link
+ * are pruned from local Dexie afterwards — the incremental `?since=`
+ * pull cannot represent deletions.
  */
 export async function unlinkProfile(input: {
   profileId: string;
@@ -631,14 +656,12 @@ export async function unlinkProfile(input: {
     await db.profiles.put(updated);
   }
 
-  // Matches that were only visible via the now-unlinked profile
-  // need to drop out of the local mirror too — the incremental
-  // `?since=` pull can't represent deletions, so they would
-  // otherwise linger forever. Authoritative source: re-fetch the
-  // full match list (post-unlink the server already applies the
-  // narrowed visibility filter) and prune any local match whose
-  // id is missing from the response, excluding matches that are
-  // still pending a POST in the sync queue.
+  // The counterpart profile (the other half of the bilateral link)
+  // is owned by the friend, so it never appears in our own
+  // `/api/profiles` response. There is therefore nothing to mirror
+  // locally — pruning matches below covers the visibility side. The
+  // friend's own device will pick up the unlink on its next
+  // `/api/profiles` pull.
   await pruneLocalMatchesAgainstServer();
 }
 

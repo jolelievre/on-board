@@ -38,11 +38,6 @@
       "hint": "Add OnBoard to your home screen for quick access",
       "cta": "Add to home screen",
       "iosHint": "On iOS, tap the Share button in Safari, then \"Add to Home Screen\"."
-    },
-    "linkCode": {
-      "title": "Link code",
-      "hint": "Show your link code so a friend can attach the profile they keep for you to your account.",
-      "cta": "Show my link code"
     }
   },
   "games": {
@@ -313,28 +308,33 @@
     "linkedBlocked": "Use the QR link flow on the profile page to consolidate linked profiles."
   },
   "link": {
-    "selfTitle": "Your link code",
-    "selfHint": "Show this QR to a friend so they can attach their record of you to your account. Your past matches together become visible to both of you.",
-    "showCode": "Show my link code",
-    "unclaimedTitle": "Link to a Google account",
-    "unclaimedHint": "Scan a friend's link code to attach this profile to their account. They'll see every match where this profile played.",
-    "link": "Scan a link code",
+    "unclaimedTitle": "Link to a friend's account",
+    "unclaimedExplainer": "Open this same profile on each of your phones, then one of you taps Show QR and the other taps Scan QR. You'll both see each other's matches.",
+    "showCta": "Show QR",
+    "scanCta": "Scan QR",
     "linkedTitle": "Linked account",
     "linkedUnknown": "Linked user",
     "unlink": "Unlink",
     "unlinking": "Unlinking…",
     "unlinkError": "Could not unlink",
+    "unlinkConfirm": {
+      "title": "Unlink this profile?",
+      "body": "Unlinking will remove the connection on both sides. You and {{friend}} will both stop seeing each other's matches."
+    },
+    "celebration": {
+      "title": "Linked!",
+      "subtitle": "Friends make scoreboards better."
+    },
     "code": {
       "loading": "Generating code…",
       "expiresIn": "Expires in {{seconds}}s",
       "expired": "This code has expired.",
       "refresh": "Show a new code",
       "retry": "Try again",
-      "error": "Could not generate a link code.",
-      "hint": "Your friend's app will scan this. The code is valid for 60 seconds."
+      "error": "Could not generate a link code."
     },
     "scanner": {
-      "hint": "Point the camera at your friend's link code. They can show theirs from Settings → \"Show my link code\".",
+      "hint": "Point the camera at your friend's link code.",
       "submitting": "Linking…",
       "linked": "Linked!",
       "error": "Could not link",
@@ -343,7 +343,8 @@
       "mergePrompt": "You already have a profile «{{existing}}» linked to this friend. Merge «{{target}}» into «{{existing}}»? All matches under «{{target}}» will move to «{{existing}}».",
       "mergeConfirm": "Merge",
       "merging": "Merging…",
-      "merged": "Profiles merged."
+      "merged": "Profiles merged.",
+      "showerMergeNeeded": "Your friend already has another profile «{{existing}}» linked to you. Ask them to merge «{{target}}» into «{{existing}}» from their device first, then try again."
     }
   }
 }

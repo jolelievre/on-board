@@ -61,8 +61,13 @@ async function getMe(req: APIRequestContext): Promise<{
   return body.user;
 }
 
-async function getLinkToken(req: APIRequestContext): Promise<string> {
-  const res = await req.post("/api/profiles/link-token");
+async function getLinkToken(
+  req: APIRequestContext,
+  sourceProfileId: string,
+): Promise<string> {
+  const res = await req.post(
+    `/api/profiles/${sourceProfileId}/link-token`,
+  );
   if (!res.ok())
     throw new Error(`link-token failed ${res.status()}: ${await res.text()}`);
   const body = (await res.json()) as { token: string };
@@ -133,8 +138,55 @@ async function openProfile(page: Page, profileId: string) {
   await page.waitForLoadState("domcontentloaded");
 }
 
-test.describe("Profile linking (single-Profile model)", () => {
-  test("scanning a friend's link code binds the profile without creating any mirror row", async ({
+/**
+ * Helper: poll the friend's profile list until a profile with the
+ * given alias appears (created via the new-match form sync queue),
+ * then return its id.
+ */
+async function awaitProfileWithAlias(
+  ctx: BrowserContext,
+  alias: string,
+): Promise<string> {
+  let id: string | undefined;
+  await expect
+    .poll(
+      async () => {
+        const list = (await (
+          await ctx.request.get("/api/profiles")
+        ).json()) as { id: string; alias: string }[];
+        id = list.find((p) => p.alias === alias)?.id;
+        return id;
+      },
+      { timeout: 10_000 },
+    )
+    .toBeTruthy();
+  return id!;
+}
+
+/**
+ * End-to-end bilateral link from two browser contexts: friend mints a
+ * QR for their source profile, owner scans into their target profile.
+ * Returns once both sides have flipped to Linked.
+ */
+async function performBilateralLink(opts: {
+  ownerPage: Page;
+  friendCtx: BrowserContext;
+  ownerTargetProfileId: string;
+  friendSourceProfileId: string;
+}) {
+  const token = await getLinkToken(
+    opts.friendCtx.request,
+    opts.friendSourceProfileId,
+  );
+  await opts.ownerPage.click("[data-testid='profile-link-scan']");
+  await submitTokenViaHook(opts.ownerPage, token);
+  await expect(
+    opts.ownerPage.locator("[data-testid='link-celebration']").first(),
+  ).toBeVisible({ timeout: 5000 });
+}
+
+test.describe("Profile linking (bilateral)", () => {
+  test("a bilateral scan flips both profiles to Linked simultaneously", async ({
     browser,
   }) => {
     const friendCtx = await browser.newContext();
@@ -142,45 +194,45 @@ test.describe("Profile linking (single-Profile model)", () => {
     try {
       await signUp(friendCtx);
       const friendMe = await getMe(friendCtx.request);
-      const friendToken = await getLinkToken(friendCtx.request);
+      const friendSource = await createUnclaimedProfile(
+        friendCtx.request,
+        "OwnerSide",
+      );
 
       await signUp(ownerCtx);
       const ownerMe = await getMe(ownerCtx.request);
-      const alice = await createUnclaimedProfile(ownerCtx.request, "Alice");
+      const ownerTarget = await createUnclaimedProfile(
+        ownerCtx.request,
+        "Alice",
+      );
 
       const ownerPage = await ownerCtx.newPage();
-      await openProfile(ownerPage, alice.id);
-      await ownerPage.click("[data-testid='profile-link']");
-      await submitTokenViaHook(ownerPage, friendToken);
+      await openProfile(ownerPage, ownerTarget.id);
+      await performBilateralLink({
+        ownerPage,
+        friendCtx,
+        ownerTargetProfileId: ownerTarget.id,
+        friendSourceProfileId: friendSource.id,
+      });
 
-      await expect(
-        ownerPage.locator("[data-testid='link-scanner-linked']"),
-      ).toBeVisible({ timeout: 5000 });
-
-      // Owner-side: the Profile row now carries linkedUserId = friend.
+      // Scanner side: target now linked to friend.
       const ownerProfiles = (await (
         await ownerCtx.request.get("/api/profiles")
       ).json()) as { id: string; linkedUserId: string | null }[];
-      const linkedAlice = ownerProfiles.find((p) => p.id === alice.id);
-      expect(linkedAlice?.linkedUserId).toBe(friendMe.id);
+      expect(
+        ownerProfiles.find((p) => p.id === ownerTarget.id)?.linkedUserId,
+      ).toBe(friendMe.id);
 
-      // Friend-side: no mirror profile owned by the friend that
-      // represents the owner. Friend still has only their self-Profile.
+      // Shower side: source now linked to owner — no auto-mirror
+      // profile was created on the friend's side.
       const friendProfiles = (await (
         await friendCtx.request.get("/api/profiles")
-      ).json()) as {
-        id: string;
-        ownerId: string;
-        linkedUserId: string | null;
-      }[];
-      expect(friendProfiles.length).toBe(1);
-      expect(friendProfiles[0].ownerId).toBe(friendMe.id);
-      expect(friendProfiles[0].linkedUserId).toBe(friendMe.id);
-
-      // And no row owned by the owner appears in the friend's listing.
+      ).json()) as { id: string; linkedUserId: string | null }[];
       expect(
-        friendProfiles.find((p) => p.ownerId === ownerMe.id),
-      ).toBeUndefined();
+        friendProfiles.find((p) => p.id === friendSource.id)?.linkedUserId,
+      ).toBe(ownerMe.id);
+      // Only self-Profile + the source we created — no mirror row.
+      expect(friendProfiles.length).toBe(2);
     } finally {
       await friendCtx.close();
       await ownerCtx.close();
@@ -190,153 +242,172 @@ test.describe("Profile linking (single-Profile model)", () => {
   test("after linking, the friend can see prior matches the owner already created", async ({
     browser,
   }) => {
-    // The bug from the conversation: A creates matches with profile
-    // "B" (unclaimed) → A links profile "B" to user B → B's match
-    // history should now include those prior matches.
+    // Assertion drives through the friend's browser at
+    // /games/7-wonders-duel — the same surface a real user would
+    // open. An API-only check would pass on the server contract
+    // alone and miss any Dexie/visibility regression in the client.
     const friendCtx = await browser.newContext();
     const ownerCtx = await browser.newContext();
     try {
       await signUp(friendCtx);
-      const friendToken = await getLinkToken(friendCtx.request);
+      const friendSource = await createUnclaimedProfile(
+        friendCtx.request,
+        "OwnerSide",
+      );
 
       await signUp(ownerCtx);
       const ownerPage = await ownerCtx.newPage();
-      // Owner creates a 7 Wonders Duel match against "Friend" (will
-      // become the friend's linked profile in a moment).
       const matchId = await createMatchViaForm(ownerPage, {
         gameSlug: "7-wonders-duel",
         playerNames: ["Me", "Friend"],
       });
-      expect(matchId).toBeTruthy();
+      const friendProfileId = await awaitProfileWithAlias(ownerCtx, "Friend");
 
-      // Wait for the inline-created "Friend" profile to flush to the
-      // server via the sync queue.
-      let friendProfile:
-        | { id: string; alias: string }
-        | undefined;
-      await expect
-        .poll(
-          async () => {
-            const profiles = (await (
-              await ownerCtx.request.get("/api/profiles")
-            ).json()) as { id: string; alias: string }[];
-            friendProfile = profiles.find((p) => p.alias === "Friend");
-            return friendProfile?.id;
-          },
-          { timeout: 10_000 },
-        )
-        .toBeTruthy();
+      await openProfile(ownerPage, friendProfileId);
+      await performBilateralLink({
+        ownerPage,
+        friendCtx,
+        ownerTargetProfileId: friendProfileId,
+        friendSourceProfileId: friendSource.id,
+      });
 
-      // Owner links the "Friend" profile to the friend's User.
-      await openProfile(ownerPage, friendProfile!.id);
-      await ownerPage.click("[data-testid='profile-link']");
-      await submitTokenViaHook(ownerPage, friendToken);
+      // Friend opens the 7 Wonders Duel page in their own browser and
+      // expects to see the match in the history.
+      const friendPage = await friendCtx.newPage();
+      await friendPage.goto("/games/7-wonders-duel");
+      await friendPage.waitForLoadState("domcontentloaded");
       await expect(
-        ownerPage.locator("[data-testid='link-scanner-linked']"),
-      ).toBeVisible({ timeout: 5000 });
-
-      // Friend's match list now includes the match. The visibility
-      // filter joins through Player → Profile → linkedUserId = friend.
-      const friendMatches = (await (
-        await friendCtx.request.get("/api/matches")
-      ).json()) as { id: string }[];
-      expect(friendMatches.some((m) => m.id === matchId)).toBe(true);
+        friendPage.locator(`[data-testid='match-history-row-${matchId}']`),
+      ).toBeVisible({ timeout: 10_000 });
     } finally {
       await friendCtx.close();
       await ownerCtx.close();
     }
   });
 
-  test("matches created by either side are visible to both after both have linked profiles", async ({
+  test("linking a profile does not hide its existing match history from the owner's UI", async ({
     browser,
   }) => {
-    // Symmetric visibility: even when the friend creates the match,
-    // the owner sees it via their own linked profile of the friend.
-    const aliceCtx = await browser.newContext();
-    const bobCtx = await browser.newContext();
+    // Regression gate for the disappearing-matches bug. Pre-link, the
+    // owner sees N matches under their friend's profile. After tapping
+    // Scan QR and submitting the token, the same UI must still show
+    // the same N matches. The bug was that `collectPersonPlayers`
+    // switched its query branch from `profileId` to
+    // `profileLinkedUserId` when `linkedUserId` flipped, but the local
+    // Player rows still had a stale `profileLinkedUserId: null` denorm.
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
     try {
-      await signUp(aliceCtx);
-      const aliceMe = await getMe(aliceCtx.request);
-      await signUp(bobCtx);
-      const bobMe = await getMe(bobCtx.request);
-
-      // Alice creates an unclaimed profile for Bob and links it.
-      const bobToken = await getLinkToken(bobCtx.request);
-      const aliceProfileOfBob = await createUnclaimedProfile(
-        aliceCtx.request,
-        "Bob",
-      );
-      await aliceCtx.request.post(
-        `/api/profiles/${aliceProfileOfBob.id}/link`,
-        { data: { token: bobToken } },
+      await signUp(friendCtx);
+      const friendSource = await createUnclaimedProfile(
+        friendCtx.request,
+        "OwnerSide",
       );
 
-      // Bob creates an unclaimed profile for Alice and links it.
-      const aliceToken = await getLinkToken(aliceCtx.request);
-      const bobProfileOfAlice = await createUnclaimedProfile(
-        bobCtx.request,
-        "Alice",
-      );
-      await bobCtx.request.post(
-        `/api/profiles/${bobProfileOfAlice.id}/link`,
-        { data: { token: aliceToken } },
-      );
-
-      // Bob creates a match via the UI. The two seats: Bob's
-      // self-Profile (typed "MeBob" resolves to a new unclaimed
-      // profile, NOT the self — but the linkedUserId widening still
-      // works) and Alice's profile (Bob's profile of Alice, linked).
-      const gameRes = await aliceCtx.request.get("/api/games/7-wonders-duel");
-      const game = await gameRes.json();
-
-      // Build the match via direct POST so we control which profileIds
-      // are referenced — exercising the cross-user join.
-      const bobSelfProfiles = (await (
-        await bobCtx.request.get("/api/profiles")
-      ).json()) as { id: string; ownerId: string; linkedUserId: string | null }[];
-      const bobSelf = bobSelfProfiles.find(
-        (p) => p.ownerId === bobMe.id && p.linkedUserId === bobMe.id,
-      )!;
-
-      const matchRes = await bobCtx.request.post("/api/matches", {
-        data: {
-          gameId: game.id,
-          players: [
-            { profileId: bobSelf.id, position: 0 },
-            { profileId: bobProfileOfAlice.id, position: 1 },
-          ],
-        },
+      await signUp(ownerCtx);
+      const ownerPage = await ownerCtx.newPage();
+      const match1 = await createMatchViaForm(ownerPage, {
+        gameSlug: "7-wonders-duel",
+        playerNames: ["Me", "Friend"],
       });
-      expect(matchRes.status()).toBe(201);
-      const bobMatch = (await matchRes.json()) as { id: string };
+      const match2 = await createMatchViaForm(ownerPage, {
+        gameSlug: "7-wonders-duel",
+        playerNames: ["Me", "Friend"],
+      });
+      expect(match1).not.toBe(match2);
 
-      // Alice's match list now includes Bob's match — visible via her
-      // own linked profile of Bob (linkedUserId = bob) which the
-      // visibility filter joins through.
-      const aliceMatches = (await (
-        await aliceCtx.request.get("/api/matches")
-      ).json()) as { id: string }[];
-      expect(aliceMatches.some((m) => m.id === bobMatch.id)).toBe(true);
+      const friendProfileId = await awaitProfileWithAlias(ownerCtx, "Friend");
 
-      // And Alice's "Bob" profile detail picks up the match via
-      // `collectPersonPlayers` widening on profileLinkedUserId.
-      // We can't easily read the Dexie state from API, but the visibility
-      // alone proves the join works end-to-end.
-      void aliceMe;
+      // Pre-link: profile detail UI shows both matches.
+      await openProfile(ownerPage, friendProfileId);
+      await expect(
+        ownerPage.locator("[data-testid='profile-recent-match']"),
+      ).toHaveCount(2, { timeout: 10_000 });
+
+      await performBilateralLink({
+        ownerPage,
+        friendCtx,
+        ownerTargetProfileId: friendProfileId,
+        friendSourceProfileId: friendSource.id,
+      });
+
+      // Re-open the profile so the scanner success view collapses
+      // into the Linked card. The recent matches must still be there.
+      await openProfile(ownerPage, friendProfileId);
+      await expect(
+        ownerPage.locator("[data-testid='profile-unlink']"),
+      ).toBeVisible({ timeout: 5000 });
+      await expect(
+        ownerPage.locator("[data-testid='profile-recent-match']"),
+      ).toHaveCount(2);
     } finally {
-      await aliceCtx.close();
-      await bobCtx.close();
+      await friendCtx.close();
+      await ownerCtx.close();
     }
   });
 
-  test("unlinking severs visibility for the formerly-linked friend", async ({
+  test("Unlink confirm modal cites the friend's name and Cancel keeps the link intact", async ({
     browser,
   }) => {
     const friendCtx = await browser.newContext();
     const ownerCtx = await browser.newContext();
     try {
       await signUp(friendCtx);
-      const friendToken = await getLinkToken(friendCtx.request);
+      const friendMe = await getMe(friendCtx.request);
+      const friendSource = await createUnclaimedProfile(
+        friendCtx.request,
+        "OwnerSide",
+      );
+
+      await signUp(ownerCtx);
+      const ownerPage = await ownerCtx.newPage();
+      const target = await createUnclaimedProfile(ownerCtx.request, "Alice");
+      await openProfile(ownerPage, target.id);
+      await performBilateralLink({
+        ownerPage,
+        friendCtx,
+        ownerTargetProfileId: target.id,
+        friendSourceProfileId: friendSource.id,
+      });
+      await openProfile(ownerPage, target.id);
+      await expect(
+        ownerPage.locator("[data-testid='profile-unlink']"),
+      ).toBeVisible({ timeout: 5000 });
+
+      // Open the confirm modal; the body should reference the
+      // friend's name so the user understands the bilateral effect.
+      await ownerPage.click("[data-testid='profile-unlink']");
+      const dialog = ownerPage.locator("[data-testid='unlink-dialog']");
+      await expect(dialog).toBeVisible();
+      await expect(dialog).toContainText(friendMe.name);
+
+      // Cancel keeps both sides linked.
+      await ownerPage.click("[data-testid='unlink-cancel']");
+      await expect(dialog).not.toBeVisible();
+
+      const ownerProfiles = (await (
+        await ownerCtx.request.get("/api/profiles")
+      ).json()) as { id: string; linkedUserId: string | null }[];
+      expect(
+        ownerProfiles.find((p) => p.id === target.id)?.linkedUserId,
+      ).toBe(friendMe.id);
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
+  test("Confirming Unlink bilaterally severs both sides and prunes cross-user match visibility", async ({
+    browser,
+  }) => {
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await signUp(friendCtx);
+      const friendSource = await createUnclaimedProfile(
+        friendCtx.request,
+        "OwnerSide",
+      );
 
       await signUp(ownerCtx);
       const ownerPage = await ownerCtx.newPage();
@@ -344,52 +415,115 @@ test.describe("Profile linking (single-Profile model)", () => {
         gameSlug: "7-wonders-duel",
         playerNames: ["Me", "Friend"],
       });
-
-      let friendProfile:
-        | { id: string; alias: string }
-        | undefined;
-      await expect
-        .poll(
-          async () => {
-            const profiles = (await (
-              await ownerCtx.request.get("/api/profiles")
-            ).json()) as { id: string; alias: string }[];
-            friendProfile = profiles.find((p) => p.alias === "Friend");
-            return friendProfile?.id;
-          },
-          { timeout: 10_000 },
-        )
-        .toBeTruthy();
-      await ownerCtx.request.post(`/api/profiles/${friendProfile!.id}/link`, {
-        data: { token: friendToken },
+      const friendProfileId = await awaitProfileWithAlias(ownerCtx, "Friend");
+      await openProfile(ownerPage, friendProfileId);
+      await performBilateralLink({
+        ownerPage,
+        friendCtx,
+        ownerTargetProfileId: friendProfileId,
+        friendSourceProfileId: friendSource.id,
       });
 
-      // Friend can see the match.
-      let friendMatches = (await (
-        await friendCtx.request.get("/api/matches")
-      ).json()) as { id: string }[];
-      expect(friendMatches.some((m) => m.id === matchId)).toBe(true);
-
-      // Reload the page so the scanner success view is dismissed and
-      // the linked-card with its unlink button renders.
-      await openProfile(ownerPage, friendProfile.id);
+      // Friend's UI shows the match while linked.
+      const friendPage = await friendCtx.newPage();
+      await friendPage.goto("/games/7-wonders-duel");
+      await friendPage.waitForLoadState("domcontentloaded");
       await expect(
-        ownerPage.locator("[data-testid='profile-unlink']"),
-      ).toBeVisible({ timeout: 5000 });
-      await ownerPage.click("[data-testid='profile-unlink']");
+        friendPage.locator(`[data-testid='match-history-row-${matchId}']`),
+      ).toBeVisible({ timeout: 10_000 });
 
-      // Friend's visibility drops.
-      await expect
-        .poll(
-          async () => {
-            friendMatches = (await (
-              await friendCtx.request.get("/api/matches")
-            ).json()) as { id: string }[];
-            return friendMatches.some((m) => m.id === matchId);
-          },
-          { timeout: 5000 },
-        )
-        .toBe(false);
+      // Owner unlinks (with explicit confirm).
+      await openProfile(ownerPage, friendProfileId);
+      await ownerPage.click("[data-testid='profile-unlink']");
+      await ownerPage.click("[data-testid='unlink-confirm']");
+      await expect(
+        ownerPage.locator("[data-testid='profile-link-scan']"),
+      ).toBeVisible({ timeout: 5000 });
+
+      // Both sides now show the profile as unclaimed.
+      const ownerProfiles = (await (
+        await ownerCtx.request.get("/api/profiles")
+      ).json()) as { id: string; linkedUserId: string | null }[];
+      expect(
+        ownerProfiles.find((p) => p.id === friendProfileId)?.linkedUserId,
+      ).toBeNull();
+      const friendProfiles = (await (
+        await friendCtx.request.get("/api/profiles")
+      ).json()) as { id: string; linkedUserId: string | null }[];
+      expect(
+        friendProfiles.find((p) => p.id === friendSource.id)?.linkedUserId,
+      ).toBeNull();
+
+      // Friend's UI no longer surfaces the owner-created match.
+      await friendPage.reload();
+      await friendPage.waitForLoadState("domcontentloaded");
+      await expect(
+        friendPage.locator(`[data-testid='match-history-row-${matchId}']`),
+      ).toHaveCount(0, { timeout: 10_000 });
+
+      // Owner's own past matches remain on their side under the
+      // now-unclaimed profile.
+      await openProfile(ownerPage, friendProfileId);
+      await expect(
+        ownerPage.locator("[data-testid='profile-recent-match']"),
+      ).toHaveCount(1, { timeout: 10_000 });
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
+  test("Re-linking after an unlink restores bilateral visibility", async ({
+    browser,
+  }) => {
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await signUp(friendCtx);
+      const friendSource = await createUnclaimedProfile(
+        friendCtx.request,
+        "OwnerSide",
+      );
+
+      await signUp(ownerCtx);
+      const ownerPage = await ownerCtx.newPage();
+      const matchId = await createMatchViaForm(ownerPage, {
+        gameSlug: "7-wonders-duel",
+        playerNames: ["Me", "Friend"],
+      });
+      const friendProfileId = await awaitProfileWithAlias(ownerCtx, "Friend");
+      await openProfile(ownerPage, friendProfileId);
+
+      await performBilateralLink({
+        ownerPage,
+        friendCtx,
+        ownerTargetProfileId: friendProfileId,
+        friendSourceProfileId: friendSource.id,
+      });
+
+      // Unlink.
+      await openProfile(ownerPage, friendProfileId);
+      await ownerPage.click("[data-testid='profile-unlink']");
+      await ownerPage.click("[data-testid='unlink-confirm']");
+      await expect(
+        ownerPage.locator("[data-testid='profile-link-scan']"),
+      ).toBeVisible({ timeout: 5000 });
+
+      // Re-link via a fresh QR.
+      await performBilateralLink({
+        ownerPage,
+        friendCtx,
+        ownerTargetProfileId: friendProfileId,
+        friendSourceProfileId: friendSource.id,
+      });
+
+      // Friend regains full visibility of the owner-created match.
+      const friendPage = await friendCtx.newPage();
+      await friendPage.goto("/games/7-wonders-duel");
+      await friendPage.waitForLoadState("domcontentloaded");
+      await expect(
+        friendPage.locator(`[data-testid='match-history-row-${matchId}']`),
+      ).toBeVisible({ timeout: 10_000 });
     } finally {
       await friendCtx.close();
       await ownerCtx.close();
@@ -405,7 +539,14 @@ test.describe("Players tab (single-Profile model)", () => {
     const ownerCtx = await browser.newContext();
     try {
       await signUp(friendCtx);
-      const friendToken = await getLinkToken(friendCtx.request);
+      const friendSource = await createUnclaimedProfile(
+        friendCtx.request,
+        "OwnerSide",
+      );
+      const friendToken = await getLinkToken(
+        friendCtx.request,
+        friendSource.id,
+      );
 
       await signUp(ownerCtx);
       const ownerMe = await getMe(ownerCtx.request);

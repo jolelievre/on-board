@@ -351,69 +351,55 @@ function LinkSection({
   onMergedTo: (survivorId: string) => void;
 }) {
   const { t } = useTranslation();
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [selfCodeOpen, setSelfCodeOpen] = useState(false);
+  const [panel, setPanel] = useState<"none" | "show" | "scan">("none");
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [unlinkError, setUnlinkError] = useState<string | null>(null);
 
-  // Self-profile path: show the user's own QR so a friend's owner-app
-  // can scan it. This is a duplicate entry point to Settings' link
-  // code, intentionally discoverable from the Players tab too.
-  if (isSelf) {
-    return (
-      <Group title={t("link.selfTitle")}>
-        <p className={styles.linkHint}>{t("link.selfHint")}</p>
-        {selfCodeOpen ? (
-          <>
-            <LinkCodeDisplay />
-            <div className={styles.linkActions}>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setSelfCodeOpen(false)}
-              >
-                {t("common.done")}
-              </Button>
-            </div>
-          </>
-        ) : (
-          <Button
-            type="button"
-            variant="secondary"
-            iconBefore={<Icon name="link" size={16} />}
-            onClick={() => setSelfCodeOpen(true)}
-            data-testid="self-show-link-code"
-          >
-            {t("link.showCode")}
-          </Button>
-        )}
-      </Group>
-    );
-  }
+  // Self-profile carries no link UI under the new bilateral model —
+  // the QR is anchored to a profile representing the *other* person.
+  // The user gets to Show/Scan from their owned friend profiles
+  // instead. Skipping the render entirely keeps the surface focused
+  // on identity + alias editing.
+  if (isSelf) return null;
 
   // Friend-profile path:
-  //  - Unclaimed + viewer owns it → "Link to a Google account" → scanner.
-  //  - Linked + viewer owns or is the linked friend → linked card + unlink.
+  //  - Unclaimed + viewer owns it → two-button row (Show QR / Scan QR).
+  //  - Linked + viewer owns or is the linked friend → linked card +
+  //    Unlink with confirm modal.
   if (!isOwner && profile.linkedUserId !== viewerId) return null;
 
-  // Keep the scanner mounted across the link transition. Without
-  // this, the moment `linkProfile` writes to Dexie and `useProfile`
-  // re-fires, `isLinked` flips true and the linked-friend branch
-  // below swaps the scanner out — the "Linked!" success message
-  // (and the merge-required confirmation, when applicable) never
-  // gets seen. The scanner only closes via the in-component Done
-  // button (which calls `onDone` → setScannerOpen(false)).
-  if (scannerOpen && isOwner) {
+  const closePanel = () => setPanel("none");
+
+  // Keep the open panel sticky across the link transition. Without
+  // this, the moment the bilateral link writes to Dexie and
+  // `useProfile` re-fires, `isLinked` flips true and the linked-card
+  // branch below swaps the scanner/QR-display out — the celebration
+  // overlay never gets seen. The panel only closes when its child
+  // signals success via `onDone`/`onLinked` → `closePanel()`.
+  if (panel === "scan" && isOwner) {
     return (
       <Group title={t("link.unclaimedTitle")}>
         <LinkScanner
           profile={profile}
-          onDone={() => setScannerOpen(false)}
+          onDone={closePanel}
           onMerged={(survivorId) => {
-            setScannerOpen(false);
+            closePanel();
             onMergedTo(survivorId);
           }}
         />
+      </Group>
+    );
+  }
+  if (panel === "show" && isOwner) {
+    return (
+      <Group title={t("link.unclaimedTitle")}>
+        <LinkCodeDisplay profile={profile} onLinked={closePanel} />
+        <div className={styles.linkActions}>
+          <Button type="button" variant="ghost" onClick={closePanel}>
+            {t("common.cancel")}
+          </Button>
+        </div>
       </Group>
     );
   }
@@ -429,6 +415,7 @@ function LinkSection({
         // Players list updates without waiting for a full re-pull.
         asLinkedUser: !isOwner && profile.linkedUserId === viewerId,
       });
+      setUnlinkConfirmOpen(false);
     } catch (err) {
       setUnlinkError(
         err instanceof Error ? err.message : t("link.unlinkError"),
@@ -440,61 +427,151 @@ function LinkSection({
 
   if (isLinked) {
     const linked = profile.linkedUser;
+    const friendDisplay =
+      linked?.alias || linked?.name || profile.alias || t("link.linkedUnknown");
     return (
-      <Group title={t("link.linkedTitle")}>
-        <div className={styles.linkedCard}>
-          {linked?.avatarUrl ? (
-            <img
-              src={linked.avatarUrl}
-              alt=""
-              className={styles.linkedAvatar}
-            />
-          ) : (
-            <span className={styles.linkedAvatarFallback}>
-              {(linked?.alias || linked?.name || "·").slice(0, 1).toUpperCase()}
-            </span>
-          )}
-          <div className={styles.linkedMeta}>
-            <span className={styles.linkedName}>
-              {linked?.alias || linked?.name || t("link.linkedUnknown")}
-            </span>
-            {linked?.email && (
-              <span className={styles.linkedEmail}>{linked.email}</span>
+      <>
+        <Group title={t("link.linkedTitle")}>
+          <div className={styles.linkedCard}>
+            {linked?.avatarUrl ? (
+              <img
+                src={linked.avatarUrl}
+                alt=""
+                className={styles.linkedAvatar}
+              />
+            ) : (
+              <span className={styles.linkedAvatarFallback}>
+                {(linked?.alias || linked?.name || "·")
+                  .slice(0, 1)
+                  .toUpperCase()}
+              </span>
             )}
+            <div className={styles.linkedMeta}>
+              <span className={styles.linkedName}>
+                {linked?.alias || linked?.name || t("link.linkedUnknown")}
+              </span>
+              {linked?.email && (
+                <span className={styles.linkedEmail}>{linked.email}</span>
+              )}
+            </div>
           </div>
-        </div>
-        {unlinkError && <p className={styles.linkError}>{unlinkError}</p>}
-        <div className={styles.linkActions}>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => void handleUnlink()}
-            disabled={unlinking}
-            data-testid="profile-unlink"
-          >
-            {unlinking ? t("link.unlinking") : t("link.unlink")}
-          </Button>
-        </div>
-      </Group>
+          {unlinkError && <p className={styles.linkError}>{unlinkError}</p>}
+          <div className={styles.linkActions}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setUnlinkError(null);
+                setUnlinkConfirmOpen(true);
+              }}
+              data-testid="profile-unlink"
+            >
+              {t("link.unlink")}
+            </Button>
+          </div>
+        </Group>
+        {unlinkConfirmOpen && (
+          <UnlinkConfirmDialog
+            friendName={friendDisplay}
+            error={unlinkError}
+            submitting={unlinking}
+            onCancel={() => setUnlinkConfirmOpen(false)}
+            onConfirm={() => void handleUnlink()}
+          />
+        )}
+      </>
     );
   }
 
-  // Unclaimed + owner: offer the link-by-QR flow. The scanner-open
-  // case is handled by the early return above so the success state
-  // survives the `isLinked` transition.
+  // Unclaimed + owner: two-button row + explainer.
   return (
     <Group title={t("link.unclaimedTitle")}>
-      <p className={styles.linkHint}>{t("link.unclaimedHint")}</p>
-      <Button
-        type="button"
-        variant="secondary"
-        iconBefore={<Icon name="link" size={16} />}
-        onClick={() => setScannerOpen(true)}
-        data-testid="profile-link"
-      >
-        {t("link.link")}
-      </Button>
+      <p className={styles.linkHint}>{t("link.unclaimedExplainer")}</p>
+      <div className={styles.linkButtonRow}>
+        <Button
+          type="button"
+          variant="secondary"
+          iconBefore={<Icon name="link" size={16} />}
+          onClick={() => setPanel("show")}
+          data-testid="profile-link-show"
+        >
+          {t("link.showCta")}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          iconBefore={<Icon name="camera" size={16} />}
+          onClick={() => setPanel("scan")}
+          data-testid="profile-link-scan"
+        >
+          {t("link.scanCta")}
+        </Button>
+      </div>
     </Group>
+  );
+}
+
+function UnlinkConfirmDialog({
+  friendName,
+  error,
+  submitting,
+  onCancel,
+  onConfirm,
+}: {
+  friendName: string;
+  error: string | null;
+  submitting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onCancel]);
+
+  return (
+    <div
+      className={styles.unlinkBackdrop}
+      role="dialog"
+      aria-modal="true"
+      data-testid="unlink-dialog"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div className={styles.unlinkSheet}>
+        <h2 className={styles.unlinkTitle}>{t("link.unlinkConfirm.title")}</h2>
+        <p className={styles.unlinkBody}>
+          {t("link.unlinkConfirm.body", { friend: friendName })}
+        </p>
+        {error && <p className={styles.linkError}>{error}</p>}
+        <div className={styles.unlinkActions}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onCancel}
+            disabled={submitting}
+            data-testid="unlink-cancel"
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={submitting}
+            data-testid="unlink-confirm"
+          >
+            {submitting ? t("link.unlinking") : t("link.unlink")}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
