@@ -1,5 +1,6 @@
 import type { LocalProfile3 } from "../../lib/db";
 import { displayProfileName } from "../../../shared/players";
+import { useOwnedProfileIndex } from "../../hooks/data/useOwnedProfileIndex";
 import styles from "./Avatar.module.css";
 
 const BUCKETS = [
@@ -79,10 +80,16 @@ export function Avatar(props: Props) {
     ? `${styles.root} ${sizeClass} ${props.className}`
     : `${styles.root} ${sizeClass}`;
 
+  // Hook is called unconditionally so the rules-of-hooks stay happy
+  // across both render branches. Pass undefined when this Avatar isn't
+  // a profile-source — the hook short-circuits to the empty index.
+  const viewerForIndex = "profile" in props ? props.viewerId : undefined;
+  const ownedIndex = useOwnedProfileIndex(viewerForIndex ?? undefined);
+
   if ("profile" in props) {
     const { profile, viewerId } = props;
     const resolved = resolveAvatarUrl(profile, viewerId);
-    const name = displayProfileName(profile, viewerId);
+    const name = displayProfileName(profile, ownedIndex);
     const initial = initialFromName(name);
     const bucket = BUCKETS[hashBucket(profile.id) % BUCKETS.length];
 

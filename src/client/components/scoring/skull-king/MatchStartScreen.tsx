@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./MatchStartScreen.module.css";
 import { displayPlayerName } from "../../../../shared/players";
+import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
 
 type Props = {
@@ -29,6 +31,8 @@ export function MatchStartScreen({
   disabled,
 }: Props) {
   const { t } = useTranslation();
+  const { session } = useAuthSession();
+  const ownedIndex = useOwnedProfileIndex(session?.user.id);
   const dragIndexRef = useRef<number | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -250,7 +254,7 @@ export function MatchStartScreen({
                   {i + 1}
                 </span>
                 <span className={styles.seatName}>
-                  {displayPlayerName(p)}
+                  {displayPlayerName(p, ownedIndex)}
                 </span>
                 {isDealer && (
                   <span className={styles.dealerLabel}>

@@ -927,6 +927,14 @@ What's left is one purely cosmetic rename: the Dexie row type is still named `Lo
 
 **Skip this entirely if not bothered by the suffix** — it's the only thing left in this slot and has zero runtime impact.
 
+#### PR 6-E follow-up: `User.alias` propagation to friend devices
+
+When a user edits their `User.alias` from Settings, `refreshLocalAliases` already pushes the new alias into their own local Dexie projections (self-Profile row + every Player row's `linkedUser.alias` snapshot owned by them). The friend's device, however, only sees the new alias when its next pull-sync fetches a Match row whose `updatedAt` was bumped after the edit — `User.alias` edits don't touch any Match row, so the friend's `?since=` delta misses the change indefinitely.
+
+Cleanest fix: on the server, when `User.alias` changes, also `Match.updatedAt = NOW()` for every Match whose Player set joins through a Profile linked to that User. The friend's next routine pullSync then refreshes the embedded `linkedUser.alias` snapshots and the new alias shows in their match history rows. Local-side: nothing changes — `useOwnedProfileIndex` already handles the viewer's own edits live, and the snapshot-fallback in `displayProfileName` is exactly the path that benefits from this server bump.
+
+Out of scope for the name-rendering PR that introduced `useOwnedProfileIndex` — that work makes alias edits propagate instantly *on the editor's device*; this follow-up extends the same freshness to the friend's device.
+
 ### Critical files
 
 | File | Action |

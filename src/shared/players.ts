@@ -1,22 +1,58 @@
 /**
  * Shared display-name and avatar resolution.
  *
- * Under the single-Profile model (PR 6-C):
- *   - Every Player references a Profile. Display flows through that
- *     Profile exclusively — no fallback to a legacy `Player.name`
- *     or `Player.userId` snapshot.
- *   - A Profile's `alias` / `customAvatarUrl` belong to the owner.
- *     The owner is the only viewer who sees those values; every
- *     other viewer either sees the canonical linked-user identity
- *     (`linkedUser.name` / `linkedUser.avatarUrl`) when the profile
- *     is claimed, or just the alias when it is not.
- *   - Special case: when the viewer IS the linked user, the renderer
- *     prefers their own auth identity (alias → name) so they see
- *     themselves under the name they chose, not whatever nickname
- *     the owner assigned. Same rule applies to avatars.
+ * Under the single-Profile model (PR 6-C) every Player references a
+ * Profile; display flows through that Profile exclusively — no
+ * fallback to a legacy `Player.name` snapshot.
+ *
+ * Names are resolved against the viewer's **owned profile index** so
+ * the rendered label always reflects what the viewer chose locally:
+ *
+ *   1. If the row's profile id is one I own → use my profile.alias
+ *      (the inflated snapshot embedded in a match may be stale; my
+ *      Dexie row is the source of truth).
+ *   2. Else if the row carries a `linkedUserId` and I own a profile
+ *      with the same `linkedUserId` → use my profile.alias (this row
+ *      represents someone I've bilaterally linked with; show how I
+ *      label them, not how the other side does).
+ *   3. Otherwise → fall back to `profile.alias` from the snapshot
+ *      (the friend-of-friend case — I have no relation to this
+ *      profile beyond seeing it in a shared match).
+ *
+ * The `ownedIndex` parameter is **required** so TypeScript catches
+ * every call site if the contract evolves again. Pass the result of
+ * `useOwnedProfileIndex(viewerId)` from a React component.
  */
 
+/**
+ * Read-only view of "the profiles I own", keyed two ways. Built by
+ * the client's `useOwnedProfileIndex` hook from Dexie; defined here
+ * so this module stays free of client-side imports.
+ *
+ * Members are intentionally minimal — only what `displayProfileName`
+ * / `displayProfileAvatar` actually read.
+ */
+export type OwnedProfileEntry = {
+  id: string;
+  alias: string;
+  customAvatarUrl: string | null;
+  useLinkedAvatar: boolean;
+  linkedUserId: string | null;
+  linkedUser: {
+    id: string;
+    name: string;
+    alias: string | null;
+    avatarUrl: string | null;
+  } | null;
+};
+
+export type OwnedProfileIndex = {
+  byId: Map<string, OwnedProfileEntry>;
+  byLinkedUserId: Map<string, OwnedProfileEntry>;
+};
+
 export type ProfileDisplayInput = {
+  id: string;
   alias: string;
   customAvatarUrl?: string | null;
   useLinkedAvatar?: boolean;
@@ -34,40 +70,44 @@ export type PlayerDisplayInput = {
   profile: ProfileDisplayInput;
 };
 
-/**
- * Resolve the display name for a Profile from the perspective of a
- * given viewer. The viewer's identity matters because someone seeing
- * themselves should never see the owner's private nickname for them.
- */
 export function displayProfileName(
   profile: ProfileDisplayInput,
-  viewerId?: string | null,
+  ownedIndex: OwnedProfileIndex,
 ): string {
-  if (profile.linkedUserId && viewerId && profile.linkedUserId === viewerId) {
-    const ua = profile.linkedUser?.alias?.trim();
-    if (ua) return ua;
-    const un = profile.linkedUser?.name?.trim();
-    if (un) return un;
+  const ownById = ownedIndex.byId.get(profile.id);
+  if (ownById) return ownById.alias;
+  if (profile.linkedUserId) {
+    const ownByLinkedUser = ownedIndex.byLinkedUserId.get(profile.linkedUserId);
+    if (ownByLinkedUser) return ownByLinkedUser.alias;
   }
   return profile.alias;
 }
 
 /**
- * Resolve the avatar URL for a Profile from the perspective of a
- * given viewer. Mirrors `displayProfileName`'s viewer-aware logic:
- * the linked user sees their own auth avatar; everyone else sees the
- * owner's choice (custom upload or the linked-user's auth avatar
- * depending on the `useLinkedAvatar` toggle).
+ * Resolve the avatar URL for a Profile. The avatar choice is anchored
+ * in the row itself (the owner's `useLinkedAvatar` toggle plus their
+ * custom upload), so the renderer keeps reading the snapshot. The
+ * only viewer-specific case is "this is *my* row" — there the
+ * linked-user's auth avatar wins, because that's the canonical
+ * picture of me regardless of any nickname the owner chose. We
+ * detect "this is my row" by checking the owned index, mirroring
+ * `displayProfileName`'s lookup.
  *
  * Returns `null` when no avatar can be resolved — callers fall back
  * to an initials-based monogram.
  */
 export function displayProfileAvatar(
   profile: ProfileDisplayInput,
-  viewerId?: string | null,
+  ownedIndex: OwnedProfileIndex,
 ): string | null {
-  if (profile.linkedUserId && viewerId && profile.linkedUserId === viewerId) {
-    return profile.linkedUser?.avatarUrl?.trim() || null;
+  // "This row is mine" iff the index has the id (i.e. I own the
+  // profile this match player references — my own self-Profile, or
+  // an owned friend-profile I've linked).
+  const mine = ownedIndex.byId.get(profile.id);
+  if (mine) {
+    const linkedAvatar = mine.linkedUser?.avatarUrl?.trim();
+    if (linkedAvatar) return linkedAvatar;
+    return mine.customAvatarUrl?.trim() || null;
   }
   if (profile.useLinkedAvatar !== false) {
     const linked = profile.linkedUser?.avatarUrl?.trim();
@@ -78,9 +118,9 @@ export function displayProfileAvatar(
 
 export function displayPlayerName(
   player: PlayerDisplayInput,
-  viewerId?: string | null,
+  ownedIndex: OwnedProfileIndex,
 ): string {
-  return displayProfileName(player.profile, viewerId);
+  return displayProfileName(player.profile, ownedIndex);
 }
 
 /**

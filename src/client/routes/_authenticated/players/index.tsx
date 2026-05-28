@@ -8,6 +8,7 @@ import { Avatar } from "../../../components/ui/Avatar";
 import { Pill } from "../../../components/ui/Pill";
 import { Icon } from "../../../components/ui/Icon";
 import { displayProfileName } from "../../../../shared/players";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import styles from "./index.module.css";
 
 export const Route = createFileRoute("/_authenticated/players/")({
@@ -63,7 +64,8 @@ function ProfileRow({
   // `useProfileList`. Every row here is a friend the viewer owns —
   // either unclaimed (no link yet) or claimed (linked to a real user).
   const isLinked = profile.linkedUserId !== null;
-  const name = displayProfileName(profile, viewerId);
+  const ownedIndex = useOwnedProfileIndex(viewerId ?? undefined);
+  const name = displayProfileName(profile, ownedIndex);
 
   return (
     <Link

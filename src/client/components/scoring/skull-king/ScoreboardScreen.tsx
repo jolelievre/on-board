@@ -2,6 +2,8 @@ import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./ScoreboardScreen.module.css";
 import { displayPlayerName } from "../../../../shared/players";
+import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import {
   SKULL_KING_TOTAL_ROUNDS,
   scoreSkullKingRound,
@@ -19,6 +21,8 @@ type Props = {
 
 export function ScoreboardScreen({ players, entries, currentRound }: Props) {
   const { t } = useTranslation();
+  const { session } = useAuthSession();
+  const ownedIndex = useOwnedProfileIndex(session?.user.id);
 
   // Per-cell: bid/tricks/total/bonus computed once.
   const cells: Record<
@@ -124,7 +128,7 @@ export function ScoreboardScreen({ players, entries, currentRound }: Props) {
                 </th>
                 {players.map((p) => (
                   <th key={p.id} className={styles.th}>
-                    {displayPlayerName(p)}
+                    {displayPlayerName(p, ownedIndex)}
                   </th>
                 ))}
               </tr>
@@ -257,6 +261,8 @@ function Sparkline({
   cumulative: Record<string, number[]>;
   roundsPlayed: number;
 }) {
+  const { session } = useAuthSession();
+  const ownedIndex = useOwnedProfileIndex(session?.user.id);
   const W = 320;
   const H = 80;
 
@@ -317,7 +323,7 @@ function Sparkline({
               fontSize="9"
               fill={color}
             >
-              {displayPlayerName(p).slice(0, 3)}
+              {displayPlayerName(p, ownedIndex).slice(0, 3)}
             </text>
           </g>
         );

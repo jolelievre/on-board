@@ -4,6 +4,8 @@ import shared from "./shared.module.css";
 import styles from "./MatchCompleteScreen.module.css";
 import { SkullGlyph } from "../../ui/sk/SkGlyphs";
 import { displayPlayerName } from "../../../../shared/players";
+import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
 
 type Props = {
@@ -35,6 +37,8 @@ export function MatchCompleteScreen({
   onOpenScoreboard,
 }: Props) {
   const { t } = useTranslation();
+  const { session } = useAuthSession();
+  const ownedIndex = useOwnedProfileIndex(session?.user.id);
   const ranked = [...players].sort(
     (a, b) => (totals[b.id] ?? 0) - (totals[a.id] ?? 0),
   );
@@ -43,7 +47,7 @@ export function MatchCompleteScreen({
   const heading = isDraw
     ? t("scoring.skullKing.complete.draw")
     : t("scoring.skullKing.complete.winnerWins", {
-        name: winner ? displayPlayerName(winner) : "",
+        name: winner ? displayPlayerName(winner, ownedIndex) : "",
       });
 
   const summary = isDraw
@@ -90,7 +94,7 @@ export function MatchCompleteScreen({
             >
               <span className={styles.rank}>{medal}</span>
               <span className={`${styles.name} ${isWinner ? styles.winner : ""}`}>
-                {displayPlayerName(p)}
+                {displayPlayerName(p, ownedIndex)}
               </span>
               <span className={styles.score}>{totals[p.id] ?? 0}</span>
             </div>

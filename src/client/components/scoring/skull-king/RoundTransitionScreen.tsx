@@ -3,6 +3,8 @@ import shared from "./shared.module.css";
 import styles from "./RoundTransitionScreen.module.css";
 import { SkullGlyph } from "../../ui/sk/SkGlyphs";
 import { displayPlayerName } from "../../../../shared/players";
+import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
 
 type Standing = {
@@ -36,6 +38,8 @@ export function RoundTransitionScreen({
   onEditLastRound,
 }: Props) {
   const { t } = useTranslation();
+  const { session } = useAuthSession();
+  const ownedIndex = useOwnedProfileIndex(session?.user.id);
   // One card per round number, no cap — round 10 deals 10 cards. The stack
   // is centred horizontally regardless of count.
   const cardCount = nextRound;
@@ -58,7 +62,7 @@ export function RoundTransitionScreen({
         <p className={styles.subtitle}>
           {t("scoring.skullKing.transition.cardsEach", {
             count: nextRound,
-            name: displayPlayerName(nextDealer),
+            name: displayPlayerName(nextDealer, ownedIndex),
           })}
         </p>
       </div>
@@ -107,7 +111,7 @@ export function RoundTransitionScreen({
             >
               <span className={styles.standingsRank}>#{i + 1}</span>
               <span className={styles.standingsName}>
-                {displayPlayerName(row.player)}
+                {displayPlayerName(row.player, ownedIndex)}
               </span>
               <span className={`${styles.standingsDelta} ${direction}`}>
                 {sign}

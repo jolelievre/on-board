@@ -2,6 +2,8 @@ import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./BidRecapScreen.module.css";
 import { displayPlayerName } from "../../../../shared/players";
+import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
 
 type Props = {
@@ -21,6 +23,8 @@ export function BidRecapScreen({
   onBack,
 }: Props) {
   const { t } = useTranslation();
+  const { session } = useAuthSession();
+  const ownedIndex = useOwnedProfileIndex(session?.user.id);
   const sum = players.reduce((s, p) => s + (bids[p.id] ?? 0), 0);
 
   let commentary = "";
@@ -66,7 +70,7 @@ export function BidRecapScreen({
                 data-testid={`sk-bid-recap-${p.id}`}
               >
                 <span className={styles.entryName}>
-                  {displayPlayerName(p)}
+                  {displayPlayerName(p, ownedIndex)}
                 </span>
                 <span
                   className={`${styles.entryValue} ${isZero ? styles.zero : ""}`}

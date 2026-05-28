@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { computeTotalsByPlayer } from "../../../shared/scoring/7-wonders-duel";
 import { parseRoundCategory } from "../../../shared/scoring/skull-king";
 import { displayPlayerName } from "../../../shared/players";
+import { useOwnedProfileIndex } from "../../hooks/data/useOwnedProfileIndex";
 import type { MatchListItem } from "../../hooks/data/useMatchList";
 import { Pill } from "../ui/Pill";
 import { Icon } from "../ui/Icon";
@@ -48,13 +49,19 @@ export function MatchHistoryRow({
   gameSlug,
   gameName,
   locale,
+  viewerId,
 }: {
   match: MatchListItem;
   gameSlug: string;
   gameName?: string;
   locale: string;
+  /** Drives the "this row represents me" bold styling. Required (even
+   * when `null`, e.g. pre-session) so callers can't silently forget
+   * it the way they did the old viewerId argument. */
+  viewerId: string | null;
 }) {
   const { t } = useTranslation();
+  const ownedIndex = useOwnedProfileIndex(viewerId ?? undefined);
   const totals = computeMatchTotalsBySlug(gameSlug, match.scores);
   const winner = match.winnerId
     ? match.players.find((p) => p.id === match.winnerId)
@@ -103,24 +110,28 @@ export function MatchHistoryRow({
           {orderedPlayers.map((p, idx) => {
             const isWinner = winner?.id === p.id;
             const isDim = isCompleted && winner !== null && !isWinner;
+            const isSelf =
+              viewerId !== null && p.profile.linkedUserId === viewerId;
             return (
               <Fragment key={p.id}>
                 <div
                   className={`${styles.playerCell} ${
                     isWinner ? styles.playerWinner : ""
                   }`}
+                  data-self={isSelf || undefined}
                 >
                   <span
                     className={[
                       styles.playerName,
                       isWinner && styles.playerNameWinner,
+                      isSelf && styles.playerNameSelf,
                       isDim && styles.playerNameDim,
                     ]
                       .filter(Boolean)
                       .join(" ")}
                   >
                     {isWinner && <Icon name="trophy" size={13} />}
-                    {displayPlayerName(p)}
+                    {displayPlayerName(p, ownedIndex)}
                   </span>
                   <span
                     data-testid={`match-history-score-${p.id}`}
@@ -149,18 +160,22 @@ export function MatchHistoryRow({
           {orderedPlayers.slice(0, 3).map((p, idx) => {
             const isWinner = winner?.id === p.id;
             const isDim = isCompleted && winner !== null && !isWinner;
+            const isSelf =
+              viewerId !== null && p.profile.linkedUserId === viewerId;
             return (
               <span
                 key={p.id}
                 className={`${styles.podiumEntry} ${
                   isWinner ? styles.podiumWinner : ""
                 }`}
+                data-self={isSelf || undefined}
               >
                 <span className={styles.podiumRank}>#{idx + 1}</span>
                 <span
                   className={[
                     styles.podiumName,
                     isWinner && styles.playerNameWinner,
+                    isSelf && styles.podiumNameSelf,
                     isDim && styles.playerNameDim,
                   ]
                     .filter(Boolean)
@@ -168,7 +183,7 @@ export function MatchHistoryRow({
                   data-testid={`match-history-score-${p.id}`}
                   data-score={totals[p.id] ?? 0}
                 >
-                  {displayPlayerName(p)}
+                  {displayPlayerName(p, ownedIndex)}
                 </span>
               </span>
             );

@@ -75,8 +75,14 @@
 }
 
 .playerNameWinner {
-  font-weight: 700;
   color: var(--color-primary);
+}
+
+/* Bold weight reserved for "this row represents me" — applies whether
+ * or not I won, so I can spot myself at a glance. Stacks with
+ * `playerNameWinner` (winner-and-me ⇒ bold + primary). */
+.playerNameSelf {
+  font-weight: 700;
 }
 
 .playerNameDim {
@@ -154,6 +160,12 @@
   white-space: nowrap;
   /* Compensate Caveat's italic lean so the last glyph isn't clipped. */
   padding-inline-end: 0.25em;
+}
+
+/* Bold weight on podium rows to flag "this is me" in 3+ player views.
+ * Same rule as `.playerNameSelf` for the compact "vs" layout. */
+.podiumNameSelf {
+  font-weight: 700;
 }
 
 .podiumMore {

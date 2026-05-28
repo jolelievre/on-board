@@ -857,3 +857,231 @@ test.describe("Players tab (single-Profile model)", () => {
     }
   });
 });
+
+test.describe("Profile name rendering (display rules)", () => {
+  test("the viewer's own seat carries data-self on every match-history row", async ({
+    browser,
+  }) => {
+    const ownerCtx = await browser.newContext();
+    try {
+      const userA = await signUp(ownerCtx);
+      const ownerPage = await ownerCtx.newPage();
+      await createMatchViaForm(ownerPage, {
+        gameSlug: "7-wonders-duel",
+        playerNames: [userA.name, "Friend"],
+      });
+      const friendProfileId = await awaitProfileWithAlias(ownerCtx, "Friend");
+
+      await openProfile(ownerPage, friendProfileId);
+      await expect(
+        ownerPage.locator("[data-testid='profile-recent-match']"),
+      ).toHaveCount(1, { timeout: 10_000 });
+      // Exactly one cell carries `data-self="true"` — the seat that
+      // represents me. The "Friend" seat does not.
+      await expect(
+        ownerPage.locator(
+          "[data-testid='profile-recent-match'] [data-self='true']",
+        ),
+      ).toHaveCount(1);
+    } finally {
+      await ownerCtx.close();
+    }
+  });
+
+  test("Editing a friend's profile alias propagates instantly to the match-history label", async ({
+    browser,
+  }) => {
+    const ownerCtx = await browser.newContext();
+    try {
+      const userA = await signUp(ownerCtx);
+      const ownerPage = await ownerCtx.newPage();
+      const matchId = await createMatchViaForm(ownerPage, {
+        gameSlug: "7-wonders-duel",
+        playerNames: [userA.name, "Friend"],
+      });
+      const friendProfileId = await awaitProfileWithAlias(ownerCtx, "Friend");
+
+      // Baseline: match-history row labels the friend's seat "Friend".
+      await ownerPage.goto("/games/7-wonders-duel");
+      await ownerPage.waitForLoadState("domcontentloaded");
+      await expect(
+        ownerPage.locator(`[data-testid='match-history-row-${matchId}']`),
+      ).toContainText("Friend", { timeout: 10_000 });
+
+      // Rename "Friend" → "Bobby" via the profile detail.
+      await openProfile(ownerPage, friendProfileId);
+      await ownerPage.fill("[data-testid='profile-alias-input']", "Bobby");
+      await ownerPage.press("[data-testid='profile-alias-input']", "Enter");
+      await expect(
+        ownerPage.locator("[data-testid='profile-alias-saved']"),
+      ).toBeVisible({ timeout: 5000 });
+
+      // Live `useOwnedProfileIndex` updates on Dexie write; navigating
+      // back picks up the new alias without a hard refresh.
+      await ownerPage.goto("/games/7-wonders-duel");
+      await ownerPage.waitForLoadState("domcontentloaded");
+      await expect(
+        ownerPage.locator(`[data-testid='match-history-row-${matchId}']`),
+      ).toContainText("Bobby", { timeout: 10_000 });
+    } finally {
+      await ownerCtx.close();
+    }
+  });
+
+  test("Editing my own User.alias propagates instantly to the self seat on existing matches", async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext();
+    try {
+      const userA = await signUp(ctx);
+      const page = await ctx.newPage();
+      const matchId = await createMatchViaForm(page, {
+        gameSlug: "7-wonders-duel",
+        playerNames: [userA.name, "Friend"],
+      });
+
+      // Baseline: the self seat renders the signup name.
+      await page.goto("/games/7-wonders-duel");
+      await page.waitForLoadState("domcontentloaded");
+      await expect(
+        page.locator(`[data-testid='match-history-row-${matchId}']`),
+      ).toContainText(userA.name, { timeout: 10_000 });
+
+      // Rename via Settings → "Mobile".
+      await page.goto("/settings");
+      await page.waitForLoadState("domcontentloaded");
+      await page.fill("[data-testid='settings-alias-input']", "Mobile");
+      await page.press("[data-testid='settings-alias-input']", "Enter");
+      await expect(
+        page.locator("[data-testid='settings-alias-saved']"),
+      ).toBeVisible({ timeout: 5000 });
+
+      // `refreshLocalAliases` writes the new alias into the
+      // self-Profile row in Dexie; the next mount of the games page
+      // picks it up via `useOwnedProfileIndex`.
+      await page.goto("/games/7-wonders-duel");
+      await page.waitForLoadState("domcontentloaded");
+      await expect(
+        page.locator(`[data-testid='match-history-row-${matchId}']`),
+      ).toContainText("Mobile", { timeout: 10_000 });
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test("Multiplayer Skull King: snapshot fallback labels the seat I have no relation to", async ({
+    browser,
+  }) => {
+    // userA creates a 3-player Skull King match: [selfA, "Bob",
+    // "Charlie"]. userA then bilateral-links "Bob" to userB.
+    // userB views the match. The "Charlie" seat is owned by userA
+    // and not linked to anyone userB knows — userB's
+    // `displayProfileName` falls through to the inflated snapshot
+    // and shows "Charlie" (the original owner-side alias). The "Bob"
+    // seat resolves through `byLinkedUserId(userB)` to userB's
+    // self-Profile alias instead, even though userA had aliased it
+    // "Bob".
+    const ctxA = await browser.newContext();
+    const ctxB = await browser.newContext();
+    try {
+      const userA = await signUp(ctxA);
+      const userB = await signUp(ctxB);
+      const friendSource = await createUnclaimedProfile(ctxB.request, "Alice");
+
+      const pageA = await ctxA.newPage();
+      const matchId = await createMatchViaForm(pageA, {
+        gameSlug: "skull-king",
+        playerNames: [userA.name, "Bob", "Charlie"],
+      });
+      const bobProfileId = await awaitProfileWithAlias(ctxA, "Bob");
+
+      // Bilateral-link only "Bob" — "Charlie" stays unclaimed and
+      // owned by userA.
+      await openProfile(pageA, bobProfileId);
+      await performBilateralLink({
+        ownerPage: pageA,
+        friendCtx: ctxB,
+        ownerTargetProfileId: bobProfileId,
+        friendSourceProfileId: friendSource.id,
+      });
+
+      // userB opens the per-game history.
+      const pageB = await ctxB.newPage();
+      await pageB.goto("/games/skull-king");
+      await pageB.waitForLoadState("domcontentloaded");
+      const row = pageB.locator(
+        `[data-testid='match-history-row-${matchId}']`,
+      );
+      await expect(row).toBeVisible({ timeout: 10_000 });
+      // The unrelated "Charlie" seat uses the snapshot alias verbatim.
+      await expect(row).toContainText("Charlie");
+      // The "Bob" seat is userB to themselves — renders as their
+      // own self-Profile alias (signup name by default), NOT "Bob".
+      await expect(row).toContainText(userB.name);
+      // userA's seat resolves via userB's owned alias for A
+      // ("Alice"), not via the inflated snapshot.
+      await expect(row).toContainText("Alice");
+      // Sanity: "Bob" must NOT appear as a label on userB's view —
+      // it was userA's private nickname and userB now sees their own
+      // identity in that slot.
+      await expect(row).not.toContainText("Bob");
+    } finally {
+      await ctxA.close();
+      await ctxB.close();
+    }
+  });
+
+  test("Cross-user match: each side sees their own preferred name for the seat that represents them", async ({
+    browser,
+  }) => {
+    // userA creates the match; userB views it via bilateral link.
+    // For userB, the seat that represents userA renders as userB's
+    // owned alias for A ("Alice"). The seat that represents userB
+    // renders as userB's self-Profile alias (defaults to their
+    // signup name) — found via `byLinkedUserId(userB)`.
+    const ctxA = await browser.newContext();
+    const ctxB = await browser.newContext();
+    try {
+      const userA = await signUp(ctxA);
+      const userB = await signUp(ctxB);
+
+      // userB pre-creates an "Alice" profile for userA so they have
+      // their own alias on record when the bilateral link lands.
+      const friendSource = await createUnclaimedProfile(
+        ctxB.request,
+        "Alice",
+      );
+      const ownerTarget = await createUnclaimedProfile(ctxA.request, "Bob");
+
+      const pageA = await ctxA.newPage();
+      await openProfile(pageA, ownerTarget.id);
+      await performBilateralLink({
+        ownerPage: pageA,
+        friendCtx: ctxB,
+        ownerTargetProfileId: ownerTarget.id,
+        friendSourceProfileId: friendSource.id,
+      });
+
+      const matchId = await createMatchViaForm(pageA, {
+        gameSlug: "7-wonders-duel",
+        playerNames: [userA.name, "Bob"],
+      });
+
+      const pageB = await ctxB.newPage();
+      await pageB.goto("/games/7-wonders-duel");
+      await pageB.waitForLoadState("domcontentloaded");
+      const row = pageB.locator(
+        `[data-testid='match-history-row-${matchId}']`,
+      );
+      await expect(row).toBeVisible({ timeout: 10_000 });
+      // userB sees their own alias "Alice" for userA's seat…
+      await expect(row).toContainText("Alice");
+      // …and their self-Profile alias (their signup name) for their
+      // own seat.
+      await expect(row).toContainText(userB.name);
+    } finally {
+      await ctxA.close();
+      await ctxB.close();
+    }
+  });
+});

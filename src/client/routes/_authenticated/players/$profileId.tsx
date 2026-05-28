@@ -24,6 +24,7 @@ import { LinkScanner } from "../../../components/profiles/LinkScanner";
 import { LinkCodeDisplay } from "../../../components/profiles/LinkCodeDisplay";
 import { MatchHistoryRow } from "../../../components/matches/MatchHistoryRow";
 import { displayProfileName } from "../../../../shared/players";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import styles from "./$profileId.module.css";
 
 export const Route = createFileRoute("/_authenticated/players/$profileId")({
@@ -98,7 +99,8 @@ function ProfileDetailBody({
     profile.linkedUserId === viewerId && profile.ownerId === viewerId;
   const isLinked = profile.linkedUserId !== null;
   const isOwner = profile.ownerId === viewerId;
-  const name = displayProfileName(profile, viewerId);
+  const ownedIndex = useOwnedProfileIndex(viewerId ?? undefined);
+  const name = displayProfileName(profile, ownedIndex);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [editingPhoto, setEditingPhoto] = useState(false);
 
@@ -291,6 +293,7 @@ function ProfileDetailBody({
                     gameSlug={r.gameSlug}
                     gameName={r.gameName}
                     locale={i18n.language}
+                    viewerId={viewerId}
                   />
                 </div>
               ))}

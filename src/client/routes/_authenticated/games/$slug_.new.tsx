@@ -113,10 +113,22 @@ function NewMatchPage() {
         .where("matchId")
         .equals(rematchOf)
         .sortBy("position");
+      // Prefer the live alias from the owned-profile row (Dexie's
+      // source of truth) over the embedded snapshot, so a rematch
+      // surfaces the friend's *current* alias rather than whatever
+      // it was when the match was first created. Falls back to the
+      // snapshot for profiles I don't own (friend-of-friend case).
+      const profileRows = await db.profiles.bulkGet(
+        players.map((p) => p.profileId),
+      );
+      const aliasById = new Map<string, string>();
+      for (const row of profileRows) {
+        if (row) aliasById.set(row.id, row.alias);
+      }
       return {
         gameId: match.gameId,
         players: players.map((p) => ({
-          name: p.profile.alias,
+          name: aliasById.get(p.profileId) ?? p.profile.alias,
           profileId: p.profileId,
         })),
         metadata: (match.metadata ?? null) as Record<string, unknown> | null,
