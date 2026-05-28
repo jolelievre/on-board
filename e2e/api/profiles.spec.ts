@@ -625,6 +625,61 @@ test.describe("API: Profile link / unlink (authenticated)", () => {
     expect(payload.sourceProfileId).toBe(profile.id);
   });
 
+  test("GET /api/profiles/:id/link-status returns the current linkedUserId for polling", async ({
+    browser,
+  }) => {
+    // Used by the shower's LinkCodeDisplay polling — minimal payload
+    // (just `linkedUserId`) and auth-scoped to the owner.
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    const otherCtx = await browser.newContext();
+    try {
+      await createAndSignIn(ownerCtx.request);
+      const alice = await createProfile(ownerCtx.request, "Alice");
+
+      // Before linking: linkedUserId is null.
+      const before = await ownerCtx.request.get(
+        `/api/profiles/${alice.id}/link-status`,
+      );
+      expect(before.status()).toBe(200);
+      const beforeBody = (await before.json()) as {
+        linkedUserId: string | null;
+      };
+      expect(beforeBody.linkedUserId).toBeNull();
+
+      // Non-owner is rejected.
+      await createAndSignIn(otherCtx.request);
+      const forbidden = await otherCtx.request.get(
+        `/api/profiles/${alice.id}/link-status`,
+      );
+      expect(forbidden.status()).toBe(403);
+
+      // After a bilateral link, linkedUserId is the friend's id.
+      await createAndSignIn(friendCtx.request);
+      const friendMe = (await (
+        await friendCtx.request.get("/api/auth/get-session")
+      ).json()) as { user: { id: string } };
+      const friendSource = await createProfile(friendCtx.request, "OwnerSide");
+      const token = await mintLinkToken(friendCtx.request, friendSource.id);
+      await ownerCtx.request.post(`/api/profiles/${alice.id}/link`, {
+        data: { token },
+      });
+
+      const after = await ownerCtx.request.get(
+        `/api/profiles/${alice.id}/link-status`,
+      );
+      expect(after.status()).toBe(200);
+      const afterBody = (await after.json()) as {
+        linkedUserId: string | null;
+      };
+      expect(afterBody.linkedUserId).toBe(friendMe.user.id);
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+      await otherCtx.close();
+    }
+  });
+
   test("POST /api/profiles/:id/link-token rejects a non-owner and an already-linked source", async ({
     browser,
   }) => {

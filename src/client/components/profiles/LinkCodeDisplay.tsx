@@ -47,8 +47,16 @@ export function LinkCodeDisplay({
 }) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<FetchState>({ kind: "idle" });
   const [, setTick] = useState(0);
+
+  // Bring the panel into view on mount — the QR sits below the
+  // explainer + button row, so on smaller screens it spawns
+  // partially off-screen unless we scroll to it.
+  useEffect(() => {
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
 
   const mint = async () => {
     setState({ kind: "loading" });
@@ -114,14 +122,31 @@ export function LinkCodeDisplay({
     let cancelled = false;
     const id = window.setInterval(async () => {
       try {
-        const res = await fetch(`/api/profiles/${profile.id}`, {
-          credentials: "include",
-        });
+        // Dedicated /link-status endpoint: lightweight (returns
+        // `{ linkedUserId: string | null }`), scoped to this profile,
+        // and lives in the same namespace as `/link-token` and
+        // `/link`. Polling only needs to detect the null → non-null
+        // transition; the full profile + match refresh happens via
+        // the `pullSync` we trigger below.
+        const res = await fetch(
+          `/api/profiles/${profile.id}/link-status`,
+          { credentials: "include" },
+        );
         if (!res.ok) return;
-        const fresh = (await res.json()) as LocalProfile3;
+        const body = (await res.json()) as { linkedUserId: string | null };
         if (cancelled) return;
-        if (fresh.linkedUserId !== null) {
-          await db.profiles.put(fresh);
+        if (body.linkedUserId !== null) {
+          // Mirror our local row so the parent's reactive
+          // `useProfile` flips the rest of the UI to the linked
+          // state. The full profile shape (with linkedUser projection)
+          // arrives in the same `pullSync` we kick off below.
+          const local = await db.profiles.get(profile.id);
+          if (local) {
+            await db.profiles.put({
+              ...local,
+              linkedUserId: body.linkedUserId,
+            });
+          }
           // The shower's side needs the same retroactive-visibility
           // refresh that `linkProfile` triggers on the scanner's
           // side: linking doesn't bump `Match.updatedAt`, so the next
@@ -150,7 +175,7 @@ export function LinkCodeDisplay({
 
   if (state.kind === "loading" || state.kind === "idle") {
     return (
-      <div className={styles.root} data-testid="link-code-display">
+      <div ref={rootRef} className={styles.root} data-testid="link-code-display">
         <p className={styles.hint}>{t("link.code.loading")}</p>
       </div>
     );
@@ -158,7 +183,7 @@ export function LinkCodeDisplay({
 
   if (state.kind === "celebrating") {
     return (
-      <div className={styles.root} data-testid="link-code-display">
+      <div ref={rootRef} className={styles.root} data-testid="link-code-display">
         <LinkCelebration
           onDone={() => {
             // Hand control back to the parent — Dexie already holds the
@@ -175,7 +200,7 @@ export function LinkCodeDisplay({
 
   if (state.kind === "error") {
     return (
-      <div className={styles.root} data-testid="link-code-display">
+      <div ref={rootRef} className={styles.root} data-testid="link-code-display">
         <p className={styles.error}>{state.message}</p>
         <Button type="button" variant="primary" onClick={() => void mint()}>
           {t("link.code.retry")}
@@ -186,7 +211,7 @@ export function LinkCodeDisplay({
 
   if (state.kind === "expired") {
     return (
-      <div className={styles.root} data-testid="link-code-display">
+      <div ref={rootRef} className={styles.root} data-testid="link-code-display">
         <p className={styles.hint}>{t("link.code.expired")}</p>
         <Button
           type="button"
@@ -207,7 +232,7 @@ export function LinkCodeDisplay({
   );
 
   return (
-    <div className={styles.root} data-testid="link-code-display">
+    <div ref={rootRef} className={styles.root} data-testid="link-code-display">
       <div className={styles.qrFrame}>
         <canvas ref={canvasRef} data-testid="link-code-qr" />
       </div>

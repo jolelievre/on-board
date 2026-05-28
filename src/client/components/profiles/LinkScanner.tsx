@@ -209,20 +209,40 @@ export function LinkScanner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The camera viewport stays mounted only while we're actively
+  // looking for a code or submitting one. Once the link succeeds (or
+  // surfaces a merge / error) we drop the big video block so the
+  // message and the celebration animation are the only things on
+  // screen — that's where the user's attention should land.
+  const showViewport =
+    state.kind === "idle" ||
+    state.kind === "scanning" ||
+    state.kind === "submitting";
+
+  // Bring the panel into view on mount. The button row sits below
+  // the hero + alias + stats, so the panel often spawns below the
+  // fold — auto-scrolling avoids a "where did it go?" beat.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
   return (
-    <div className={styles.root} data-testid="link-scanner">
-      <div className={styles.viewport}>
-        <video
-          ref={videoRef}
-          className={styles.video}
-          autoPlay
-          playsInline
-          muted
-        />
-        {(state.kind === "scanning" || state.kind === "submitting") && (
-          <div className={styles.reticle} />
-        )}
-      </div>
+    <div ref={rootRef} className={styles.root} data-testid="link-scanner">
+      {showViewport && (
+        <div className={styles.viewport}>
+          <video
+            ref={videoRef}
+            className={styles.video}
+            autoPlay
+            playsInline
+            muted
+          />
+          {(state.kind === "scanning" || state.kind === "submitting") && (
+            <div className={styles.reticle} />
+          )}
+        </div>
+      )}
 
       {state.kind === "scanning" && (
         <p className={styles.hint}>{t("link.scanner.hint")}</p>

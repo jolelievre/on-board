@@ -334,6 +334,36 @@ export const profilesRoutes = new Hono<AuthEnv>()
       throw err;
     }
   })
+  .get("/:id/link-status", async (c) => {
+    // Lightweight polling endpoint for the shower's `LinkCodeDisplay`.
+    // The component ticks this every 2 s while its QR is on screen and
+    // pivots to the "linked" celebration when `linkedUserId` flips
+    // non-null. A scoped endpoint keeps the polling cost minimal (no
+    // big profile projection / linkedUser join) and lives in the same
+    // namespace as `/link-token` and `/link` so the surface area of
+    // the link flow stays grouped.
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    if (!CUID_RE.test(id)) {
+      return c.json({ error: "Invalid profile id format" }, 400);
+    }
+
+    const profile = await prisma.profile.findUnique({
+      where: { id },
+      select: { ownerId: true, linkedUserId: true },
+    });
+    if (!profile) {
+      return c.json({ error: "Profile not found" }, 404);
+    }
+    if (profile.ownerId !== user.id) {
+      return c.json(
+        { error: "Only the owner can check this profile's link status" },
+        403,
+      );
+    }
+    return c.json({ linkedUserId: profile.linkedUserId });
+  })
   .post("/:id/link-token", async (c) => {
     // Profile-scoped token. The caller mints a token attesting that
     // *they* are themselves AND that they're anchoring this link

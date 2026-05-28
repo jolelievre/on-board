@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../../lib/auth-client";
@@ -22,6 +22,7 @@ import { AvatarUploader } from "../../../components/profiles/AvatarUploader";
 import { MergeDialog } from "../../../components/profiles/MergeDialog";
 import { LinkScanner } from "../../../components/profiles/LinkScanner";
 import { LinkCodeDisplay } from "../../../components/profiles/LinkCodeDisplay";
+import { MatchHistoryRow } from "../../../components/matches/MatchHistoryRow";
 import { displayProfileName } from "../../../../shared/players";
 import styles from "./$profileId.module.css";
 
@@ -71,7 +72,7 @@ function ProfileDetailBody({
   profile: LocalProfile3;
   viewerId: string | null;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
   // Owner-only page: every profile in the Players tab is one the
@@ -276,27 +277,22 @@ function ProfileDetailBody({
 
         {recent && recent.length > 0 && (
           <Group title={t("players.recent.title")}>
-            <div className={styles.recentList}>
-              {recent.map((m) => (
-                <Link
-                  key={m.matchId}
-                  to="/matches/$id"
-                  params={{ id: m.matchId }}
-                  className={styles.recentRow}
+            <div
+              className={styles.recentList}
+              data-testid="profile-recent-list"
+            >
+              {recent.map((r) => (
+                <div
+                  key={r.match.id}
                   data-testid="profile-recent-match"
                 >
-                  <div className={styles.recentMeta}>
-                    <span className={styles.recentTitle}>{m.gameName}</span>
-                    <span className={styles.recentSub}>
-                      {new Date(m.startedAt).toLocaleDateString()}
-                      {m.status === "IN_PROGRESS" &&
-                        ` · ${t("matches.history.inProgress")}`}
-                    </span>
-                  </div>
-                  {m.status === "COMPLETED" && m.isWinner === true && (
-                    <Icon name="trophy" size={18} title={t("players.recent.win")} />
-                  )}
-                </Link>
+                  <MatchHistoryRow
+                    match={r.match}
+                    gameSlug={r.gameSlug}
+                    gameName={r.gameName}
+                    locale={i18n.language}
+                  />
+                </div>
               ))}
             </div>
           </Group>

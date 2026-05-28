@@ -1,5 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type LocalProfile3 } from "../../lib/db";
+import { projectPlayer } from "./hydratePlayer";
+import type { MatchListItem } from "./useMatchList";
 
 export type DataStatus = "loading" | "ok" | "missing";
 
@@ -517,17 +519,18 @@ export function useHeadToHead(
 }
 
 export type ProfileRecentMatch = {
-  matchId: string;
+  /** Game metadata for the row's label + score computation. */
   gameSlug: string;
   gameName: string;
-  status: "IN_PROGRESS" | "COMPLETED";
-  startedAt: string;
-  completedAt: string | null;
-  isWinner: boolean | null;
+  /** Full match shape so the shared `MatchHistoryRow` can render
+   * the same player/score layout the per-game history uses. */
+  match: MatchListItem;
 };
 
 /** Most recent matches the profile participated in. Used on the profile
- * detail page. */
+ * detail page. Returns the full `MatchListItem` shape (players +
+ * scores) so the shared `MatchHistoryRow` component renders the same
+ * preview as the per-game history. */
 export function useProfileRecentMatches(
   profileId: string | undefined,
   limit = 10,
@@ -540,9 +543,6 @@ export function useProfileRecentMatches(
       const players = await collectPersonPlayers(profile);
       if (players.length === 0) return [];
 
-      const playerById = new Map<string, string>();
-      for (const p of players) playerById.set(p.id, p.matchId);
-
       const matchIds = [...new Set(players.map((p) => p.matchId))];
       const matches = await db.matches.bulkGet(matchIds);
       const validMatches = matches.filter(
@@ -551,6 +551,38 @@ export function useProfileRecentMatches(
       validMatches.sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
 
       const sliced = validMatches.slice(0, limit);
+      if (sliced.length === 0) return [];
+
+      const slicedIds = sliced.map((m) => m.id);
+      const [allPlayers, allScores] = await Promise.all([
+        db.players.where("matchId").anyOf(slicedIds).toArray(),
+        db.scores.where("matchId").anyOf(slicedIds).toArray(),
+      ]);
+
+      const playersByMatch = new Map<string, ReturnType<typeof projectPlayer>[]>();
+      for (const p of allPlayers) {
+        const list = playersByMatch.get(p.matchId) ?? [];
+        list.push(projectPlayer(p));
+        playersByMatch.set(p.matchId, list);
+      }
+      for (const list of playersByMatch.values()) {
+        list.sort((a, b) => a.position - b.position);
+      }
+
+      const scoresByMatch = new Map<
+        string,
+        { playerId: string; category: string; value: number }[]
+      >();
+      for (const s of allScores) {
+        const list = scoresByMatch.get(s.matchId) ?? [];
+        list.push({
+          playerId: s.playerId,
+          category: s.category,
+          value: s.value,
+        });
+        scoresByMatch.set(s.matchId, list);
+      }
+
       const gameIds = [...new Set(sliced.map((m) => m.gameId))];
       const games = await db.games.bulkGet(gameIds);
       const gamesById = new Map<string, { slug: string; name: string }>();
@@ -558,28 +590,21 @@ export function useProfileRecentMatches(
         if (g) gamesById.set(g.id, { slug: g.slug, name: g.name });
       }
 
-      const profilePlayerIdsByMatch = new Map<string, Set<string>>();
-      for (const p of players) {
-        const set = profilePlayerIdsByMatch.get(p.matchId) ?? new Set<string>();
-        set.add(p.id);
-        profilePlayerIdsByMatch.set(p.matchId, set);
-      }
-
       return sliced.map((m) => {
         const gameInfo = gamesById.get(m.gameId);
-        const playerIds = profilePlayerIdsByMatch.get(m.id) ?? new Set();
-        let isWinner: boolean | null = null;
-        if (m.status === "COMPLETED") {
-          isWinner = m.winnerId ? playerIds.has(m.winnerId) : false;
-        }
         return {
-          matchId: m.id,
           gameSlug: gameInfo?.slug ?? "",
           gameName: gameInfo?.name ?? "",
-          status: m.status,
-          startedAt: m.startedAt,
-          completedAt: m.completedAt,
-          isWinner,
+          match: {
+            id: m.id,
+            status: m.status,
+            victoryType: m.victoryType,
+            winnerId: m.winnerId,
+            startedAt: m.startedAt,
+            completedAt: m.completedAt,
+            players: playersByMatch.get(m.id) ?? [],
+            scores: scoresByMatch.get(m.id) ?? [],
+          },
         };
       });
     },

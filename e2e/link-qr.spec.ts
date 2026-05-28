@@ -186,6 +186,152 @@ async function performBilateralLink(opts: {
 }
 
 test.describe("Profile linking (bilateral)", () => {
+  test("Shower sees the celebration overlay when the bilateral link lands (LinkCodeDisplay polling)", async ({
+    browser,
+  }) => {
+    // Both sides drive the UI: the shower opens their profile and
+    // taps Show QR (mounting LinkCodeDisplay which polls
+    // /link-status). The scanner submits the token. The shower's
+    // poller picks up the linkedUserId flip within the 2 s tick and
+    // swaps the QR for the celebration overlay — no manual refresh.
+    const ownerCtx = await browser.newContext();
+    const friendCtx = await browser.newContext();
+    try {
+      await signUp(friendCtx);
+      const friendSource = await createUnclaimedProfile(
+        friendCtx.request,
+        "OwnerSide",
+      );
+      await signUp(ownerCtx);
+      const ownerTarget = await createUnclaimedProfile(
+        ownerCtx.request,
+        "Alice",
+      );
+
+      // Shower opens their profile and taps Show QR. LinkCodeDisplay
+      // starts its 2 s polling against /link-status as soon as the
+      // token mints (kind = "ready").
+      const friendPage = await friendCtx.newPage();
+      await openProfile(friendPage, friendSource.id);
+      await friendPage.click("[data-testid='profile-link-show']");
+      await expect(
+        friendPage.locator("[data-testid='link-code-display']"),
+      ).toBeVisible({ timeout: 5000 });
+
+      // Scanner side does the link.
+      const ownerPage = await ownerCtx.newPage();
+      await openProfile(ownerPage, ownerTarget.id);
+      await performBilateralLink({
+        ownerPage,
+        friendCtx,
+        ownerTargetProfileId: ownerTarget.id,
+        friendSourceProfileId: friendSource.id,
+      });
+
+      // Shower's celebration overlay appears within the next polling
+      // tick (well inside the 8 s budget that covers two ticks).
+      await expect(
+        friendPage.locator("[data-testid='link-celebration']").first(),
+      ).toBeVisible({ timeout: 8000 });
+    } finally {
+      await ownerCtx.close();
+      await friendCtx.close();
+    }
+  });
+
+  test("Scanner viewport is hidden once the link lands (only the celebration is visible)", async ({
+    browser,
+  }) => {
+    // Before submission the big video block sits on screen; once we
+    // transition to `linked` it should disappear so the celebration
+    // overlay isn't competing with a still-running camera viewport.
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await signUp(friendCtx);
+      const friendSource = await createUnclaimedProfile(
+        friendCtx.request,
+        "OwnerSide",
+      );
+      await signUp(ownerCtx);
+      const ownerTarget = await createUnclaimedProfile(
+        ownerCtx.request,
+        "Alice",
+      );
+
+      const ownerPage = await ownerCtx.newPage();
+      await openProfile(ownerPage, ownerTarget.id);
+      await ownerPage.click("[data-testid='profile-link-scan']");
+
+      // While scanning, the viewport renders a <video>. We can't
+      // reliably assert visibility because headless Chrome won't open
+      // a camera, but the element should exist in the DOM.
+      await expect(
+        ownerPage.locator("[data-testid='link-scanner'] video"),
+      ).toHaveCount(1, { timeout: 5000 });
+
+      const token = await getLinkToken(friendCtx.request, friendSource.id);
+      await submitTokenViaHook(ownerPage, token);
+
+      // Celebration appears…
+      await expect(
+        ownerPage.locator("[data-testid='link-celebration']").first(),
+      ).toBeVisible({ timeout: 5000 });
+      // …and the video viewport is gone.
+      await expect(
+        ownerPage.locator("[data-testid='link-scanner'] video"),
+      ).toHaveCount(0);
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
+  test("Profile recent matches surface scores (shared MatchHistoryRow)", async ({
+    browser,
+  }) => {
+    // Verifies the shared MatchHistoryRow drives the profile's
+    // recent-match list — i.e. each card carries player score cells
+    // (`match-history-score-*`) rather than the old date-only row.
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await signUp(friendCtx);
+      const friendSource = await createUnclaimedProfile(
+        friendCtx.request,
+        "OwnerSide",
+      );
+      await signUp(ownerCtx);
+      const ownerPage = await ownerCtx.newPage();
+      const matchId = await createMatchViaForm(ownerPage, {
+        gameSlug: "7-wonders-duel",
+        playerNames: ["Me", "Friend"],
+      });
+      const friendProfileId = await awaitProfileWithAlias(ownerCtx, "Friend");
+
+      await openProfile(ownerPage, friendProfileId);
+      await expect(
+        ownerPage.locator("[data-testid='profile-recent-match']"),
+      ).toHaveCount(1, { timeout: 10_000 });
+      // The shared component renders both players' score cells. Two
+      // players → two `match-history-score-*` testids in this card.
+      await expect(
+        ownerPage.locator(
+          `[data-testid='match-history-row-${matchId}'] [data-testid^='match-history-score-']`,
+        ),
+      ).toHaveCount(2);
+      // And the row links through to the match detail page (Link's
+      // `to` prop), so tapping it navigates.
+      await ownerPage.click(`[data-testid='match-history-row-${matchId}']`);
+      await ownerPage.waitForURL(new RegExp(`/matches/${matchId}`));
+
+      void friendSource;
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
   test("a bilateral scan flips both profiles to Linked simultaneously", async ({
     browser,
   }) => {
