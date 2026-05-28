@@ -86,6 +86,21 @@ export async function setSyncMeta(key: string, value: string): Promise<void> {
 }
 
 /**
+ * Drop both pull cursors so the next `pullSync()` re-fetches every
+ * server-visible match + profile without a `?since=` filter. Used when
+ * a server-side visibility change can retroactively make older rows
+ * visible (the bilateral link flow is the canonical case: linking
+ * doesn't bump `Match.updatedAt`, so a `?since=` delta would miss the
+ * friend's pre-link history entirely).
+ */
+export async function resetPullCursors(): Promise<void> {
+  await db.syncMeta.bulkDelete([
+    SYNC_META_LAST_PULL,
+    SYNC_META_LAST_PROFILE_PULL,
+  ]);
+}
+
+/**
  * Pull updates from the server into Dexie. Idempotent. Safe to call from
  * multiple triggers: app boot, post-flush, `online` event, route change,
  * tab regain (`visibilitychange`).
@@ -150,6 +165,15 @@ export async function pullSync(
       );
     },
   );
+  // Track whether any owned profile transitioned from unclaimed to
+  // linked during this pull. That's the shower-side signal for a
+  // bilateral link that just landed (the scanner's `linkProfile`
+  // mutation has its own eager reset+pull, but the shower has no
+  // direct hook unless their `LinkCodeDisplay` polling is active).
+  // When detected we clear the matches cursor and re-pull at the end
+  // — the friend's pre-link history doesn't carry a fresh
+  // `Match.updatedAt`, so the `?since=` delta above would miss it.
+  let linkTransitionDetected = false;
   const profiles = pullEntity(
     api<ApiProfile[]>(profilesUrl),
     async (rows) => {
@@ -157,7 +181,8 @@ export async function pullSync(
         "rw",
         [db.profiles, db.syncMeta],
         async () => {
-          await mergeProfiles(rows);
+          const transitions = await mergeProfiles(rows);
+          if (transitions) linkTransitionDetected = true;
           await setSyncMeta(SYNC_META_LAST_PROFILE_PULL, pulledAt);
         },
       );
@@ -165,6 +190,15 @@ export async function pullSync(
   );
 
   await Promise.allSettled([games, matches, profiles]);
+
+  if (linkTransitionDetected) {
+    await resetPullCursors();
+    // Bypass the throttle for the recursive call — the bilateral link
+    // is a discrete event that semantically resets visibility, so we
+    // accept the second round-trip.
+    lastPullStartedAt = 0;
+    await pullSync({ force: true });
+  }
 }
 
 async function pullEntity<T>(
@@ -180,8 +214,8 @@ async function pullEntity<T>(
   }
 }
 
-async function mergeProfiles(rows: ApiProfile[]): Promise<void> {
-  if (rows.length === 0) return;
+async function mergeProfiles(rows: ApiProfile[]): Promise<boolean> {
+  if (rows.length === 0) return false;
 
   const ids = rows.map((p) => p.id);
   const existing = await db.profiles.bulkGet(ids);
@@ -191,6 +225,7 @@ async function mergeProfiles(rows: ApiProfile[]): Promise<void> {
   }
 
   const toPut: LocalProfile3[] = [];
+  let linkTransition = false;
   for (const p of rows) {
     const local = existingById.get(p.id);
     // LWW on updatedAt: skip when the local copy is at least as fresh.
@@ -199,6 +234,17 @@ async function mergeProfiles(rows: ApiProfile[]): Promise<void> {
     // local so a queued PATCH-then-pull doesn't undo the optimistic
     // value.
     if (local && local.updatedAt >= p.updatedAt) continue;
+    // Detect unclaimed → linked transition. The fresh server row is
+    // about to overwrite a local row that was unclaimed (or was never
+    // seen locally before). When this happens the caller will reset
+    // the matches cursor + re-pull, because the bilateral link just
+    // widened visibility into matches the friend created pre-link.
+    if (
+      p.linkedUserId !== null &&
+      (!local || local.linkedUserId === null)
+    ) {
+      linkTransition = true;
+    }
     toPut.push({
       id: p.id,
       ownerId: p.ownerId,
@@ -213,6 +259,7 @@ async function mergeProfiles(rows: ApiProfile[]): Promise<void> {
     });
   }
   if (toPut.length > 0) await db.profiles.bulkPut(toPut);
+  return linkTransition;
 }
 
 // NOTE — server-side profile deletions (link-time merge, friend-side

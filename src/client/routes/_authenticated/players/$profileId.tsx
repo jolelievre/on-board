@@ -491,20 +491,20 @@ function LinkSection({
         <Button
           type="button"
           variant="secondary"
-          iconBefore={<Icon name="link" size={16} />}
-          onClick={() => setPanel("show")}
-          data-testid="profile-link-show"
-        >
-          {t("link.showCta")}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
           iconBefore={<Icon name="camera" size={16} />}
           onClick={() => setPanel("scan")}
           data-testid="profile-link-scan"
         >
           {t("link.scanCta")}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          iconBefore={<Icon name="link" size={16} />}
+          onClick={() => setPanel("show")}
+          data-testid="profile-link-show"
+        >
+          {t("link.showCta")}
         </Button>
       </div>
     </Group>

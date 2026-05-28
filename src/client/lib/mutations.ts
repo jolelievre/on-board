@@ -7,6 +7,7 @@ import {
   type LocalScore,
 } from "./db";
 import { syncEngine } from "./sync";
+import { pullSync, resetPullCursors } from "./pull-sync";
 
 const nowIso = () => new Date().toISOString();
 
@@ -614,6 +615,18 @@ export async function linkProfile(input: {
     // the row isn't reachable through other queries.
     await db.profiles.put(body.profile);
     await db.profiles.put(body.sourceProfile);
+    // The link retroactively makes the friend's pre-link matches +
+    // their owned-friend profiles visible to us, but linking doesn't
+    // bump `Match.updatedAt` server-side, so a `?since=` delta would
+    // miss them entirely. Drop the pull cursors and do one full pull
+    // so the friend's pre-link history lands in local Dexie.
+    await resetPullCursors();
+    try {
+      await pullSync({ force: true });
+    } catch {
+      // Network blip — the next routine pullSync (boot / route /
+      // online event) will retry with the now-cleared cursor.
+    }
   }
   return body;
 }

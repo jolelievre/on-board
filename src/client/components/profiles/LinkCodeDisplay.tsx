@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import QRCode from "qrcode";
 import { requestLinkToken } from "../../lib/mutations";
+import { pullSync, resetPullCursors } from "../../lib/pull-sync";
 import { db, type LocalProfile3 } from "../../lib/db";
 import { Button } from "../ui/Button";
 import { LinkCelebration } from "./LinkCelebration";
@@ -121,6 +122,18 @@ export function LinkCodeDisplay({
         if (cancelled) return;
         if (fresh.linkedUserId !== null) {
           await db.profiles.put(fresh);
+          // The shower's side needs the same retroactive-visibility
+          // refresh that `linkProfile` triggers on the scanner's
+          // side: linking doesn't bump `Match.updatedAt`, so the next
+          // `?since=` delta would miss the friend's pre-link history.
+          // Drop the cursors and force a full pull before celebrating.
+          await resetPullCursors();
+          try {
+            await pullSync({ force: true });
+          } catch {
+            // Network blip — next routine pullSync (boot / route /
+            // online event) retries with the cleared cursor.
+          }
           setState({ kind: "celebrating" });
         }
       } catch {

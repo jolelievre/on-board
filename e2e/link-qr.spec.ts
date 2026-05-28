@@ -473,6 +473,117 @@ test.describe("Profile linking (bilateral)", () => {
     }
   });
 
+  test("After bilateral linking, EACH side sees the OTHER's pre-link matches in their UI (established pull cursors)", async ({
+    browser,
+  }) => {
+    // The user-reported bug: both sides have established pull-sync
+    // cursors (i.e. they've used the app before), each side has
+    // created matches with their own unclaimed "friend" profile, then
+    // they bilaterally link. The cross-user pre-link history must
+    // become visible in both UIs. A `?since=` delta would miss those
+    // matches because the link doesn't bump Match.updatedAt; the link
+    // mutation has to reset both cursors and force a full re-pull.
+    //
+    // To simulate established cursors, each side opens the app UI
+    // *before* the link (which triggers a boot-time pullSync that
+    // stamps the cursor). Then we perform the bilateral link and
+    // assert each side sees the other's pre-link match via the UI
+    // (the recent-matches list on the linked profile detail page,
+    // and the per-game match-history).
+    const ctxA = await browser.newContext();
+    const ctxB = await browser.newContext();
+    try {
+      const userA = await signUp(ctxA);
+      const userB = await signUp(ctxB);
+
+      // Each side creates a match with their OWN self-profile (the
+      // form's exact-alias match resolves to the auto-created
+      // self-Profile when the signup name is typed) + an unclaimed
+      // profile for the other person. Using the self-profile is what
+      // makes the match attributable through bilateral linking —
+      // `collectPersonPlayers` widens on `profileLinkedUserId`, and
+      // the self-profile already has its owner's user id in that
+      // column. A match with no self-seat doesn't carry the
+      // identifying link.
+      const pageA = await ctxA.newPage();
+      const matchA = await createMatchViaForm(pageA, {
+        gameSlug: "7-wonders-duel",
+        playerNames: [userA.name, "Bob"],
+      });
+      const aProfileOfB = await awaitProfileWithAlias(ctxA, "Bob");
+
+      const pageB = await ctxB.newPage();
+      const matchB = await createMatchViaForm(pageB, {
+        gameSlug: "7-wonders-duel",
+        playerNames: [userB.name, "Alice"],
+      });
+      const bProfileOfA = await awaitProfileWithAlias(ctxB, "Alice");
+
+      // Establish a recent pull cursor on both sides by navigating to
+      // an authenticated route (the boot-time pullSync stamps
+      // lastPullAt). Without this the link's full re-pull would be a
+      // no-op for either side — the bug only manifests against an
+      // established cursor.
+      await pageA.goto("/players");
+      await pageA.waitForLoadState("domcontentloaded");
+      await expect(
+        pageA.locator("[data-testid='player-row']"),
+      ).toHaveCount(1, { timeout: 10_000 });
+      await pageB.goto("/players");
+      await pageB.waitForLoadState("domcontentloaded");
+      await expect(
+        pageB.locator("[data-testid='player-row']"),
+      ).toHaveCount(1, { timeout: 10_000 });
+
+      // Bilateral link: A scans B's QR on A's "Bob" profile.
+      await openProfile(pageA, aProfileOfB);
+      await performBilateralLink({
+        ownerPage: pageA,
+        friendCtx: ctxB,
+        ownerTargetProfileId: aProfileOfB,
+        friendSourceProfileId: bProfileOfA,
+      });
+
+      // A's side: open the linked "Bob" profile detail → A sees A's
+      // own pre-link match AND B's pre-link match (visibility flows
+      // through B.bProfileOfA.linkedUserId == A).
+      await openProfile(pageA, aProfileOfB);
+      await expect(
+        pageA.locator("[data-testid='profile-recent-match']"),
+      ).toHaveCount(2, { timeout: 10_000 });
+
+      // A's per-game history confirms cross-user pull.
+      await pageA.goto("/games/7-wonders-duel");
+      await pageA.waitForLoadState("domcontentloaded");
+      await expect(
+        pageA.locator(`[data-testid='match-history-row-${matchA}']`),
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(
+        pageA.locator(`[data-testid='match-history-row-${matchB}']`),
+      ).toBeVisible({ timeout: 10_000 });
+
+      // Symmetric assertion on B's side. B has to trigger their own
+      // pull-sync (their session has its own cursor); navigating to
+      // an authenticated route refreshes it via the boot/route
+      // pullSync trigger.
+      await openProfile(pageB, bProfileOfA);
+      await expect(
+        pageB.locator("[data-testid='profile-recent-match']"),
+      ).toHaveCount(2, { timeout: 10_000 });
+      await pageB.goto("/games/7-wonders-duel");
+      await pageB.waitForLoadState("domcontentloaded");
+      await expect(
+        pageB.locator(`[data-testid='match-history-row-${matchA}']`),
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(
+        pageB.locator(`[data-testid='match-history-row-${matchB}']`),
+      ).toBeVisible({ timeout: 10_000 });
+    } finally {
+      await ctxA.close();
+      await ctxB.close();
+    }
+  });
+
   test("Re-linking after an unlink restores bilateral visibility", async ({
     browser,
   }) => {
