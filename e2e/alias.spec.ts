@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { login } from "./helpers/auth";
+import { createProfile } from "./helpers/api";
 
 /**
  * Alias feature tests.
@@ -117,6 +118,40 @@ test.describe("Alias — settings + propagation", () => {
     ).toBeVisible();
     await expect(
       page.locator("[data-testid='new-match-suggestion-0-Jo']"),
+    ).toHaveCount(0);
+  });
+
+  test("editing a friend's profile alias updates the new-match form suggestion chip", async ({
+    page,
+  }) => {
+    // Regression guard for the suggestion-list freshness path. The
+    // original test edited the alias via /players/<self>; under the
+    // single-Profile model the self-profile redirects to /settings,
+    // so the equivalent self-alias scenario lives in the "clearing
+    // the alias" test above. This guards the *friend* side: rename a
+    // friend's profile on /players/<friend> → the typed name in the
+    // new-match form's autocomplete reflects the new alias immediately.
+    await signUpFresh(page);
+
+    const friend = await createProfile(page.request, "Bob");
+    await page.goto(`/players/${friend.id}`);
+    await page.waitForLoadState("domcontentloaded");
+
+    await page.fill("[data-testid='profile-alias-input']", "Bobby");
+    await page.press("[data-testid='profile-alias-input']", "Enter");
+    await expect(
+      page.locator("[data-testid='profile-alias-saved']"),
+    ).toBeVisible();
+
+    // The new-match form's friend suggestion uses the live alias.
+    await page.goto("/games/7-wonders-duel/new");
+    await page.waitForLoadState("domcontentloaded");
+    await page.click("[data-testid='new-match-player-1']");
+    await expect(
+      page.locator("[data-testid='new-match-suggestion-1-Bobby']"),
+    ).toBeVisible();
+    await expect(
+      page.locator("[data-testid='new-match-suggestion-1-Bob']"),
     ).toHaveCount(0);
   });
 

@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
-import type { APIRequestContext } from "@playwright/test";
 import { createAndSignIn } from "../helpers/auth";
+import { createProfile, mintLinkToken } from "../helpers/api";
 import type { ApiProfile } from "../../src/client/lib/api-types";
 
 function makeClientId(): string {
@@ -9,37 +9,6 @@ function makeClientId(): string {
     hex += Math.floor(Math.random() * 16).toString(16);
   }
   return `c${hex}`;
-}
-
-// Bilateral-link helpers: a token is now scoped to a specific owned
-// profile (the "source"). Tests call `mintLinkToken(req, profile.id)`
-// to mint a fresh one. `createProfile` is just a thin wrapper to keep
-// the bilateral setup readable in each test.
-async function mintLinkToken(
-  req: APIRequestContext,
-  sourceProfileId: string,
-): Promise<string> {
-  const res = await req.post(`/api/profiles/${sourceProfileId}/link-token`);
-  if (!res.ok()) {
-    throw new Error(
-      `mintLinkToken ${sourceProfileId} -> ${res.status()} ${await res.text()}`,
-    );
-  }
-  const { token } = (await res.json()) as { token: string };
-  return token;
-}
-
-async function createProfile(
-  req: APIRequestContext,
-  alias: string,
-): Promise<ApiProfile> {
-  const res = await req.post("/api/profiles", { data: { alias } });
-  if (!res.ok()) {
-    throw new Error(
-      `createProfile ${alias} -> ${res.status()} ${await res.text()}`,
-    );
-  }
-  return (await res.json()) as ApiProfile;
 }
 
 test.describe("API: Profiles (authenticated)", () => {
@@ -134,10 +103,7 @@ test.describe("API: Profiles (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const create = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const profile = (await create.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     const patched = await request.patch(`/api/profiles/${profile.id}`, {
       data: { alias: "Bob", useLinkedAvatar: false },
@@ -150,10 +116,7 @@ test.describe("API: Profiles (authenticated)", () => {
 
   test("PATCH /api/profiles/:id forbids non-owners", async ({ request }) => {
     await createAndSignIn(request);
-    const create = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const profile = (await create.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     await createAndSignIn(request); // new user
     const patched = await request.patch(`/api/profiles/${profile.id}`, {
@@ -166,10 +129,7 @@ test.describe("API: Profiles (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const create = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const aliceProfile = (await create.json()) as ApiProfile;
+    const aliceProfile = await createProfile(request, "Alice");
 
     await createAndSignIn(request); // new user
     const res = await request.get("/api/profiles");
@@ -187,10 +147,7 @@ test.describe("API: Profiles (authenticated)", () => {
     const cursor = new Date().toISOString();
     await new Promise((r) => setTimeout(r, 30));
 
-    const create = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const created = (await create.json()) as ApiProfile;
+    const created = await createProfile(request, "Alice");
 
     const res = await request.get(
       `/api/profiles?since=${encodeURIComponent(cursor)}`,
@@ -208,14 +165,8 @@ test.describe("API: Profiles (authenticated)", () => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
-    const aliceRes = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const alice = (await aliceRes.json()) as ApiProfile;
-    const bobRes = await request.post("/api/profiles", {
-      data: { alias: "Bob" },
-    });
-    const bob = (await bobRes.json()) as ApiProfile;
+    const alice = await createProfile(request, "Alice");
+    const bob = await createProfile(request, "Bob");
 
     const matchRes = await request.post("/api/matches", {
       data: {
@@ -242,14 +193,8 @@ test.describe("API: Profiles (authenticated)", () => {
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
-    const aliceRes = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const alice = (await aliceRes.json()) as ApiProfile;
-    const bobRes = await request.post("/api/profiles", {
-      data: { alias: "Bob" },
-    });
-    const bob = (await bobRes.json()) as ApiProfile;
+    const alice = await createProfile(request, "Alice");
+    const bob = await createProfile(request, "Bob");
 
     await request.post("/api/matches", {
       data: {
@@ -261,10 +206,7 @@ test.describe("API: Profiles (authenticated)", () => {
       },
     });
 
-    const carolRes = await request.post("/api/profiles", {
-      data: { alias: "Carol" },
-    });
-    const carol = (await carolRes.json()) as ApiProfile;
+    const carol = await createProfile(request, "Carol");
 
     const second = await request.post("/api/matches", {
       data: {
@@ -320,11 +262,7 @@ test.describe("API: Profile avatars (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const created = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    expect(created.status()).toBe(201);
-    const profile = (await created.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
       multipart: {
@@ -353,10 +291,7 @@ test.describe("API: Profile avatars (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const created = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const profile = (await created.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     await createAndSignIn(request); // switch identity
     const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
@@ -375,10 +310,7 @@ test.describe("API: Profile avatars (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const created = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const profile = (await created.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
       data: "",
@@ -393,10 +325,7 @@ test.describe("API: Profile avatars (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const created = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const profile = (await created.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
       multipart: {
@@ -434,14 +363,8 @@ test.describe("API: Profile merge (authenticated)", () => {
     const gameRes = await request.get("/api/games/7-wonders-duel");
     const game = await gameRes.json();
 
-    const aliceRes = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const alice = (await aliceRes.json()) as ApiProfile;
-    const aliasRes = await request.post("/api/profiles", {
-      data: { alias: "Aliss" },
-    });
-    const alias = (await aliasRes.json()) as ApiProfile;
+    const alice = await createProfile(request, "Alice");
+    const alias = await createProfile(request, "Aliss");
 
     // One match references each profile so the merge has rewrites to do.
     const matchRes = await request.post("/api/matches", {
@@ -486,16 +409,10 @@ test.describe("API: Profile merge (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const aliceRes = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const alice = (await aliceRes.json()) as ApiProfile;
+    const alice = await createProfile(request, "Alice");
 
     await createAndSignIn(request);
-    const otherRes = await request.post("/api/profiles", {
-      data: { alias: "Other" },
-    });
-    const other = (await otherRes.json()) as ApiProfile;
+    const other = await createProfile(request, "Other");
 
     const merge = await request.post(`/api/profiles/${other.id}/merge`, {
       data: { sourceProfileId: alice.id },
@@ -517,10 +434,7 @@ test.describe("API: Profile merge (authenticated)", () => {
     const profiles = (await selfRes.json()) as ApiProfile[];
     const self = profiles.find((p) => p.linkedUserId === p.ownerId)!;
 
-    const otherRes = await request.post("/api/profiles", {
-      data: { alias: "OtherMe" },
-    });
-    const other = (await otherRes.json()) as ApiProfile;
+    const other = await createProfile(request, "OtherMe");
 
     const merge = await request.post(`/api/profiles/${self.id}/merge`, {
       data: { sourceProfileId: other.id },
@@ -574,10 +488,7 @@ test.describe("API: Profile merge (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const aliceRes = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const alice = (await aliceRes.json()) as ApiProfile;
+    const alice = await createProfile(request, "Alice");
 
     const merge = await request.post(`/api/profiles/${alice.id}/merge`, {
       data: { sourceProfileId: alice.id },
