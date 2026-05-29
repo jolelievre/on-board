@@ -67,7 +67,7 @@
 .playerName {
   font-family: var(--font-body);
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--color-ink);
   display: inline-flex;
   align-items: center;
@@ -78,11 +78,13 @@
   color: var(--color-primary);
 }
 
-/* Bold weight reserved for "this row represents me" — applies whether
- * or not I won, so I can spot myself at a glance. Stacks with
- * `playerNameWinner` (winner-and-me ⇒ bold + primary). */
+/* Heavy weight reserved for "this row represents me" — applies whether
+ * or not I won, so I can spot myself at a glance. Goes wide on
+ * purpose (default 400 → self 800) so the contrast survives the
+ * Caveat handwriting font where mid-range weights look near-identical.
+ * Stacks with `playerNameWinner` (winner-and-me ⇒ heavy + primary). */
 .playerNameSelf {
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .playerNameDim {
@@ -151,7 +153,7 @@
 .podiumName {
   font-family: var(--font-body);
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--color-ink);
   flex: 1 1 auto;
   min-width: 0;
@@ -162,10 +164,10 @@
   padding-inline-end: 0.25em;
 }
 
-/* Bold weight on podium rows to flag "this is me" in 3+ player views.
+/* Heavy weight on podium rows to flag "this is me" in 3+ player views.
  * Same rule as `.playerNameSelf` for the compact "vs" layout. */
 .podiumNameSelf {
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .podiumMore {
