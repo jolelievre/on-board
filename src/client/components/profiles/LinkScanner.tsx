@@ -193,8 +193,12 @@ export function LinkScanner({
 
   // Test-only injection point: the E2E suite stubs window-level
   // helpers so it can drive the link flow without rendering a real
-  // QR. Off-by-default in production; the harness must opt in.
+  // QR. The gate compares against a build-time-inlined string from
+  // `vite.config.ts` (set from DEPLOY_ENV), so production builds
+  // tree-shake the entire block — `window.__onboardSubmitLinkToken`
+  // is never exposed in prod. Dev / integration / preview keep it.
   useEffect(() => {
+    if (import.meta.env.VITE_ENABLE_TEST_HOOKS !== "true") return;
     if (typeof window === "undefined") return;
     const w = window as unknown as {
       __onboardSubmitLinkToken?: (token: string) => Promise<void>;

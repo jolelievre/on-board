@@ -76,8 +76,8 @@ function honoDevServer(): Plugin {
 
 type DeployEnv = "production" | "integration" | "preview";
 
-const DEPLOY_ENV: DeployEnv =
-  (process.env.DEPLOY_ENV as DeployEnv | undefined) ?? "production";
+const EXPLICIT_DEPLOY_ENV = process.env.DEPLOY_ENV as DeployEnv | undefined;
+const DEPLOY_ENV: DeployEnv = EXPLICIT_DEPLOY_ENV ?? "production";
 
 // Per-env PWA branding — lets a user install all three environments
 // side-by-side (production / integration / preview) and tell them apart
@@ -113,6 +113,19 @@ const envManifest = ENV_MANIFEST[DEPLOY_ENV];
 // reflect the environment.
 process.env.VITE_APP_NAME = envManifest.name;
 process.env.VITE_APP_THEME_COLOR = envManifest.theme;
+
+// Gate test-only window hooks (e.g. the E2E LinkScanner submit hook).
+// Production builds strip them via dead-code elimination — the constant
+// string comparison in the gate becomes statically false, the guarded
+// useEffect body is unreachable, and esbuild drops it from the bundle.
+//
+// We key on the *explicit* DEPLOY_ENV value (not the resolved one) so
+// local dev — where DEPLOY_ENV is unset and resolves to "production"
+// for branding purposes — still ships the hook. Only an explicit
+// `DEPLOY_ENV=production` deploy strips it.
+process.env.VITE_ENABLE_TEST_HOOKS = String(
+  EXPLICIT_DEPLOY_ENV !== "production",
+);
 
 export default defineConfig({
   plugins: [
