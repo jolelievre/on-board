@@ -1032,6 +1032,29 @@ On mobile, tapping a suggestion chip or "Create profile" in the new-match form f
 
 ---
 
+## Phase 7b: Documentation pass (post-1.0)
+
+**Goal**: Replace the bootstrap-era doc set with a stable reference, now that the architecture has settled. Triggered once v1.0 ships; PLAN.md itself converts into a CHANGELOG at this point because the phase-by-phase narrative is no longer load-bearing.
+
+The gap today: project description, data model, auth flow, game rules, and API surface are scattered across `CLAUDE.md`, `PLAN.md`, source comments, and one offline-specific doc. Everything still moves often enough that writing it earlier would mostly produce churn — this phase parks the work behind the v1 freeze.
+
+### What to write
+
+- **README rewrite** — currently bootstrap-only. Replace with: what OnBoard is, who it's for, the offline-first stance, install instructions, link to the doc set below.
+- **`docs/architecture.md`** — companion to `docs/offline-architecture.md`, covering what offline doesn't: data model (Profile / Player / Match / Score relationships, single-Profile model, `ownerId` + `linkedUserId` semantics), auth flow (Google OAuth via better-auth, session cookie, link-token HMAC), profile-linking model (bilateral QR, merge-on-collision, unlink propagation), sync engine internals at a higher level than offline-architecture's deep dive.
+- **`docs/games/{skull-king,7-wonders-duel}.md`** — per-game rules + scoring tables + variant matrix. Currently lives as comments next to the scoring functions; promoting it makes the rules legible without reading TypeScript and gives a home for screenshots.
+- **`docs/api.md`** — route reference (request / response shapes, auth requirements, error codes). Generated from the Hono route handlers if practical; hand-written otherwise.
+- **`CONTRIBUTING.md`** — fold in the conventions that currently live in `CLAUDE.md` and aren't AI-instruction-specific (lint rules, test conventions, commit style, branch workflow). `CLAUDE.md` keeps its AI-targeted material.
+
+### What to retire
+
+- **`PLAN.md`** → `CHANGELOG.md` (phase entries become release entries). PLAN.md is removed.
+- Scattered scoring rules in source comments → migrate to `docs/games/*.md`, leave a one-line pointer in the source.
+
+**Validation**: a new contributor can clone the repo, read `README.md` → `docs/architecture.md` → `docs/api.md`, and understand the system without reading any source code. CLAUDE.md no longer duplicates content that lives in `docs/`.
+
+---
+
 ## Phase 8: Skull King — Rascal Variant
 
 **Goal**: Complete the Phase 4 scope by adding the Rascal variant alongside Classic.
