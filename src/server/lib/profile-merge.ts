@@ -14,19 +14,17 @@ export class ProfileMergeError extends Error {
 type MergeInput = {
   /** The User performing the merge — must own both profiles. */
   callerId: string;
-  /** Profile that survives. Players and group members from `source`
-   * move onto this row. */
+  /** Profile that survives. Players from `source` move onto this row. */
   targetProfileId: string;
   /** Profile being absorbed. Disappears at the end of the transaction. */
   sourceProfileId: string;
 };
 
 /**
- * Collapse `source` into `target`: rewrite every `Player.profileId` and
- * every `ProfileGroupMember.profileId` from source → target, carry the
- * source's `linkedUserId` forward when the target lacks one, copy
- * `customAvatarUrl` only when the target has none, then delete the
- * source profile.
+ * Collapse `source` into `target`: rewrite every `Player.profileId` from
+ * source → target, carry the source's `linkedUserId` forward when the
+ * target lacks one, copy `customAvatarUrl` only when the target has
+ * none, then delete the source profile.
  *
  * Constraints (post single-Profile refactor):
  * - Caller must own both profiles. A merge is always an owner-side
@@ -126,36 +124,6 @@ export async function mergeProfiles(
     await tx.profile.update({
       where: { id: targetProfileId },
       data: targetUpdates,
-    });
-  }
-
-  // ProfileGroupMember stays empty until 6-D, but rewrite defensively
-  // so the same merge call works for both today and after 6-D ships.
-  // The compound unique [groupId, profileId] could collide if the
-  // target is already a member of a group the source is in — delete
-  // the source-side duplicates first.
-  const sourceMemberships = await tx.profileGroupMember.findMany({
-    where: { profileId: sourceProfileId },
-    select: { groupId: true },
-  });
-  if (sourceMemberships.length > 0) {
-    const groupIds = sourceMemberships.map((m) => m.groupId);
-    const targetExisting = await tx.profileGroupMember.findMany({
-      where: { profileId: targetProfileId, groupId: { in: groupIds } },
-      select: { groupId: true },
-    });
-    const overlappingGroupIds = new Set(targetExisting.map((m) => m.groupId));
-    if (overlappingGroupIds.size > 0) {
-      await tx.profileGroupMember.deleteMany({
-        where: {
-          profileId: sourceProfileId,
-          groupId: { in: [...overlappingGroupIds] },
-        },
-      });
-    }
-    await tx.profileGroupMember.updateMany({
-      where: { profileId: sourceProfileId },
-      data: { profileId: targetProfileId },
     });
   }
 

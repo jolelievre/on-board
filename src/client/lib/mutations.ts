@@ -3,7 +3,7 @@ import {
   db,
   type LocalMatch,
   type LocalPlayer,
-  type LocalProfile3,
+  type LocalProfile,
   type LocalScore,
 } from "./db";
 import { syncEngine } from "./sync";
@@ -365,7 +365,7 @@ export async function createProfile(
   const alias = input.alias.trim();
   const ts = nowIso();
 
-  const profile: LocalProfile3 = {
+  const profile: LocalProfile = {
     id: profileId,
     ownerId: input.ownerId,
     linkedUserId: null,
@@ -421,7 +421,7 @@ export async function uploadAvatar(input: {
     const text = await res.text();
     throw new Error(text || `Upload failed (${res.status})`);
   }
-  const updated = (await res.json()) as LocalProfile3;
+  const updated = (await res.json()) as LocalProfile;
   await db.profiles.put(updated);
 }
 
@@ -445,7 +445,7 @@ export async function clearCustomAvatar(input: {
     const text = await res.text();
     throw new Error(text || `Delete failed (${res.status})`);
   }
-  const updated = (await res.json()) as LocalProfile3;
+  const updated = (await res.json()) as LocalProfile;
   await db.profiles.put(updated);
 }
 
@@ -577,8 +577,8 @@ export async function requestLinkToken(input: {
 export type LinkProfileResponse =
   | {
       status: "linked";
-      profile: LocalProfile3;
-      sourceProfile: LocalProfile3;
+      profile: LocalProfile;
+      sourceProfile: LocalProfile;
     }
   | {
       status: "merge_required";
@@ -666,7 +666,7 @@ export async function unlinkProfile(input: {
     const text = await res.text();
     throw new Error(text || `Unlink failed (${res.status})`);
   }
-  const updated = (await res.json()) as LocalProfile3;
+  const updated = (await res.json()) as LocalProfile;
   if (input.asLinkedUser) {
     await db.profiles.delete(input.profileId);
   } else {
@@ -705,7 +705,7 @@ export async function patchProfile(input: PatchProfileInput): Promise<void> {
   await db.transaction("rw", [db.profiles, db.syncQueue], async () => {
     const profile = await db.profiles.get(input.profileId);
     if (profile) {
-      const next: LocalProfile3 = {
+      const next: LocalProfile = {
         ...profile,
         ...(body.alias !== undefined ? { alias: body.alias } : {}),
         ...(body.useLinkedAvatar !== undefined

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { LocalProfile3 } from "../../lib/db";
+import type { LocalProfile } from "../../lib/db";
 import { useCamera, type CameraErrorKey } from "../../hooks/useCamera";
 import {
   uploadAvatar,
@@ -36,7 +36,7 @@ export function AvatarUploader({
   viewerId,
   onDone,
 }: {
-  profile: LocalProfile3;
+  profile: LocalProfile;
   /** Powers the in-line `<Avatar>` preview (so the resolver picks the
    * right photo for the viewer) and decides whether to render the
    * self-profile vs friend-profile copy on the linked-avatar toggle. */
@@ -44,7 +44,17 @@ export function AvatarUploader({
   onDone?: () => void;
 }) {
   const { t } = useTranslation();
-  const camera = useCamera();
+  // Self-profile semantics: ownerId === linkedUserId === viewerId.
+  // Drives both the linked-avatar toggle copy and the initial camera
+  // facing-mode — selfie-style for your own photo, rear-facing for a
+  // friend you're pointing the phone at. The user can still flip.
+  const isSelf =
+    profile.linkedUserId !== null &&
+    profile.linkedUserId === viewerId &&
+    profile.ownerId === viewerId;
+  const camera = useCamera({
+    initialFacingMode: isSelf ? "user" : "environment",
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<Mode>("idle");
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
@@ -140,16 +150,6 @@ export function AvatarUploader({
     ? t(`avatar.cameraError.${camera.error}` as const)
     : null;
 
-  // Self-profile semantics: ownerId === linkedUserId === viewerId.
-  // Drives the linked-avatar toggle copy ("Use my Google photo" vs
-  // "Use friend's photo") so the same control reads correctly for both
-  // audiences. We re-derive this inside the uploader (rather than
-  // accepting it as a prop) because the upload + toggle live together
-  // here and there's only one source of truth needed.
-  const isSelf =
-    profile.linkedUserId !== null &&
-    profile.linkedUserId === viewerId &&
-    profile.ownerId === viewerId;
   const showLinkedToggle = profile.linkedUserId !== null;
 
   return (

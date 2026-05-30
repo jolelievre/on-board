@@ -27,9 +27,32 @@ test.describe("New match form — self suggestion chip", () => {
     await expect(selfChip).toBeVisible();
     await selfChip.click();
 
-    await expect(
-      page.locator("[data-testid='new-match-player-0']"),
-    ).toHaveValue(userName);
+    const input = page.locator("[data-testid='new-match-player-0']");
+    await expect(input).toHaveValue(userName);
+    // Picking a suggestion must drop input focus — otherwise the mobile
+    // soft keyboard stays up and covers the next slot.
+    await expect(input).not.toBeFocused();
+  });
+
+  test("clicking the '+ Create profile' inline row drops input focus", async ({
+    page,
+  }) => {
+    await page.goto("/games/skull-king/new");
+    await page.waitForLoadState("domcontentloaded");
+
+    const input = page.locator("[data-testid='new-match-player-0']");
+    await input.click();
+    const newAlias = `Blur-${stamp()}`;
+    await input.fill(newAlias);
+
+    // The "+ Create profile" row appears for any query that doesn't
+    // exactly match an existing suggestion.
+    const createRow = page.locator("[data-testid='new-match-create-0']");
+    await expect(createRow).toBeVisible();
+    await createRow.click();
+
+    await expect(input).toHaveValue(newAlias);
+    await expect(input).not.toBeFocused();
   });
 });
 

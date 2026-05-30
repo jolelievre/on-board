@@ -46,7 +46,7 @@ npm run dev          # Vite dev server + Hono API (port 5173)
 | `npm run db:reset` | Reset dev DB + re-apply migrations + seed |
 | `npm run db:studio` | Open Prisma Studio |
 | `npm run db:push` | Apply Prisma schema directly (no migration file) |
-| `npm run db:test:reset` | Force-reset the **test** database (`onboard_test`) — destructive, used by E2E setup |
+| `npm run db:test:reset` | Force-reset **and seed** the **test** database (`onboard_test`) — destructive. Wraps `scripts/test-setup.sh`; the `pretest*` hooks invoke the same script. After this command the DB is ready to run E2E directly. |
 | `npm run screenshots` | Capture mobile-viewport PNGs of every screen into `plan-assets/screenshots/` (standalone — boots its own dev server in test mode, not part of the E2E test campaign) |
 
 ### Architecture
@@ -93,6 +93,7 @@ The dev server and Playwright both use port 5173. Stale processes on that port c
 - Use `fill()` over `type()` for form inputs
 - Retries: 1 locally, 2 in CI
 - Workers: uncapped locally, 1 in CI
+- **Always invoke tests via `npm run test*`** — the `pretest*` hook resets + seeds the test DB (`onboard_test`) via `scripts/test-setup.sh`. Calling `npx playwright test` directly skips the hook and leaves the DB unseeded, which manifests as pages stuck on "Loading…" (no games available). If you need to re-seed without running the full suite, use `npm run db:test:reset`.
 
 ### Running against deployed environments
 

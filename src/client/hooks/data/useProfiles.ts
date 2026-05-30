@@ -1,17 +1,17 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { db, type LocalProfile3 } from "../../lib/db";
+import { db, type LocalProfile } from "../../lib/db";
 import { projectPlayer } from "./hydratePlayer";
 import type { MatchListItem } from "./useMatchList";
 
 export type DataStatus = "loading" | "ok" | "missing";
 
 export type UseProfileListResult = {
-  data: LocalProfile3[] | undefined;
+  data: LocalProfile[] | undefined;
   status: DataStatus;
 };
 
 export type UseProfileResult = {
-  data: LocalProfile3 | undefined;
+  data: LocalProfile | undefined;
   status: DataStatus;
 };
 
@@ -35,7 +35,7 @@ export type UseProfileResult = {
  */
 export function useProfileList(viewerId: string | undefined): UseProfileListResult {
   const data = useLiveQuery(
-    async (): Promise<LocalProfile3[] | null> => {
+    async (): Promise<LocalProfile[] | null> => {
       if (!viewerId) return null;
       const owned = await db.profiles.where("ownerId").equals(viewerId).toArray();
       const rows = owned.filter((p) => p.linkedUserId !== viewerId);
@@ -103,12 +103,38 @@ async function collectPersonPlayers(
   return merged;
 }
 
+/**
+ * Reactive read of the viewer's self-Profile (the one with
+ * `ownerId === linkedUserId === viewerId`, auto-created on first
+ * login). Returns `undefined` while the session is unresolved or the
+ * pullSync that backfills the row hasn't completed yet.
+ *
+ * Used by Settings to power the avatar editor — `useProfileList`
+ * deliberately filters the self-Profile out of the friends list, so
+ * Settings needs a dedicated read.
+ */
+export function useSelfProfile(
+  viewerId: string | undefined,
+): LocalProfile | undefined {
+  return useLiveQuery(
+    async (): Promise<LocalProfile | undefined> => {
+      if (!viewerId) return undefined;
+      const owned = await db.profiles
+        .where("ownerId")
+        .equals(viewerId)
+        .toArray();
+      return owned.find((p) => p.linkedUserId === viewerId);
+    },
+    [viewerId],
+  );
+}
+
 /** Reactive read of one profile by id. Returns `status: "missing"` when
  * the profile isn't mirrored locally (out of viewer scope, deleted,
  * or pullSync hasn't run yet). */
 export function useProfile(id: string | undefined): UseProfileResult {
   const data = useLiveQuery(
-    async (): Promise<LocalProfile3 | null> => {
+    async (): Promise<LocalProfile | null> => {
       if (!id) return null;
       const p = await db.profiles.get(id);
       return p ?? null;
@@ -248,7 +274,7 @@ export type ProfileSuggestion = {
   id: string;
   alias: string;
   isSelf: boolean;
-  profile: LocalProfile3;
+  profile: LocalProfile;
 };
 
 /**
@@ -268,7 +294,7 @@ export function useProfileSuggestions(
   excludeIds: Set<string>,
 ): ProfileSuggestion[] | undefined {
   const data = useLiveQuery(
-    async (): Promise<LocalProfile3[] | null> => {
+    async (): Promise<LocalProfile[] | null> => {
       if (!viewerId) return null;
       // The picker needs every owned profile *including the self-
       // Profile* (so "me" appears as a suggestion in match creation).
@@ -309,7 +335,7 @@ export type PlayedWithGroup = {
   profileIds: string[];
   /** Resolved profile rows for rendering avatars + aliases in the chip.
    * Indices align with `profileIds`. */
-  profiles: LocalProfile3[];
+  profiles: LocalProfile[];
   /** `startedAt` of the most-recent match this exact group played. */
   lastPlayedAt: string;
 };
@@ -392,7 +418,7 @@ export function usePlayedWith(
       if (seen.size === 0) return [];
 
       const profileRows = await db.profiles.bulkGet([...allProfileIds]);
-      const profilesById = new Map<string, LocalProfile3>();
+      const profilesById = new Map<string, LocalProfile>();
       for (const p of profileRows) {
         if (p) profilesById.set(p.id, p);
       }
@@ -403,7 +429,7 @@ export function usePlayedWith(
       const groups: PlayedWithGroup[] = [];
       for (const g of seen.values()) {
         const hydrated = g.profileIds.map((id) => profilesById.get(id));
-        if (hydrated.every((p): p is LocalProfile3 => p !== undefined)) {
+        if (hydrated.every((p): p is LocalProfile => p !== undefined)) {
           groups.push({ ...g, profiles: hydrated });
         }
       }

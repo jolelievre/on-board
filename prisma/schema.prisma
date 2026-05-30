@@ -36,7 +36,6 @@ model User {
   // friends can independently maintain their own linked Profile for
   // the same person — uniqueness is per-owner, not global.
   linkedProfiles Profile[]      @relation("ProfileLinked")
-  ownedGroups    ProfileGroup[] @relation("ProfileGroupOwner")
 }
 
 /// An OAuth provider link. One User can have multiple Accounts
@@ -166,42 +165,13 @@ model Profile {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  owner        User                 @relation("ProfileOwner",  fields: [ownerId],      references: [id], onDelete: Cascade)
-  linkedUser   User?                @relation("ProfileLinked", fields: [linkedUserId], references: [id], onDelete: SetNull)
-  players      Player[]
-  groupMembers ProfileGroupMember[]
+  owner      User     @relation("ProfileOwner",  fields: [ownerId],      references: [id], onDelete: Cascade)
+  linkedUser User?    @relation("ProfileLinked", fields: [linkedUserId], references: [id], onDelete: SetNull)
+  players    Player[]
 
   @@unique([ownerId, linkedUserId])
   @@index([ownerId])
   @@index([linkedUserId])
-}
-
-/// A named, ordered group of Profiles (e.g. "Wednesday Skull King crew").
-/// Tables exist in 6-A but stay empty until PR 6-D ships the management UI.
-model ProfileGroup {
-  id        String   @id @default(cuid())
-  ownerId   String
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  owner   User                 @relation("ProfileGroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members ProfileGroupMember[]
-
-  @@index([ownerId])
-}
-
-/// Junction row: a Profile's position within a ProfileGroup.
-model ProfileGroupMember {
-  groupId   String
-  profileId String
-  position  Int
-
-  group   ProfileGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  profile Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
-
-  @@id([groupId, profileId])
-  @@index([profileId])
 }
 
 /// A single score entry for a player in a match.

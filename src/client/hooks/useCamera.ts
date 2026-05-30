@@ -1,6 +1,16 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 
-type FacingMode = "user" | "environment";
+export type FacingMode = "user" | "environment";
+
+type UseCameraOptions = {
+  /** Camera to open on the first `start()` call. Defaults to the
+   * front-facing ("user") camera — appropriate for selfie-style
+   * captures (e.g. the viewer editing their own avatar). Pass
+   * `"environment"` when the camera will be aimed at someone else
+   * (e.g. the viewer photographing a friend for the friend's
+   * profile). The flip control still works regardless. */
+  initialFacingMode?: FacingMode;
+};
 
 /**
  * Camera capture hook ported from `birthday-party/src/hooks/useCamera`.
@@ -19,13 +29,15 @@ type FacingMode = "user" | "environment";
  * The cleanup effect also stops the stream on unmount as a belt-and-
  * braces safeguard.
  */
-export function useCamera() {
+export function useCamera(options?: UseCameraOptions) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<CameraErrorKey | null>(null);
-  const [facingMode, setFacingMode] = useState<FacingMode>("user");
+  const [facingMode, setFacingMode] = useState<FacingMode>(
+    options?.initialFacingMode ?? "user",
+  );
   const [canFlip, setCanFlip] = useState(false);
 
   useEffect(() => {

@@ -5,6 +5,7 @@ import { authClient, updateProfile } from "../../lib/auth-client";
 import { refreshLocalAliases } from "../../lib/pull-sync";
 import { useInstallPrompt } from "../../hooks/useInstallPrompt";
 import { clearSessionCache } from "../../hooks/useAuthSession";
+import { useSelfProfile } from "../../hooks/data/useProfiles";
 import { LanguageSelector } from "../../components/LanguageSelector";
 import { ThemeToggle } from "../../components/ui/ThemeToggle";
 import { Header } from "../../components/layout/Header";
@@ -12,6 +13,7 @@ import { Group } from "../../components/ui/Group";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { Icon } from "../../components/ui/Icon";
+import { EditableAvatar } from "../../components/profiles/EditableAvatar";
 import styles from "./settings.module.css";
 
 export const Route = createFileRoute("/_authenticated/settings")({
@@ -22,11 +24,7 @@ function SettingsPage() {
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
   const { canInstall, install, showIOSHint } = useInstallPrompt();
-  const displayName =
-    (session?.user as { alias?: string | null } | undefined)?.alias?.trim() ||
-    session?.user.name ||
-    "";
-  const initial = displayName.slice(0, 1).toUpperCase() || "·";
+  const selfProfile = useSelfProfile(session?.user.id);
 
   return (
     <>
@@ -37,18 +35,16 @@ function SettingsPage() {
 
         <div className={styles.body}>
           {session && (
-            <div className={styles.profileCard}>
-              <span className={styles.avatar}>
-                {session.user.image ? (
-                  <img src={session.user.image} alt="" />
-                ) : (
-                  initial
-                )}
-              </span>
-              <div className={styles.profileBody}>
-                <p className={styles.profileName}>{session.user.name}</p>
-                <p className={styles.profileEmail}>{session.user.email}</p>
-              </div>
+            <div className={styles.profileHero}>
+              {selfProfile && (
+                <EditableAvatar
+                  profile={selfProfile}
+                  viewerId={session.user.id}
+                  size="xl"
+                />
+              )}
+              <p className={styles.profileName}>{session.user.name}</p>
+              <p className={styles.profileEmail}>{session.user.email}</p>
             </div>
           )}
 

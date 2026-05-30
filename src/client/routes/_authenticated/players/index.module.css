@@ -1,3 +1,10 @@
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .title {
   font-family: var(--font-display);
   font-weight: 700;
@@ -13,6 +20,20 @@
   color: var(--color-ink-faint);
   margin: 0.25rem 0 0;
   line-height: 1.4;
+}
+
+.addProfileForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+  max-width: 18rem;
+}
+
+.addProfileActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .list {

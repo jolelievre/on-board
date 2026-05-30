@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import QrScanner from "qr-scanner";
 import { linkProfile, mergeProfile } from "../../lib/mutations";
-import type { LocalProfile3 } from "../../lib/db";
+import type { LocalProfile } from "../../lib/db";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { LinkCelebration } from "./LinkCelebration";
@@ -50,7 +50,7 @@ export function LinkScanner({
   onDone,
   onMerged,
 }: {
-  profile: LocalProfile3;
+  profile: LocalProfile;
   /** Closes the scanner surface. Called on success and on cancel. */
   onDone: () => void;
   /** Called when a link-time merge collapses two profiles. Lets the

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { LocalProfile3 } from "../../lib/db";
+import type { LocalProfile } from "../../lib/db";
 import { useProfileList } from "../../hooks/data/useProfiles";
 import { mergeProfile } from "../../lib/mutations";
 import { Avatar } from "../ui/Avatar";
@@ -27,7 +27,7 @@ export function MergeDialog({
   onClose,
   onMerged,
 }: {
-  source: LocalProfile3;
+  source: LocalProfile;
   viewerId: string;
   onClose: () => void;
   onMerged: (targetId: string) => void;
