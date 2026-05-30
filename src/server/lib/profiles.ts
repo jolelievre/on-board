@@ -1,4 +1,3 @@
-import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { resolveSelfAlias } from "../../shared/players.js";
 
@@ -19,7 +18,10 @@ export async function ensureSelfProfile(user: {
 }): Promise<void> {
   const alias = resolveSelfAlias(user);
   await prisma.profile.upsert({
-    where: { linkedUserId: user.id },
+    // 6-C scoped `linkedUserId` uniqueness to (ownerId, linkedUserId),
+    // so the self-profile lookup keys on the composite — same row
+    // since `ownerId === linkedUserId === user.id` for a self-Profile.
+    where: { ownerId_linkedUserId: { ownerId: user.id, linkedUserId: user.id } },
     create: {
       ownerId: user.id,
       linkedUserId: user.id,
@@ -58,15 +60,3 @@ export async function syncSelfProfileAlias(userId: string): Promise<void> {
   });
 }
 
-/**
- * The visibility filter for Profiles: an authenticated user can see
- * profiles they own (`ownerId = me`) or profiles linked to their own
- * auth account (`linkedUserId = me`). Used by the list, detail, and
- * mutation endpoints, and by the `/api/matches` resolver when binding
- * a Player to an existing Profile.
- */
-export function profileVisibilityWhere(userId: string): Prisma.ProfileWhereInput {
-  return {
-    OR: [{ ownerId: userId }, { linkedUserId: userId }],
-  };
-}

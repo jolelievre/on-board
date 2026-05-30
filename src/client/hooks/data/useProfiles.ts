@@ -1,5 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type LocalProfile3 } from "../../lib/db";
+import { projectPlayer } from "./hydratePlayer";
+import type { MatchListItem } from "./useMatchList";
 
 export type DataStatus = "loading" | "ok" | "missing";
 
@@ -14,12 +16,19 @@ export type UseProfileResult = {
 };
 
 /**
- * Reactive list of profiles visible to the given viewer — that is,
- * profiles they own OR profiles linked to their own auth account.
+ * Reactive list of profiles for the Players tab — friends only.
  *
- * The self-Profile (where `linkedUserId === viewerId`) is pinned to the
- * top regardless of `usedAt`; remaining rows are sorted by `usedAt`
- * descending so the most recently used profile appears first.
+ * Under the single-Profile model, the Players tab shows people the
+ * viewer has played with. That excludes:
+ *   - the viewer's self-Profile (ownerId === linkedUserId === me) —
+ *     editing your own identity lives in Settings, not here.
+ *   - profiles representing me from someone else's side
+ *     (linkedUserId === me but ownerId !== me) — those rows belong to
+ *     a friend who has me linked; I have no editorial role there.
+ *
+ * What's left: profiles I own where the linkedUserId is not me. That
+ * captures unclaimed profiles ("Bob" I added before he signed up) and
+ * linked friends (the same "Bob" once I scanned his QR).
  *
  * Pass `undefined` while session is still loading — the hook returns
  * `status: "loading"` until a real id is supplied.
@@ -28,23 +37,10 @@ export function useProfileList(viewerId: string | undefined): UseProfileListResu
   const data = useLiveQuery(
     async (): Promise<LocalProfile3[] | null> => {
       if (!viewerId) return null;
-      // Dexie can't express OR across two columns natively. Two scans
-      // joined in memory is fine at this scale — every Profile a user
-      // can see is in their owned set or their linked set, and both
-      // sets are tiny (10s, not 1000s).
-      const [owned, linked] = await Promise.all([
-        db.profiles.where("ownerId").equals(viewerId).toArray(),
-        db.profiles.where("linkedUserId").equals(viewerId).toArray(),
-      ]);
-      const byId = new Map<string, LocalProfile3>();
-      for (const p of owned) byId.set(p.id, p);
-      for (const p of linked) byId.set(p.id, p);
-      const rows = [...byId.values()];
+      const owned = await db.profiles.where("ownerId").equals(viewerId).toArray();
+      const rows = owned.filter((p) => p.linkedUserId !== viewerId);
+      // usedAt descending — most recently used friend first.
       rows.sort((a, b) => {
-        const aSelf = a.linkedUserId === viewerId ? 0 : 1;
-        const bSelf = b.linkedUserId === viewerId ? 0 : 1;
-        if (aSelf !== bSelf) return aSelf - bSelf;
-        // usedAt descending — most recent first.
         if (a.usedAt > b.usedAt) return -1;
         if (a.usedAt < b.usedAt) return 1;
         return a.alias.localeCompare(b.alias);
@@ -57,6 +53,54 @@ export function useProfileList(viewerId: string | undefined): UseProfileListResu
   if (data === undefined) return { data: undefined, status: "loading" };
   if (data === null) return { data: undefined, status: "loading" };
   return { data, status: "ok" };
+}
+
+/**
+ * Collect every Player row that represents the same *person* as the
+ * given profile.
+ *
+ * Under the single-Profile model, a person is represented by one or
+ * more Profile rows sharing the same `linkedUserId`. We mirror the
+ * server's match-visibility predicate (`matchVisibilityWhere`) and
+ * union two queries:
+ *   - `profileId === profile.id` catches every Player row pointing
+ *     directly at this Profile (the owner-side history, including
+ *     rows written before the Profile was linked — their denormalised
+ *     `profileLinkedUserId` is stale and the link transition does not
+ *     bump `Match.updatedAt`, so pull-sync won't refresh them either).
+ *   - `profileLinkedUserId === profile.linkedUserId` catches Player
+ *     rows from matches created on another device under a *different*
+ *     Profile row that shares the same linked auth user (the friend's
+ *     own self-Profile).
+ *
+ * Without this union, freshly-linked profiles would lose their entire
+ * pre-link match history from the UI until a full pull-sync rewrote
+ * every affected Player row.
+ */
+async function collectPersonPlayers(
+  profile: { id: string; linkedUserId: string | null },
+): Promise<{ id: string; matchId: string }[]> {
+  const directPromise = db.players
+    .where("profileId")
+    .equals(profile.id)
+    .toArray();
+  if (!profile.linkedUserId) return directPromise;
+
+  const [direct, viaLinkedUser] = await Promise.all([
+    directPromise,
+    db.players
+      .where("profileLinkedUserId")
+      .equals(profile.linkedUserId)
+      .toArray(),
+  ]);
+  const seen = new Set<string>();
+  const merged: { id: string; matchId: string }[] = [];
+  for (const p of [...direct, ...viaLinkedUser]) {
+    if (seen.has(p.id)) continue;
+    seen.add(p.id);
+    merged.push(p);
+  }
+  return merged;
 }
 
 /** Reactive read of one profile by id. Returns `status: "missing"` when
@@ -111,10 +155,9 @@ export function useProfileStats(
   const data = useLiveQuery(
     async (): Promise<ProfileStats | null> => {
       if (!profileId) return null;
-      const players = await db.players
-        .where("profileId")
-        .equals(profileId)
-        .toArray();
+      const profile = await db.profiles.get(profileId);
+      if (!profile) return null;
+      const players = await collectPersonPlayers(profile);
       if (players.length === 0) {
         return {
           totalMatches: 0,
@@ -224,7 +267,27 @@ export function useProfileSuggestions(
   query: string,
   excludeIds: Set<string>,
 ): ProfileSuggestion[] | undefined {
-  const { data } = useProfileList(viewerId);
+  const data = useLiveQuery(
+    async (): Promise<LocalProfile3[] | null> => {
+      if (!viewerId) return null;
+      // The picker needs every owned profile *including the self-
+      // Profile* (so "me" appears as a suggestion in match creation).
+      // The Players tab listing in `useProfileList` separately filters
+      // out the self-Profile because the tab is friend-only — keep
+      // these two consumers' filters distinct.
+      const owned = await db.profiles.where("ownerId").equals(viewerId).toArray();
+      owned.sort((a, b) => {
+        const aSelf = a.linkedUserId === viewerId ? 0 : 1;
+        const bSelf = b.linkedUserId === viewerId ? 0 : 1;
+        if (aSelf !== bSelf) return aSelf - bSelf;
+        if (a.usedAt > b.usedAt) return -1;
+        if (a.usedAt < b.usedAt) return 1;
+        return a.alias.localeCompare(b.alias);
+      });
+      return owned;
+    },
+    [viewerId],
+  );
   if (!data) return undefined;
   const needle = query.trim().toLowerCase();
   return data
@@ -235,7 +298,7 @@ export function useProfileSuggestions(
     .map((p) => ({
       id: p.id,
       alias: p.alias,
-      isSelf: p.linkedUserId === viewerId,
+      isSelf: p.linkedUserId === viewerId && p.ownerId === viewerId,
       profile: p,
     }));
 }
@@ -371,7 +434,7 @@ export type HeadToHeadRecord = {
  * each profileId. Only `COMPLETED` matches feed the win/loss/draw
  * counters; the viewer-wins side reads `viewerSelfProfileId`, which the
  * caller is expected to derive from `useProfileList` (the self-Profile
- * is `linkedUserId === viewerId`).
+ * is `ownerId === linkedUserId === viewerId`).
  *
  * Returns `undefined` while Dexie reads are in flight. Returns a
  * record with `matches: 0` when the two profiles have never shared a
@@ -391,26 +454,40 @@ export function useHeadToHead(
         return { matches: 0, subjectWins: 0, viewerWins: 0, draws: 0 };
       }
 
-      const subjectPlayers = await db.players
-        .where("profileId")
-        .equals(subjectProfileId)
-        .toArray();
+      const [subjectProfile, viewerProfile] = await Promise.all([
+        db.profiles.get(subjectProfileId),
+        db.profiles.get(viewerSelfProfileId),
+      ]);
+      if (!subjectProfile || !viewerProfile) {
+        return { matches: 0, subjectWins: 0, viewerWins: 0, draws: 0 };
+      }
+
+      // Collect every Player row representing the subject across
+      // owners — `collectPersonPlayers` widens via
+      // `Player.profileLinkedUserId`, so head-to-head picks up
+      // matches the friend created with their own self-Profile too.
+      const subjectPlayers = await collectPersonPlayers(subjectProfile);
       const matchIds = [...new Set(subjectPlayers.map((p) => p.matchId))];
       if (matchIds.length === 0) {
         return { matches: 0, subjectWins: 0, viewerWins: 0, draws: 0 };
       }
 
       const matches = await db.matches.bulkGet(matchIds);
-      const playersByMatch = new Map<string, typeof subjectPlayers>();
       const allInMatch = await db.players
         .where("matchId")
         .anyOf(matchIds)
         .toArray();
+      const playersByMatch = new Map<string, typeof allInMatch>();
       for (const p of allInMatch) {
         const list = playersByMatch.get(p.matchId) ?? [];
         list.push(p);
         playersByMatch.set(p.matchId, list);
       }
+
+      const subjectPlayerIds = new Set(subjectPlayers.map((p) => p.id));
+      // Same widening on the viewer side.
+      const viewerPlayers = await collectPersonPlayers(viewerProfile);
+      const viewerPlayerIds = new Set(viewerPlayers.map((p) => p.id));
 
       let total = 0;
       let subjectWins = 0;
@@ -421,12 +498,8 @@ export function useHeadToHead(
         if (!m) continue;
         if (m.status !== "COMPLETED") continue;
         const inMatch = playersByMatch.get(m.id) ?? [];
-        const subjectPlayer = inMatch.find(
-          (p) => p.profileId === subjectProfileId,
-        );
-        const viewerPlayer = inMatch.find(
-          (p) => p.profileId === viewerSelfProfileId,
-        );
+        const subjectPlayer = inMatch.find((p) => subjectPlayerIds.has(p.id));
+        const viewerPlayer = inMatch.find((p) => viewerPlayerIds.has(p.id));
         if (!subjectPlayer || !viewerPlayer) continue;
         total += 1;
         if (m.winnerId === subjectPlayer.id) subjectWins += 1;
@@ -446,17 +519,18 @@ export function useHeadToHead(
 }
 
 export type ProfileRecentMatch = {
-  matchId: string;
+  /** Game metadata for the row's label + score computation. */
   gameSlug: string;
   gameName: string;
-  status: "IN_PROGRESS" | "COMPLETED";
-  startedAt: string;
-  completedAt: string | null;
-  isWinner: boolean | null;
+  /** Full match shape so the shared `MatchHistoryRow` can render
+   * the same player/score layout the per-game history uses. */
+  match: MatchListItem;
 };
 
 /** Most recent matches the profile participated in. Used on the profile
- * detail page. */
+ * detail page. Returns the full `MatchListItem` shape (players +
+ * scores) so the shared `MatchHistoryRow` component renders the same
+ * preview as the per-game history. */
 export function useProfileRecentMatches(
   profileId: string | undefined,
   limit = 10,
@@ -464,14 +538,10 @@ export function useProfileRecentMatches(
   const data = useLiveQuery(
     async (): Promise<ProfileRecentMatch[] | null> => {
       if (!profileId) return null;
-      const players = await db.players
-        .where("profileId")
-        .equals(profileId)
-        .toArray();
+      const profile = await db.profiles.get(profileId);
+      if (!profile) return null;
+      const players = await collectPersonPlayers(profile);
       if (players.length === 0) return [];
-
-      const playerById = new Map<string, string>();
-      for (const p of players) playerById.set(p.id, p.matchId);
 
       const matchIds = [...new Set(players.map((p) => p.matchId))];
       const matches = await db.matches.bulkGet(matchIds);
@@ -481,6 +551,38 @@ export function useProfileRecentMatches(
       validMatches.sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
 
       const sliced = validMatches.slice(0, limit);
+      if (sliced.length === 0) return [];
+
+      const slicedIds = sliced.map((m) => m.id);
+      const [allPlayers, allScores] = await Promise.all([
+        db.players.where("matchId").anyOf(slicedIds).toArray(),
+        db.scores.where("matchId").anyOf(slicedIds).toArray(),
+      ]);
+
+      const playersByMatch = new Map<string, ReturnType<typeof projectPlayer>[]>();
+      for (const p of allPlayers) {
+        const list = playersByMatch.get(p.matchId) ?? [];
+        list.push(projectPlayer(p));
+        playersByMatch.set(p.matchId, list);
+      }
+      for (const list of playersByMatch.values()) {
+        list.sort((a, b) => a.position - b.position);
+      }
+
+      const scoresByMatch = new Map<
+        string,
+        { playerId: string; category: string; value: number }[]
+      >();
+      for (const s of allScores) {
+        const list = scoresByMatch.get(s.matchId) ?? [];
+        list.push({
+          playerId: s.playerId,
+          category: s.category,
+          value: s.value,
+        });
+        scoresByMatch.set(s.matchId, list);
+      }
+
       const gameIds = [...new Set(sliced.map((m) => m.gameId))];
       const games = await db.games.bulkGet(gameIds);
       const gamesById = new Map<string, { slug: string; name: string }>();
@@ -488,28 +590,21 @@ export function useProfileRecentMatches(
         if (g) gamesById.set(g.id, { slug: g.slug, name: g.name });
       }
 
-      const profilePlayerIdsByMatch = new Map<string, Set<string>>();
-      for (const p of players) {
-        const set = profilePlayerIdsByMatch.get(p.matchId) ?? new Set<string>();
-        set.add(p.id);
-        profilePlayerIdsByMatch.set(p.matchId, set);
-      }
-
       return sliced.map((m) => {
         const gameInfo = gamesById.get(m.gameId);
-        const playerIds = profilePlayerIdsByMatch.get(m.id) ?? new Set();
-        let isWinner: boolean | null = null;
-        if (m.status === "COMPLETED") {
-          isWinner = m.winnerId ? playerIds.has(m.winnerId) : false;
-        }
         return {
-          matchId: m.id,
           gameSlug: gameInfo?.slug ?? "",
           gameName: gameInfo?.name ?? "",
-          status: m.status,
-          startedAt: m.startedAt,
-          completedAt: m.completedAt,
-          isWinner,
+          match: {
+            id: m.id,
+            status: m.status,
+            victoryType: m.victoryType,
+            winnerId: m.winnerId,
+            startedAt: m.startedAt,
+            completedAt: m.completedAt,
+            players: playersByMatch.get(m.id) ?? [],
+            scores: scoresByMatch.get(m.id) ?? [],
+          },
         };
       });
     },

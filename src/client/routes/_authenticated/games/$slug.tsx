@@ -1,19 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
+import { useAuthSession } from "../../../hooks/useAuthSession";
 import { useGame } from "../../../hooks/data/useGame";
 import { useMatchList } from "../../../hooks/data/useMatchList";
-import {
-  computeTotalsByPlayer,
-  type SevenWondersVictoryType,
-} from "../../../../shared/scoring/7-wonders-duel";
-import { parseRoundCategory } from "../../../../shared/scoring/skull-king";
-import { displayPlayerName } from "../../../../shared/players";
 import { Header } from "../../../components/layout/Header";
 import { Pill } from "../../../components/ui/Pill";
 import { Icon } from "../../../components/ui/Icon";
 import { CoverArt } from "../../../components/games/CoverArt";
+import { MatchHistoryRow } from "../../../components/matches/MatchHistoryRow";
 import buttonStyles from "../../../components/ui/Button.module.css";
 import styles from "./$slug.module.css";
 
@@ -21,28 +16,12 @@ export const Route = createFileRoute("/_authenticated/games/$slug")({
   component: GameDetailPage,
 });
 
-type Player = {
-  id: string;
-  name: string;
-  position: number;
-  user?: { name: string; alias: string | null } | null;
-};
-type ScoreRow = { playerId: string; category: string; value: number };
-type MatchListItem = {
-  id: string;
-  status: "IN_PROGRESS" | "COMPLETED";
-  victoryType: SevenWondersVictoryType | "draw" | string | null;
-  winnerId: string | null;
-  startedAt: string;
-  completedAt: string | null;
-  players: Player[];
-  scores: ScoreRow[];
-};
-
 function GameDetailPage() {
   const { slug } = Route.useParams();
   const { t, i18n } = useTranslation();
   const { isOnline } = useOnlineStatus();
+  const { session } = useAuthSession();
+  const viewerId = session?.user.id ?? null;
 
   const { data: game, status: gameStatus } = useGame(slug);
   const { data: matches } = useMatchList(game?.id);
@@ -135,166 +114,13 @@ function GameDetailPage() {
                 match={m}
                 locale={i18n.language}
                 gameSlug={slug}
+                viewerId={viewerId}
               />
             ))
           )}
         </div>
       </div>
     </>
-  );
-}
-
-/** Sum of round_N values per player. Skull King writes one Score row per
- * (player, round_N) with the round's total in `value`, so a flat sum is
- * the match total. */
-function computeSkullKingTotalsByPlayer(
-  scores: { playerId: string; category: string; value: number }[],
-): Record<string, number> {
-  const totals: Record<string, number> = {};
-  for (const s of scores) {
-    if (parseRoundCategory(s.category) === null) continue;
-    totals[s.playerId] = (totals[s.playerId] ?? 0) + s.value;
-  }
-  return totals;
-}
-
-function computeMatchTotalsBySlug(
-  slug: string,
-  scores: { playerId: string; category: string; value: number }[],
-): Record<string, number> {
-  if (slug === "skull-king") return computeSkullKingTotalsByPlayer(scores);
-  return computeTotalsByPlayer(scores);
-}
-
-function MatchHistoryRow({
-  match,
-  locale,
-  gameSlug,
-}: {
-  match: MatchListItem;
-  locale: string;
-  gameSlug: string;
-}) {
-  const { t } = useTranslation();
-  const totals = computeMatchTotalsBySlug(gameSlug, match.scores);
-  const winner = match.winnerId
-    ? match.players.find((p) => p.id === match.winnerId)
-    : null;
-  const dateText = new Date(match.startedAt).toLocaleDateString(locale, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-
-  const isCompleted = match.status === "COMPLETED";
-  const compact = match.players.length === 2;
-
-  // Multi-player matches sort the player rows by score (leader first) so the
-  // standings read at a glance — even mid-match. Two-player matches keep
-  // their position-ordered "vs" layout.
-  const orderedPlayers = compact
-    ? match.players
-    : [...match.players].sort(
-        (a, b) => (totals[b.id] ?? 0) - (totals[a.id] ?? 0),
-      );
-
-  return (
-    <Link
-      to="/matches/$id"
-      params={{ id: match.id }}
-      data-testid={`match-history-row-${match.id}`}
-      className={styles.matchCard}
-    >
-      <div className={styles.matchHead}>
-        <span className={styles.matchDate}>{dateText}</span>
-        {!isCompleted ? (
-          <Pill tone="warning">{t("matches.history.inProgress")}</Pill>
-        ) : match.victoryType ? (
-          <Pill tone={match.victoryType === "score" ? "muted" : "primary"}>
-            {t(`matches.victoryType.${match.victoryType}`)}
-          </Pill>
-        ) : null}
-      </div>
-
-      {compact ? (
-        <div className={styles.players}>
-          {orderedPlayers.map((p, idx) => {
-            const isWinner = winner?.id === p.id;
-            const isDim = isCompleted && winner !== null && !isWinner;
-            return (
-              <Fragment key={p.id}>
-                <div
-                  className={`${styles.playerCell} ${isWinner ? styles.playerWinner : ""}`}
-                >
-                  <span
-                    className={[
-                      styles.playerName,
-                      isWinner && styles.playerNameWinner,
-                      isDim && styles.playerNameDim,
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
-                    {isWinner && <Icon name="trophy" size={13} />}
-                    {displayPlayerName(p)}
-                  </span>
-                  <span
-                    data-testid={`match-history-score-${p.id}`}
-                    className={[
-                      styles.playerScore,
-                      isWinner && styles.playerScoreWinner,
-                      isDim && styles.playerScoreDim,
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
-                    {totals[p.id] ?? 0}
-                  </span>
-                </div>
-                {idx < orderedPlayers.length - 1 && (
-                  <span className={styles.versus}>
-                    {t("matches.history.vs")}
-                  </span>
-                )}
-              </Fragment>
-            );
-          })}
-        </div>
-      ) : (
-        <div className={styles.podium} data-testid="match-history-podium">
-          {orderedPlayers.slice(0, 3).map((p, idx) => {
-            const isWinner = winner?.id === p.id;
-            const isDim = isCompleted && winner !== null && !isWinner;
-            return (
-              <span
-                key={p.id}
-                className={`${styles.podiumEntry} ${isWinner ? styles.podiumWinner : ""}`}
-              >
-                <span className={styles.podiumRank}>#{idx + 1}</span>
-                <span
-                  className={[
-                    styles.podiumName,
-                    isWinner && styles.playerNameWinner,
-                    isDim && styles.playerNameDim,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  data-testid={`match-history-score-${p.id}`}
-                  data-score={totals[p.id] ?? 0}
-                >
-                  {displayPlayerName(p)}
-                </span>
-              </span>
-            );
-          })}
-          {orderedPlayers.length > 3 && (
-            <span className={styles.podiumMore}>
-              +{orderedPlayers.length - 3}
-            </span>
-          )}
-        </div>
-      )}
-    </Link>
   );
 }
 

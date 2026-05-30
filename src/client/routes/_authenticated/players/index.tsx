@@ -8,6 +8,7 @@ import { Avatar } from "../../../components/ui/Avatar";
 import { Pill } from "../../../components/ui/Pill";
 import { Icon } from "../../../components/ui/Icon";
 import { displayProfileName } from "../../../../shared/players";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import styles from "./index.module.css";
 
 export const Route = createFileRoute("/_authenticated/players/")({
@@ -59,9 +60,12 @@ function ProfileRow({
   viewerId: string | null;
 }) {
   const { t } = useTranslation();
-  const isSelf = profile.linkedUserId === viewerId;
+  // Self-Profile and profiles representing me are excluded upstream by
+  // `useProfileList`. Every row here is a friend the viewer owns —
+  // either unclaimed (no link yet) or claimed (linked to a real user).
   const isLinked = profile.linkedUserId !== null;
-  const name = displayProfileName(profile, viewerId);
+  const ownedIndex = useOwnedProfileIndex(viewerId ?? undefined);
+  const name = displayProfileName(profile, ownedIndex);
 
   return (
     <Link
@@ -75,9 +79,7 @@ function ProfileRow({
       <div className={styles.rowBody}>
         <p className={styles.alias}>{name}</p>
         <div className={styles.meta}>
-          {isSelf ? (
-            <Pill tone="primary">{t("players.you")}</Pill>
-          ) : isLinked ? (
+          {isLinked ? (
             <Pill tone="success">{t("players.linked")}</Pill>
           ) : (
             <Pill tone="muted">{t("players.unclaimed")}</Pill>

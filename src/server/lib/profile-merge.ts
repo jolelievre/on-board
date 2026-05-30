@@ -14,8 +14,8 @@ export class ProfileMergeError extends Error {
 type MergeInput = {
   /** The User performing the merge — must own both profiles. */
   callerId: string;
-  /** Profile that survives. Its alias replaces any references that
-   * pointed at `sourceProfileId`. */
+  /** Profile that survives. Players and group members from `source`
+   * move onto this row. */
   targetProfileId: string;
   /** Profile being absorbed. Disappears at the end of the transaction. */
   sourceProfileId: string;
@@ -23,21 +23,30 @@ type MergeInput = {
 
 /**
  * Collapse `source` into `target`: rewrite every `Player.profileId` and
- * every `ProfileGroupMember.profileId` from source → target, snapshot
- * `Player.name` to the target's alias so older clients that still read
- * the dormant column see the canonical display name, then delete the
+ * every `ProfileGroupMember.profileId` from source → target, carry the
+ * source's `linkedUserId` forward when the target lacks one, copy
+ * `customAvatarUrl` only when the target has none, then delete the
  * source profile.
  *
- * This unclaimed-only variant rejects when either profile has a
- * `linkedUserId` set — the token-required path ships in PR 6-C. The
- * caller must own both profiles. All checks live inside the
- * transaction so two concurrent merges can't observe an intermediate
- * state.
+ * Constraints (post single-Profile refactor):
+ * - Caller must own both profiles. A merge is always an owner-side
+ *   consolidation of two profiles representing the same person.
+ * - If both profiles have `linkedUserId`, they must point at the same
+ *   User. The composite `@@unique([ownerId, linkedUserId])` on Profile
+ *   normally prevents the conflicting case, but we defend explicitly
+ *   in case the constraint is ever relaxed.
+ * - If only the source has `linkedUserId`, it transfers to the target
+ *   before deletion. This is the merge-required collision path: the
+ *   owner has an existing linked profile (target) and tries to link
+ *   another (source) to the same friend; merging carries the freshly
+ *   established link onto the survivor.
  *
- * Returns the surviving (target) profile id so the caller can refetch
- * the canonical row.
+ * All checks live inside the transaction so two concurrent merges
+ * cannot observe an intermediate state.
+ *
+ * Returns the surviving profile id so the caller can refetch.
  */
-export async function mergeUnclaimedProfiles(
+export async function mergeProfiles(
   tx: TxClient,
   { callerId, targetProfileId, sourceProfileId }: MergeInput,
 ): Promise<string> {
@@ -51,11 +60,21 @@ export async function mergeUnclaimedProfiles(
   const [target, source] = await Promise.all([
     tx.profile.findUnique({
       where: { id: targetProfileId },
-      select: { id: true, alias: true, ownerId: true, linkedUserId: true },
+      select: {
+        id: true,
+        ownerId: true,
+        linkedUserId: true,
+        customAvatarUrl: true,
+      },
     }),
     tx.profile.findUnique({
       where: { id: sourceProfileId },
-      select: { id: true, ownerId: true, linkedUserId: true },
+      select: {
+        id: true,
+        ownerId: true,
+        linkedUserId: true,
+        customAvatarUrl: true,
+      },
     }),
   ]);
 
@@ -68,25 +87,47 @@ export async function mergeUnclaimedProfiles(
       403,
     );
   }
-  if (target.linkedUserId !== null || source.linkedUserId !== null) {
-    // 6-C will introduce a token-checked path for linked merges; until
-    // then a linked profile is locked.
+  if (
+    target.linkedUserId !== null &&
+    source.linkedUserId !== null &&
+    target.linkedUserId !== source.linkedUserId
+  ) {
     throw new ProfileMergeError(
-      "Linked profiles cannot be merged via this endpoint",
+      "Cannot merge profiles linked to different accounts",
       409,
     );
   }
 
   await tx.player.updateMany({
     where: { profileId: sourceProfileId },
-    data: {
-      profileId: targetProfileId,
-      // Snapshot the surviving alias so the legacy `Player.name`
-      // column stays coherent with `Player.profileId` for the soak
-      // window before 6-E drops it.
-      name: target.alias,
-    },
+    data: { profileId: targetProfileId },
   });
+
+  // Clear source.linkedUserId BEFORE updating target with the same
+  // value, otherwise the `@@unique([ownerId, linkedUserId])` constraint
+  // briefly fails (two rows owned by the caller pointing at the same
+  // friend). The source row is about to be deleted anyway.
+  if (source.linkedUserId !== null && target.linkedUserId === null) {
+    await tx.profile.update({
+      where: { id: sourceProfileId },
+      data: { linkedUserId: null },
+    });
+  }
+
+  // Carry the source's link forward when the target has none.
+  const targetUpdates: Prisma.ProfileUpdateInput = {};
+  if (target.linkedUserId === null && source.linkedUserId !== null) {
+    targetUpdates.linkedUser = { connect: { id: source.linkedUserId } };
+  }
+  if (!target.customAvatarUrl && source.customAvatarUrl) {
+    targetUpdates.customAvatarUrl = source.customAvatarUrl;
+  }
+  if (Object.keys(targetUpdates).length > 0) {
+    await tx.profile.update({
+      where: { id: targetProfileId },
+      data: targetUpdates,
+    });
+  }
 
   // ProfileGroupMember stays empty until 6-D, but rewrite defensively
   // so the same merge call works for both today and after 6-D ships.

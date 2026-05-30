@@ -19,6 +19,10 @@ export type LocalProfileLinkedUser = {
   name: string;
   alias: string | null;
   avatarUrl: string | null;
+  /** Added in 6-C so the linked-friend card can show which Google
+   * account the profile binds to. Optional for legacy mirrors that
+   * predate this projection. */
+  email?: string;
 };
 
 /** Server-mirrored Profile row (Phase 6-A). One per person the user knows.
@@ -90,16 +94,41 @@ export type LocalMatch = {
   updatedAt: string;
 };
 
+/** Denormalized Profile projection embedded on each Player row when
+ * pulled from the server. Lets the UI render every player (name,
+ * avatar, viewer-aware override for the linked user) without a
+ * separate Profile lookup. Includes the linked auth user when the
+ * profile is claimed — null when unclaimed. */
+export type LocalPlayerProfile = {
+  id: string;
+  ownerId: string;
+  linkedUserId: string | null;
+  alias: string;
+  customAvatarUrl: string | null;
+  useLinkedAvatar: boolean;
+  linkedUser: {
+    id: string;
+    name: string;
+    alias: string | null;
+    avatarUrl: string | null;
+  } | null;
+};
+
 export type LocalPlayer = {
   id: string;
   matchId: string;
-  /** Phase 6-A: every Player resolves to a Profile. Nullable for legacy
-   * cached rows that pre-date 6-A; display code falls back to `name`. */
-  profileId?: string | null;
-  userId?: string | null;
-  name: string;
+  profileId: string;
+  /** Mirror of `profile.linkedUserId`, denormalized to the top level
+   * so Dexie can index it. `collectPersonPlayers` reads this to
+   * surface every match where a given person played, regardless of
+   * which Profile row represented them at that point. Null when the
+   * profile is unclaimed. */
+  profileLinkedUserId: string | null;
   position: number;
-  user?: { name: string; alias: string | null } | null;
+  /** Embedded Profile snapshot from the most recent pull. Lets the UI
+   * render player names/avatars even when the viewer doesn't have
+   * standalone visibility into the Profile row. */
+  profile: LocalPlayerProfile;
   updatedAt: string;
 };
 
@@ -189,6 +218,42 @@ class OnBoardDB extends Dexie {
       profileGroupMembers: "[groupId+profileId], groupId, profileId",
       syncMeta: "key",
     });
+
+    // v4 — Phase 6-C: single-Profile refactor. Player rows now embed
+    // the Profile projection so cross-user matches render correctly
+    // even when the viewer can't pull the Profile row standalone.
+    // The `userId` index is dropped (column gone server-side); a new
+    // `profileLinkedUserId` index powers `collectPersonPlayers`'
+    // "all matches where this person played" query without scans.
+    // Existing rows are wiped — the next pullSync repopulates from
+    // the new server projection in one round-trip.
+    this.version(4)
+      .stores({
+        syncQueue: "++id, createdAt, status",
+        games: "id, slug",
+        matches: "id, gameId, status, startedAt, updatedAt, [createdById+startedAt]",
+        players: "id, matchId, profileId, profileLinkedUserId, [matchId+position]",
+        scores: "id, matchId, [matchId+playerId+category], updatedAt",
+        profiles: "id, ownerId, linkedUserId, usedAt, updatedAt",
+        profileGroups: "id, ownerId, updatedAt",
+        profileGroupMembers: "[groupId+profileId], groupId, profileId",
+        syncMeta: "key",
+      })
+      .upgrade(async (tx) => {
+        // The old v3 rows lack the embedded `profile` projection. The
+        // simplest, safest path is to drop every cached Player row and
+        // force a full re-pull on next boot — clears the
+        // `lastPullAt` cursor so pull-sync fetches everything from
+        // scratch.
+        await tx.table("players").clear();
+        await tx.table("matches").clear();
+        await tx.table("scores").clear();
+        await tx
+          .table("syncMeta")
+          .where("key")
+          .equals("lastMatchPullAt")
+          .delete();
+      });
   }
 }
 

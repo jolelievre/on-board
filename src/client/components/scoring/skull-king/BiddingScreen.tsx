@@ -3,6 +3,8 @@ import shared from "./shared.module.css";
 import styles from "./BiddingScreen.module.css";
 import { DigitGrid } from "../../ui/sk/DigitGrid";
 import { displayPlayerName } from "../../../../shared/players";
+import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
 
 type Props = {
@@ -32,6 +34,8 @@ export function BiddingScreen({
   onReveal,
 }: Props) {
   const { t } = useTranslation();
+  const { session } = useAuthSession();
+  const ownedIndex = useOwnedProfileIndex(session?.user.id);
   const active = players[activeIndex];
   const bidCount = players.filter((p) => bids[p.id] != null).length;
   const allDone = bidCount === players.length;
@@ -89,7 +93,7 @@ export function BiddingScreen({
             >
               <span className={styles.rowLeft}>
                 <span className={styles.posBadge}>{i + 1}</span>
-                <span className={styles.rowName}>{displayPlayerName(p)}</span>
+                <span className={styles.rowName}>{displayPlayerName(p, ownedIndex)}</span>
               </span>
               {v != null ? (
                 <span
@@ -113,7 +117,7 @@ export function BiddingScreen({
           <span className={styles.sheetTitle}>
             {active
               ? t("scoring.skullKing.bid.playerBid", {
-                  name: displayPlayerName(active),
+                  name: displayPlayerName(active, ownedIndex),
                 })
               : null}
           </span>

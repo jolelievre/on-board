@@ -47,11 +47,17 @@ export function MergeDialog({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // The dialog only makes sense for unclaimed → unclaimed in 6-B.
-  // We also filter out the source itself and any linked profile so the
-  // candidate list mirrors what the server will actually accept.
+  // Candidates are every profile the viewer owns (any linked state),
+  // minus the source itself. Friend-owned profiles linked to the
+  // viewer don't qualify — the merge resolver requires the caller to
+  // own *both* sides. Source is always unclaimed here (the entry
+  // point in the profile detail page only renders MergeDialog for
+  // `!isLinked` profiles), so:
+  //   - target unclaimed → 6-B behavior, no link state changes.
+  //   - target linked → 6-C-relaxed behavior: source folds in,
+  //     target keeps its link.
   const candidates = (profiles ?? []).filter(
-    (p) => p.id !== source.id && p.linkedUserId === null,
+    (p) => p.id !== source.id && p.ownerId === viewerId,
   );
 
   const handleConfirm = async () => {

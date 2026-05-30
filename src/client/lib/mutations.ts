@@ -7,6 +7,11 @@ import {
   type LocalScore,
 } from "./db";
 import { syncEngine } from "./sync";
+import {
+  pullSync,
+  pruneLocalMatchesAgainstServer,
+  resetPullCursors,
+} from "./pull-sync";
 
 const nowIso = () => new Date().toISOString();
 
@@ -23,17 +28,12 @@ function scheduleFlush(): void {
 export type CreateMatchInput = {
   gameId: string;
   /**
-   * Per-slot resolution. As of PR 6-B every entry should carry a
-   * `profileId` — the picker either selected an existing profile or
-   * created one inline before submit. `name` + `userId` remain for the
-   * narrow rematch path that hits a pre-6-A Dexie row whose profileId
-   * is still null; on submit the server falls back to the legacy
-   * name-resolver for that single slot.
+   * Per-slot resolution. Every entry must carry a `profileId`; the
+   * picker (or "create new" inline flow) resolves each seat to a
+   * Profile before submit. There is no longer a name-only fallback.
    */
   players: {
-    profileId?: string | null;
-    name?: string;
-    userId?: string | null;
+    profileId: string;
   }[];
   /** Pre-supplied id (tests/replay). Otherwise generated. */
   id?: string;
@@ -58,25 +58,43 @@ export async function createMatch(
   const matchId = input.id ?? createId();
   const ts = nowIso();
 
-  // Hydrate each slot to the row we want to mirror locally. The picker
-  // passes `profileId`; legacy callers (rematch from pre-6-A rows) still
-  // pass `name`. We look up the local Profile to snapshot its alias into
-  // `Player.name` so the UI has something to render even before the
-  // server response comes back.
+  // Snapshot the local Profile rows so each Player row carries the
+  // embedded `profile` projection the UI reads from. Pull-sync will
+  // overwrite these snapshots with the server's canonical projection
+  // on the next round-trip.
   const players: LocalPlayer[] = await Promise.all(
     input.players.map(async (p, position) => {
-      let name = p.name ?? "";
-      if (p.profileId) {
-        const profile = await db.profiles.get(p.profileId);
-        if (profile) name = profile.alias;
+      const profile = await db.profiles.get(p.profileId);
+      if (!profile) {
+        // Should never happen — the picker only surfaces local profiles
+        // and the inline-create flow writes the row before submitting.
+        throw new Error(
+          `createMatch: profile ${p.profileId} missing from local Dexie`,
+        );
       }
+      const playerProfile = {
+        id: profile.id,
+        ownerId: profile.ownerId,
+        linkedUserId: profile.linkedUserId,
+        alias: profile.alias,
+        customAvatarUrl: profile.customAvatarUrl,
+        useLinkedAvatar: profile.useLinkedAvatar,
+        linkedUser: profile.linkedUser
+          ? {
+              id: profile.linkedUser.id,
+              name: profile.linkedUser.name,
+              alias: profile.linkedUser.alias,
+              avatarUrl: profile.linkedUser.avatarUrl,
+            }
+          : null,
+      };
       return {
         id: createId(),
         matchId,
-        name,
         position,
-        userId: p.userId ?? null,
-        profileId: p.profileId ?? null,
+        profileId: p.profileId,
+        profileLinkedUserId: profile.linkedUserId,
+        profile: playerProfile,
         updatedAt: ts,
       };
     }),
@@ -110,10 +128,7 @@ export async function createMatch(
           players: players.map((p) => ({
             id: p.id,
             position: p.position,
-            ...(p.profileId
-              ? { profileId: p.profileId }
-              : { name: p.name }),
-            ...(p.userId ? { userId: p.userId } : {}),
+            profileId: p.profileId,
           })),
         }),
         createdAt: ts,
@@ -435,18 +450,15 @@ export async function clearCustomAvatar(input: {
 }
 
 /**
- * Collapse `sourceProfileId` into `targetProfileId` for the unclaimed
- * variant (6-B). Optimistically rewrites Dexie's Player rows + deletes
- * the source Profile before the POST returns so the UI updates
- * immediately, then queues the POST so an offline merge replays on
- * reconnect.
+ * Collapse `sourceProfileId` into `targetProfileId`. Optimistically
+ * rewrites Dexie's Player rows + deletes the source Profile before
+ * the POST returns so the UI updates immediately, then queues the
+ * POST so an offline merge replays on reconnect.
  *
- * The 6-B server endpoint rejects linked profiles outright; we don't
- * pre-check here because the UI surface (MergeDialog) only shows
- * unclaimed candidates. A server rejection therefore implies a sync
- * race (target became linked between dialog render and submit) — the
- * queued POST flips to `failed` and the user can retry from a fresh
- * dialog.
+ * Under the single-Profile model (6-C) a merge is always an
+ * owner-side consolidation of two profiles the caller owns. The
+ * server preserves any `linkedUserId` from the source onto the
+ * surviving target when the target lacks one.
  */
 export async function mergeProfile(input: {
   targetProfileId: string;
@@ -454,25 +466,41 @@ export async function mergeProfile(input: {
 }): Promise<void> {
   const ts = nowIso();
   const target = await db.profiles.get(input.targetProfileId);
-  const survivingAlias = target?.alias ?? "";
 
   await db.transaction(
     "rw",
     [db.profiles, db.players, db.syncQueue],
     async () => {
-      // Rewrite every local Player from source → target. We carry the
-      // surviving alias forward into the legacy `name` column so the
-      // dormant value matches what the server is about to snapshot.
+      // Rewrite every local Player from source → target so the UI
+      // flips immediately. The embedded `profile` projection on each
+      // row gets refreshed by the next pullSync.
       const players = await db.players
         .where("profileId")
         .equals(input.sourceProfileId)
         .toArray();
-      for (const p of players) {
-        p.profileId = input.targetProfileId;
-        if (survivingAlias) p.name = survivingAlias;
-        p.updatedAt = ts;
-      }
-      if (players.length > 0) {
+      if (players.length > 0 && target) {
+        const targetProjection = {
+          id: target.id,
+          ownerId: target.ownerId,
+          linkedUserId: target.linkedUserId,
+          alias: target.alias,
+          customAvatarUrl: target.customAvatarUrl,
+          useLinkedAvatar: target.useLinkedAvatar,
+          linkedUser: target.linkedUser
+            ? {
+                id: target.linkedUser.id,
+                name: target.linkedUser.name,
+                alias: target.linkedUser.alias,
+                avatarUrl: target.linkedUser.avatarUrl,
+              }
+            : null,
+        };
+        for (const p of players) {
+          p.profileId = input.targetProfileId;
+          p.profileLinkedUserId = target.linkedUserId;
+          p.profile = targetProjection;
+          p.updatedAt = ts;
+        }
         await db.players.bulkPut(players);
       }
 
@@ -490,6 +518,168 @@ export async function mergeProfile(input: {
   );
 
   scheduleFlush();
+}
+
+// ─── Profile link / unlink (Phase 6-C) ───
+//
+// The link flow can't ride the offline sync queue: tokens expire after
+// 60s, so a queued request that fires after a reconnect would always
+// fail verification. These mutations therefore POST directly and
+// surface network errors to the caller, which renders them inline in
+// the link UI ("token expired — ask your friend to refresh the QR").
+
+export type LinkTokenResponse = {
+  token: string;
+  expiresAt: string;
+};
+
+/**
+ * Ask the server to mint a short-lived signed token anchored on the
+ * caller's owned profile `sourceProfileId`. The friend's app scans
+ * this and POSTs it to their own owned profile — the link is bilateral
+ * by construction. The caller's User id is read from the session, so
+ * the only parameter is the source profile id.
+ */
+export async function requestLinkToken(input: {
+  sourceProfileId: string;
+}): Promise<LinkTokenResponse> {
+  if (!navigator.onLine) {
+    throw new Error("A network connection is required to show a link code");
+  }
+  const res = await fetch(
+    `/api/profiles/${input.sourceProfileId}/link-token`,
+    {
+      method: "POST",
+      credentials: "include",
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Could not mint link token (${res.status})`);
+  }
+  return (await res.json()) as LinkTokenResponse;
+}
+
+/**
+ * Bilaterally link two unclaimed Profiles representing the same person:
+ * `profileId` (the scanner's owned profile) and the token-embedded
+ * `sourceProfileId` (the shower's owned profile). On the happy path,
+ * the server returns both updated rows in one shot and we mirror both
+ * into Dexie so the scanner's Players tab + the shower's own profile
+ * (if they're on this device) flip to linked without a pull-sync.
+ *
+ * Two merge-required branches surface:
+ *  - `side: "scanner"` → the caller already has another profile linked
+ *    to the shower; UI prompts to merge.
+ *  - `side: "shower"` → the shower already has another profile linked
+ *    to the caller; UI surfaces a non-actionable message and the
+ *    caller asks their friend to merge first.
+ */
+export type LinkProfileResponse =
+  | {
+      status: "linked";
+      profile: LocalProfile3;
+      sourceProfile: LocalProfile3;
+    }
+  | {
+      status: "merge_required";
+      side: "scanner";
+      existing: { id: string; alias: string };
+      target: { id: string; alias: string };
+    }
+  | {
+      status: "merge_required";
+      side: "shower";
+      existingAlias: string;
+      targetAlias: string;
+    };
+
+export async function linkProfile(input: {
+  profileId: string;
+  token: string;
+}): Promise<LinkProfileResponse> {
+  if (!navigator.onLine) {
+    throw new Error("A network connection is required to link a profile");
+  }
+  const res = await fetch(`/api/profiles/${input.profileId}/link`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token: input.token }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Link failed (${res.status})`);
+  }
+  const body = (await res.json()) as LinkProfileResponse;
+  if (body.status === "linked") {
+    // Mirror both authoritative rows immediately so the local Dexie
+    // matches the server. The shower's `sourceProfile` may or may not
+    // exist locally (it does if the shower is the same user on this
+    // device, e.g. two browser profiles); putting it is a no-op when
+    // the row isn't reachable through other queries.
+    await db.profiles.put(body.profile);
+    await db.profiles.put(body.sourceProfile);
+    // The link retroactively makes the friend's pre-link matches +
+    // their owned-friend profiles visible to us, but linking doesn't
+    // bump `Match.updatedAt` server-side, so a `?since=` delta would
+    // miss them entirely. Drop the pull cursors and do one full pull
+    // so the friend's pre-link history lands in local Dexie.
+    await resetPullCursors();
+    try {
+      await pullSync({ force: true });
+    } catch {
+      // Network blip — the next routine pullSync (boot / route /
+      // online event) will retry with the now-cleared cursor.
+    }
+  }
+  return body;
+}
+
+/**
+ * Bilaterally sever a link. The server clears `linkedUserId` on both
+ * `:id` and the counterpart profile (the other side of the bilateral
+ * pair) in one transaction; we mirror both into Dexie so the local
+ * Players tab reflects the change without waiting for the next
+ * pull-sync. Either the owner or the linked user can call this; the
+ * server enforces that authorization. Self-Profiles cannot be
+ * unlinked — the server returns 409.
+ *
+ * Matches that were only visible via the now-broken bilateral link
+ * are pruned from local Dexie afterwards — the incremental `?since=`
+ * pull cannot represent deletions.
+ */
+export async function unlinkProfile(input: {
+  profileId: string;
+  /** True when the *linked friend* (not the owner) is the one calling.
+   * Used to delete the local mirror on success, since the profile is
+   * about to drop out of the caller's `/api/profiles` response. */
+  asLinkedUser?: boolean;
+}): Promise<void> {
+  if (!navigator.onLine) {
+    throw new Error("A network connection is required to unlink a profile");
+  }
+  const res = await fetch(`/api/profiles/${input.profileId}/unlink`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Unlink failed (${res.status})`);
+  }
+  const updated = (await res.json()) as LocalProfile3;
+  if (input.asLinkedUser) {
+    await db.profiles.delete(input.profileId);
+  } else {
+    await db.profiles.put(updated);
+  }
+
+  // The counterpart profile (the other half of the bilateral link)
+  // is owned by the friend, so it never appears in our own
+  // `/api/profiles` response. There is therefore nothing to mirror
+  // locally — pruning matches below covers the visibility side. The
+  // friend's own device will pick up the unlink on its next
+  // `/api/profiles` pull.
+  await pruneLocalMatchesAgainstServer();
 }
 
 export type PatchProfileInput = {

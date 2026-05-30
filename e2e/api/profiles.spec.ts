@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createAndSignIn } from "../helpers/auth";
+import { createProfile, mintLinkToken } from "../helpers/api";
 import type { ApiProfile } from "../../src/client/lib/api-types";
 
 function makeClientId(): string {
@@ -102,10 +103,7 @@ test.describe("API: Profiles (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const create = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const profile = (await create.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     const patched = await request.patch(`/api/profiles/${profile.id}`, {
       data: { alias: "Bob", useLinkedAvatar: false },
@@ -118,10 +116,7 @@ test.describe("API: Profiles (authenticated)", () => {
 
   test("PATCH /api/profiles/:id forbids non-owners", async ({ request }) => {
     await createAndSignIn(request);
-    const create = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const profile = (await create.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     await createAndSignIn(request); // new user
     const patched = await request.patch(`/api/profiles/${profile.id}`, {
@@ -134,10 +129,7 @@ test.describe("API: Profiles (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const create = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const aliceProfile = (await create.json()) as ApiProfile;
+    const aliceProfile = await createProfile(request, "Alice");
 
     await createAndSignIn(request); // new user
     const res = await request.get("/api/profiles");
@@ -155,10 +147,7 @@ test.describe("API: Profiles (authenticated)", () => {
     const cursor = new Date().toISOString();
     await new Promise((r) => setTimeout(r, 30));
 
-    const create = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const created = (await create.json()) as ApiProfile;
+    const created = await createProfile(request, "Alice");
 
     const res = await request.get(
       `/api/profiles?since=${encodeURIComponent(cursor)}`,
@@ -169,115 +158,92 @@ test.describe("API: Profiles (authenticated)", () => {
     expect(ids).toContain(created.id);
   });
 
-  test("POST /api/matches resolves each player to a Profile", async ({
+  test("POST /api/matches binds each Player to its supplied Profile", async ({
     request,
   }) => {
     await createAndSignIn(request);
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
+    const alice = await createProfile(request, "Alice");
+    const bob = await createProfile(request, "Bob");
+
     const matchRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
     expect(matchRes.status()).toBe(201);
     const match = (await matchRes.json()) as {
-      players: { name: string; profileId: string | null }[];
+      players: { profileId: string; position: number }[];
     };
 
-    for (const player of match.players) {
-      expect(player.profileId).not.toBeNull();
-    }
-    expect(match.players[0].profileId).not.toBe(match.players[1].profileId);
+    expect(match.players[0].profileId).toBe(alice.id);
+    expect(match.players[1].profileId).toBe(bob.id);
   });
 
-  test("POST /api/matches reuses an existing Profile when the alias matches", async ({
+  test("POST /api/matches lets the same Profile be reused across matches", async ({
     request,
   }) => {
     await createAndSignIn(request);
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
 
-    const first = await request.post("/api/matches", {
+    const alice = await createProfile(request, "Alice");
+    const bob = await createProfile(request, "Bob");
+
+    await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: "Alice", position: 0 },
-          { name: "Bob", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: bob.id, position: 1 },
         ],
       },
     });
-    const firstMatch = (await first.json()) as {
-      players: { name: string; profileId: string | null }[];
-    };
+
+    const carol = await createProfile(request, "Carol");
 
     const second = await request.post("/api/matches", {
       data: {
         gameId: game.id,
-        // Case-insensitive alias match: "alice" should reuse Alice's profile.
         players: [
-          { name: "alice", position: 0 },
-          { name: "Carol", position: 1 },
+          { profileId: alice.id, position: 0 },
+          { profileId: carol.id, position: 1 },
         ],
       },
     });
     const secondMatch = (await second.json()) as {
-      players: {
-        name: string;
-        position: number;
-        profileId: string | null;
-      }[];
+      players: { profileId: string; position: number }[];
     };
-
-    const firstAlice = firstMatch.players.find((p) => p.name === "Alice")!;
-    // PR 6-B: Player.name is now snapshotted from the canonical
-    // Profile.alias, so the second slot reads "Alice" even though the
-    // client passed "alice". Identity comes from profileId, not from
-    // the legacy display column.
-    const secondAlice = secondMatch.players.find((p) => p.position === 0)!;
-    expect(secondAlice.profileId).toBe(firstAlice.profileId);
-    expect(secondAlice.name).toBe("Alice");
-
-    // Carol gets a brand-new profile.
-    const firstBob = firstMatch.players.find((p) => p.name === "Bob")!;
-    const secondCarol = secondMatch.players.find((p) => p.position === 1)!;
-    expect(secondCarol.profileId).not.toBe(firstBob.profileId);
-    expect(secondCarol.profileId).not.toBe(firstAlice.profileId);
+    expect(secondMatch.players[0].profileId).toBe(alice.id);
+    expect(secondMatch.players[1].profileId).toBe(carol.id);
   });
 
-  test("POST /api/matches with userId === self binds the self-Profile", async ({
+  test("POST /api/matches rejects a player payload without profileId", async ({
     request,
   }) => {
+    // Under the single-Profile model, every seat must resolve to a
+    // Profile before submit. The legacy name-only / userId path is
+    // gone — callers that don't migrate get a loud 400.
     await createAndSignIn(request);
     const gamesRes = await request.get("/api/games/7-wonders-duel");
     const game = await gamesRes.json();
-    const meRes = await request.get("/api/auth/get-session");
-    const me = await meRes.json();
 
     const matchRes = await request.post("/api/matches", {
       data: {
         gameId: game.id,
         players: [
-          { name: me.user.name, position: 0, userId: me.user.id },
+          { name: "Anyone", position: 0 },
           { name: "Friend", position: 1 },
         ],
       },
     });
-    const match = (await matchRes.json()) as {
-      players: { name: string; profileId: string | null; userId: string | null }[];
-    };
-
-    const profilesRes = await request.get("/api/profiles");
-    const profiles = (await profilesRes.json()) as ApiProfile[];
-    const selfProfile = profiles.find((p) => p.linkedUserId === p.ownerId)!;
-
-    const selfPlayer = match.players.find((p) => p.userId === me.user.id)!;
-    expect(selfPlayer.profileId).toBe(selfProfile.id);
+    expect(matchRes.status()).toBe(400);
   });
 });
 
@@ -296,11 +262,7 @@ test.describe("API: Profile avatars (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const created = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    expect(created.status()).toBe(201);
-    const profile = (await created.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
       multipart: {
@@ -329,10 +291,7 @@ test.describe("API: Profile avatars (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const created = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const profile = (await created.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     await createAndSignIn(request); // switch identity
     const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
@@ -351,10 +310,7 @@ test.describe("API: Profile avatars (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const created = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const profile = (await created.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
       data: "",
@@ -369,10 +325,7 @@ test.describe("API: Profile avatars (authenticated)", () => {
     request,
   }) => {
     await createAndSignIn(request);
-    const created = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const profile = (await created.json()) as ApiProfile;
+    const profile = await createProfile(request, "Alice");
 
     const upload = await request.post(`/api/profiles/${profile.id}/avatar`, {
       multipart: {
@@ -410,14 +363,8 @@ test.describe("API: Profile merge (authenticated)", () => {
     const gameRes = await request.get("/api/games/7-wonders-duel");
     const game = await gameRes.json();
 
-    const aliceRes = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const alice = (await aliceRes.json()) as ApiProfile;
-    const aliasRes = await request.post("/api/profiles", {
-      data: { alias: "Aliss" },
-    });
-    const alias = (await aliasRes.json()) as ApiProfile;
+    const alice = await createProfile(request, "Alice");
+    const alias = await createProfile(request, "Aliss");
 
     // One match references each profile so the merge has rewrites to do.
     const matchRes = await request.post("/api/matches", {
@@ -445,32 +392,27 @@ test.describe("API: Profile merge (authenticated)", () => {
     const profiles = (await sourceFetch.json()) as ApiProfile[];
     expect(profiles.some((p) => p.id === alias.id)).toBe(false);
 
-    // The match's second Player now references alice's profile and
-    // snapshots her alias to Player.name.
+    // The match's second Player now references alice's profile.
     const detail = await request.get(`/api/matches/${matchId}`);
     const detailBody = (await detail.json()) as {
-      players: { profileId: string | null; name: string }[];
+      players: { profileId: string; profile: { alias: string } }[];
     };
     expect(
       detailBody.players.every((p) => p.profileId === alice.id),
     ).toBe(true);
-    expect(detailBody.players.every((p) => p.name === "Alice")).toBe(true);
+    expect(
+      detailBody.players.every((p) => p.profile.alias === "Alice"),
+    ).toBe(true);
   });
 
   test("POST /api/profiles/:targetId/merge requires ownership of both profiles", async ({
     request,
   }) => {
     await createAndSignIn(request);
-    const aliceRes = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const alice = (await aliceRes.json()) as ApiProfile;
+    const alice = await createProfile(request, "Alice");
 
     await createAndSignIn(request);
-    const otherRes = await request.post("/api/profiles", {
-      data: { alias: "Other" },
-    });
-    const other = (await otherRes.json()) as ApiProfile;
+    const other = await createProfile(request, "Other");
 
     const merge = await request.post(`/api/profiles/${other.id}/merge`, {
       data: { sourceProfileId: alice.id },
@@ -480,40 +422,724 @@ test.describe("API: Profile merge (authenticated)", () => {
     expect(merge.status()).toBe(403);
   });
 
-  test("POST /api/profiles/:targetId/merge rejects when either side is linked", async ({
+  test("POST /api/profiles/:targetId/merge folds an unclaimed source into a linked target (no token needed)", async ({
     request,
   }) => {
+    // 6-C relaxation: caller owns both, source is unclaimed, target is
+    // linked → merge preserves the link. The self-profile is a
+    // convenient linked target (linkedUserId === viewer.id) because no
+    // two-user setup is required to exercise the path.
     await createAndSignIn(request);
     const selfRes = await request.get("/api/profiles");
     const profiles = (await selfRes.json()) as ApiProfile[];
     const self = profiles.find((p) => p.linkedUserId === p.ownerId)!;
 
-    const otherRes = await request.post("/api/profiles", {
-      data: { alias: "Other" },
-    });
-    const other = (await otherRes.json()) as ApiProfile;
+    const other = await createProfile(request, "OtherMe");
 
-    // self is linked (linkedUserId === viewer.id) — 6-B refuses linked
-    // merges; the token-required variant ships in 6-C.
     const merge = await request.post(`/api/profiles/${self.id}/merge`, {
       data: { sourceProfileId: other.id },
     });
-    expect(merge.status()).toBe(409);
+    expect(merge.status()).toBe(200);
+    const body = (await merge.json()) as { profile: ApiProfile };
+    expect(body.profile.id).toBe(self.id);
+    expect(body.profile.linkedUserId).toBe(self.ownerId);
+  });
+
+  test("POST /api/profiles/:targetId/merge carries linkedUserId from source to unclaimed target", async ({
+    browser,
+  }) => {
+    // Under the single-Profile model, merging a linked source into an
+    // unclaimed target preserves the link on the survivor — the caller
+    // doesn't lose it just because they picked the merge direction
+    // the other way around.
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await createAndSignIn(friendCtx.request);
+      const friendMe = (await (
+        await friendCtx.request.get("/api/auth/get-session")
+      ).json()) as { user: { id: string } };
+      const friendOfOwner = await createProfile(friendCtx.request, "OwnerSide");
+      const token = await mintLinkToken(friendCtx.request, friendOfOwner.id);
+
+      await createAndSignIn(ownerCtx.request);
+      const linked = await createProfile(ownerCtx.request, "Alice");
+      await ownerCtx.request.post(`/api/profiles/${linked.id}/link`, {
+        data: { token },
+      });
+
+      const unclaimed = await createProfile(ownerCtx.request, "AliceUnclaimed");
+
+      const merge = await ownerCtx.request.post(
+        `/api/profiles/${unclaimed.id}/merge`,
+        { data: { sourceProfileId: linked.id } },
+      );
+      expect(merge.status()).toBe(200);
+      const body = (await merge.json()) as { profile: ApiProfile };
+      expect(body.profile.id).toBe(unclaimed.id);
+      expect(body.profile.linkedUserId).toBe(friendMe.user.id);
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
   });
 
   test("POST /api/profiles/:targetId/merge rejects same-id payload", async ({
     request,
   }) => {
     await createAndSignIn(request);
-    const aliceRes = await request.post("/api/profiles", {
-      data: { alias: "Alice" },
-    });
-    const alice = (await aliceRes.json()) as ApiProfile;
+    const alice = await createProfile(request, "Alice");
 
     const merge = await request.post(`/api/profiles/${alice.id}/merge`, {
       data: { sourceProfileId: alice.id },
     });
     expect(merge.status()).toBe(400);
+  });
+});
+
+test.describe("API: Profile link / unlink (authenticated)", () => {
+  test("POST /api/profiles/:id/link-token returns a token encoding caller + source profile", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const me = await (await request.get("/api/auth/get-session")).json();
+
+    const profile = await createProfile(request, "Friend");
+    const res = await request.post(
+      `/api/profiles/${profile.id}/link-token`,
+    );
+    expect(res.ok()).toBeTruthy();
+    const body = (await res.json()) as { token: string; expiresAt: string };
+    expect(typeof body.token).toBe("string");
+    expect(body.token.split(".")).toHaveLength(2);
+
+    // The future-dated expiry should be ~60s from now; allow loose
+    // bounds so a slow CI doesn't flake.
+    const expMs = new Date(body.expiresAt).getTime();
+    const delta = expMs - Date.now();
+    expect(delta).toBeGreaterThan(30_000);
+    expect(delta).toBeLessThan(90_000);
+
+    // Payload now encodes both userId and sourceProfileId.
+    const [payloadB64] = body.token.split(".");
+    const pad =
+      payloadB64.length % 4 === 0 ? "" : "=".repeat(4 - (payloadB64.length % 4));
+    const json = Buffer.from(
+      payloadB64.replace(/-/g, "+").replace(/_/g, "/") + pad,
+      "base64",
+    ).toString("utf8");
+    const payload = JSON.parse(json) as {
+      userId: string;
+      sourceProfileId: string;
+    };
+    expect(payload.userId).toBe(me.user.id);
+    expect(payload.sourceProfileId).toBe(profile.id);
+  });
+
+  test("GET /api/profiles/:id/link-status returns the current linkedUserId for polling", async ({
+    browser,
+  }) => {
+    // Used by the shower's LinkCodeDisplay polling — minimal payload
+    // (just `linkedUserId`) and auth-scoped to the owner.
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    const otherCtx = await browser.newContext();
+    try {
+      await createAndSignIn(ownerCtx.request);
+      const alice = await createProfile(ownerCtx.request, "Alice");
+
+      // Before linking: linkedUserId is null.
+      const before = await ownerCtx.request.get(
+        `/api/profiles/${alice.id}/link-status`,
+      );
+      expect(before.status()).toBe(200);
+      const beforeBody = (await before.json()) as {
+        linkedUserId: string | null;
+      };
+      expect(beforeBody.linkedUserId).toBeNull();
+
+      // Non-owner is rejected.
+      await createAndSignIn(otherCtx.request);
+      const forbidden = await otherCtx.request.get(
+        `/api/profiles/${alice.id}/link-status`,
+      );
+      expect(forbidden.status()).toBe(403);
+
+      // After a bilateral link, linkedUserId is the friend's id.
+      await createAndSignIn(friendCtx.request);
+      const friendMe = (await (
+        await friendCtx.request.get("/api/auth/get-session")
+      ).json()) as { user: { id: string } };
+      const friendSource = await createProfile(friendCtx.request, "OwnerSide");
+      const token = await mintLinkToken(friendCtx.request, friendSource.id);
+      await ownerCtx.request.post(`/api/profiles/${alice.id}/link`, {
+        data: { token },
+      });
+
+      const after = await ownerCtx.request.get(
+        `/api/profiles/${alice.id}/link-status`,
+      );
+      expect(after.status()).toBe(200);
+      const afterBody = (await after.json()) as {
+        linkedUserId: string | null;
+      };
+      expect(afterBody.linkedUserId).toBe(friendMe.user.id);
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+      await otherCtx.close();
+    }
+  });
+
+  test("POST /api/profiles/:id/link-token rejects a non-owner and an already-linked source", async ({
+    browser,
+  }) => {
+    const aliceCtx = await browser.newContext();
+    const bobCtx = await browser.newContext();
+    try {
+      await createAndSignIn(aliceCtx.request);
+      const aliceProfile = await createProfile(aliceCtx.request, "ForBob");
+
+      // Bob can't mint a token for Alice's profile.
+      await createAndSignIn(bobCtx.request);
+      const otherSide = await bobCtx.request.post(
+        `/api/profiles/${aliceProfile.id}/link-token`,
+      );
+      expect(otherSide.status()).toBe(403);
+
+      // The caller's own self-profile is already linked → 409.
+      const selfList = (await (
+        await aliceCtx.request.get("/api/profiles")
+      ).json()) as ApiProfile[];
+      const selfProfile = selfList.find(
+        (p) => p.linkedUserId === p.ownerId,
+      )!;
+      const onSelf = await aliceCtx.request.post(
+        `/api/profiles/${selfProfile.id}/link-token`,
+      );
+      expect(onSelf.status()).toBe(409);
+    } finally {
+      await aliceCtx.close();
+      await bobCtx.close();
+    }
+  });
+
+  test("POST /api/profiles/:id/link bilaterally links both profiles in one shot", async ({
+    browser,
+  }) => {
+    // Bilateral semantics: a single scan flips linkedUserId on both
+    // the scanner's target profile AND the shower's source profile.
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await createAndSignIn(friendCtx.request);
+      const friendMe = (await (
+        await friendCtx.request.get("/api/auth/get-session")
+      ).json()) as { user: { id: string } };
+      const friendSource = await createProfile(friendCtx.request, "OwnerSide");
+      const token = await mintLinkToken(friendCtx.request, friendSource.id);
+
+      await createAndSignIn(ownerCtx.request);
+      const ownerMe = (await (
+        await ownerCtx.request.get("/api/auth/get-session")
+      ).json()) as { user: { id: string } };
+      const alice = await createProfile(ownerCtx.request, "Alice");
+
+      const linkRes = await ownerCtx.request.post(
+        `/api/profiles/${alice.id}/link`,
+        { data: { token } },
+      );
+      expect(linkRes.status()).toBe(200);
+      const body = (await linkRes.json()) as {
+        status: string;
+        profile: ApiProfile;
+        sourceProfile: ApiProfile;
+      };
+      expect(body.status).toBe("linked");
+      // Scanner's profile now points at the shower's user…
+      expect(body.profile.linkedUserId).toBe(friendMe.user.id);
+      expect(body.profile.linkedUser?.id).toBe(friendMe.user.id);
+      // …and the shower's profile now points at the scanner's user.
+      expect(body.sourceProfile.id).toBe(friendSource.id);
+      expect(body.sourceProfile.linkedUserId).toBe(ownerMe.user.id);
+
+      // Friend's own /api/profiles confirms the source row landed.
+      const friendList = (await (
+        await friendCtx.request.get("/api/profiles")
+      ).json()) as ApiProfile[];
+      const sourceAfter = friendList.find((p) => p.id === friendSource.id)!;
+      expect(sourceAfter.linkedUserId).toBe(ownerMe.user.id);
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
+  test("GET /api/profiles surfaces the linked friend's email after a bilateral link", async ({
+    browser,
+  }) => {
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      const friend = await createAndSignIn(friendCtx.request);
+      const friendSource = await createProfile(friendCtx.request, "OwnerSide");
+      const token = await mintLinkToken(friendCtx.request, friendSource.id);
+
+      await createAndSignIn(ownerCtx.request);
+      const alice = await createProfile(ownerCtx.request, "Alice");
+
+      const link = await ownerCtx.request.post(
+        `/api/profiles/${alice.id}/link`,
+        { data: { token } },
+      );
+      const body = (await link.json()) as { profile: ApiProfile };
+      expect(body.profile.linkedUser?.email).toBe(friend.email);
+
+      // And the same projection comes back via the list endpoint.
+      const list = (await (
+        await ownerCtx.request.get("/api/profiles")
+      ).json()) as ApiProfile[];
+      const aliceAfter = list.find((p) => p.id === alice.id);
+      expect(aliceAfter?.linkedUser?.email).toBe(friend.email);
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
+  test("POST /api/profiles/:id/link is idempotent when both sides already point at each other", async ({
+    browser,
+  }) => {
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await createAndSignIn(friendCtx.request);
+      const friendSource = await createProfile(friendCtx.request, "OwnerSide");
+      const token = await mintLinkToken(friendCtx.request, friendSource.id);
+
+      await createAndSignIn(ownerCtx.request);
+      const alice = await createProfile(ownerCtx.request, "Alice");
+      await ownerCtx.request.post(`/api/profiles/${alice.id}/link`, {
+        data: { token },
+      });
+
+      // A replay with the same token: shower's profile is still
+      // linked to scanner, scanner's profile still linked to shower
+      // — must succeed, not 409.
+      const replay = await ownerCtx.request.post(
+        `/api/profiles/${alice.id}/link`,
+        { data: { token } },
+      );
+      expect(replay.status()).toBe(200);
+      const body = (await replay.json()) as { status: string };
+      expect(body.status).toBe("linked");
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
+  test("POST /api/profiles/:id/link scanner-side merge_required when caller already has another profile linked to the shower", async ({
+    browser,
+  }) => {
+    const friendCtx = await browser.newContext();
+    const friendReq = friendCtx.request;
+    const ownerCtx = await browser.newContext();
+    const ownerReq = ownerCtx.request;
+
+    try {
+      await createAndSignIn(friendReq);
+      const friendMe = (await (
+        await friendReq.get("/api/auth/get-session")
+      ).json()) as { user: { id: string } };
+      const friendSourceA = await createProfile(friendReq, "OwnerSideA");
+      const tokenA = await mintLinkToken(friendReq, friendSourceA.id);
+      const friendSourceB = await createProfile(friendReq, "OwnerSideB");
+      const tokenB = await mintLinkToken(friendReq, friendSourceB.id);
+
+      await createAndSignIn(ownerReq);
+      const aleece = await createProfile(ownerReq, "Aleece");
+      const alice = await createProfile(ownerReq, "Alice");
+
+      // First link succeeds.
+      const link1 = await ownerReq.post(`/api/profiles/${aleece.id}/link`, {
+        data: { token: tokenA },
+      });
+      expect(link1.status()).toBe(200);
+
+      // Second link to the same friend → scanner-side merge_required.
+      const link2 = await ownerReq.post(`/api/profiles/${alice.id}/link`, {
+        data: { token: tokenB },
+      });
+      expect(link2.status()).toBe(200);
+      const body = (await link2.json()) as {
+        status: string;
+        side?: string;
+        existing?: { id: string; alias: string };
+        target?: { id: string; alias: string };
+      };
+      expect(body.status).toBe("merge_required");
+      expect(body.side).toBe("scanner");
+      expect(body.existing?.id).toBe(aleece.id);
+      expect(body.existing?.alias).toBe("Aleece");
+      expect(body.target?.id).toBe(alice.id);
+
+      // No mutation: target stayed unclaimed.
+      const profilesRes = await ownerReq.get("/api/profiles");
+      const profiles = (await profilesRes.json()) as ApiProfile[];
+      const aliceAfter = profiles.find((p) => p.id === alice.id)!;
+      expect(aliceAfter.linkedUserId).toBeNull();
+
+      // Caller resolves by merging Alice into Aleece — preserving
+      // the friend's link on the survivor.
+      const merge = await ownerReq.post(
+        `/api/profiles/${aleece.id}/merge`,
+        { data: { sourceProfileId: alice.id } },
+      );
+      expect(merge.status()).toBe(200);
+      const mergeBody = (await merge.json()) as {
+        status: string;
+        profile: ApiProfile;
+      };
+      expect(mergeBody.status).toBe("merged");
+      expect(mergeBody.profile.id).toBe(aleece.id);
+      expect(mergeBody.profile.linkedUserId).toBe(friendMe.user.id);
+
+      // Source profile is gone.
+      const afterRes = await ownerReq.get("/api/profiles");
+      const after = (await afterRes.json()) as ApiProfile[];
+      expect(after.find((p) => p.id === alice.id)).toBeUndefined();
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
+  // The shower-side merge_required branch is a defensive guard for
+  // asymmetric states (e.g. legacy unilateral data). Under the new
+  // bilateral flow, the @@unique([ownerId, linkedUserId]) constraint
+  // plus the bilateral semantics make it impossible to construct a
+  // case where ONLY the shower has a stale profile pointing at the
+  // scanner without the scanner also having the matching counterpart
+  // — so the server always returns scanner-side merge_required first
+  // and the shower-side branch can't be exercised through public
+  // endpoints. The branch is kept for defense-in-depth against future
+  // schema changes; an E2E test would require direct DB manipulation.
+
+  test("POST /api/profiles/:id/link rejects an expired or tampered token", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const alice = await createProfile(request, "Alice");
+
+    // Malformed token
+    const bad1 = await request.post(`/api/profiles/${alice.id}/link`, {
+      data: { token: "not-a-token" },
+    });
+    expect(bad1.status()).toBe(400);
+
+    // Forged signature on a plausible payload (now with the new
+    // sourceProfileId field shape; signature still bogus).
+    const fakePayload = Buffer.from(
+      JSON.stringify({
+        userId: "fakeid",
+        sourceProfileId: "c00000000000000000000000",
+        exp: Date.now() + 60_000,
+      }),
+    )
+      .toString("base64")
+      .replace(/=+$/g, "")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
+    const bad2 = await request.post(`/api/profiles/${alice.id}/link`, {
+      data: { token: `${fakePayload}.AAAA` },
+    });
+    expect(bad2.status()).toBe(400);
+  });
+
+  test("POST /api/profiles/:id/link refuses scanning your own QR code", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const own = await createProfile(request, "ForFriend");
+    const token = await mintLinkToken(request, own.id);
+
+    const profiles = (await (
+      await request.get("/api/profiles")
+    ).json()) as ApiProfile[];
+    const self = profiles.find((p) => p.linkedUserId === p.ownerId)!;
+
+    // Try to link another unclaimed profile owned by the same user
+    // against a token they minted themselves → 400.
+    const other = await createProfile(request, "Mirror");
+
+    const res = await request.post(`/api/profiles/${other.id}/link`, {
+      data: { token },
+    });
+    expect(res.status()).toBe(400);
+
+    // Sanity: self-profile lookup didn't get disturbed.
+    expect(self.linkedUserId).toBe(self.ownerId);
+  });
+
+  test("POST /api/profiles/:id/link forbids non-owners (scanner side)", async ({
+    browser,
+  }) => {
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    const thirdCtx = await browser.newContext();
+    try {
+      await createAndSignIn(friendCtx.request);
+      const friendSource = await createProfile(friendCtx.request, "OwnerSide");
+      const token = await mintLinkToken(friendCtx.request, friendSource.id);
+
+      await createAndSignIn(ownerCtx.request);
+      const alice = await createProfile(ownerCtx.request, "Alice");
+
+      await createAndSignIn(thirdCtx.request);
+      const res = await thirdCtx.request.post(
+        `/api/profiles/${alice.id}/link`,
+        { data: { token } },
+      );
+      expect(res.status()).toBe(403);
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+      await thirdCtx.close();
+    }
+  });
+
+  test("POST /api/profiles/:id/link rejects when the target is already linked to a different friend", async ({
+    browser,
+  }) => {
+    const friendACtx = await browser.newContext();
+    const friendBCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await createAndSignIn(friendACtx.request);
+      const aSource = await createProfile(friendACtx.request, "OwnerSideA");
+      const tokA = await mintLinkToken(friendACtx.request, aSource.id);
+
+      await createAndSignIn(friendBCtx.request);
+      const bSource = await createProfile(friendBCtx.request, "OwnerSideB");
+      const tokB = await mintLinkToken(friendBCtx.request, bSource.id);
+
+      await createAndSignIn(ownerCtx.request);
+      const alice = await createProfile(ownerCtx.request, "Alice");
+
+      const link1 = await ownerCtx.request.post(
+        `/api/profiles/${alice.id}/link`,
+        { data: { token: tokA } },
+      );
+      expect(link1.status()).toBe(200);
+
+      // Now Alice is linked to friend A. Linking the same profile to
+      // friend B → 409.
+      const link2 = await ownerCtx.request.post(
+        `/api/profiles/${alice.id}/link`,
+        { data: { token: tokB } },
+      );
+      expect(link2.status()).toBe(409);
+    } finally {
+      await friendACtx.close();
+      await friendBCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
+  test("POST /api/profiles/:id/unlink bilaterally severs both halves (owner side)", async ({
+    browser,
+  }) => {
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await createAndSignIn(friendCtx.request);
+      const friendSource = await createProfile(friendCtx.request, "OwnerSide");
+      const token = await mintLinkToken(friendCtx.request, friendSource.id);
+
+      await createAndSignIn(ownerCtx.request);
+      const alice = await createProfile(ownerCtx.request, "Alice");
+
+      const link = await ownerCtx.request.post(
+        `/api/profiles/${alice.id}/link`,
+        { data: { token } },
+      );
+      expect(link.status()).toBe(200);
+
+      const unlink = await ownerCtx.request.post(
+        `/api/profiles/${alice.id}/unlink`,
+      );
+      expect(unlink.status()).toBe(200);
+      const after = (await unlink.json()) as ApiProfile;
+      expect(after.linkedUserId).toBeNull();
+
+      // The counterpart on the friend's side is also cleared.
+      const friendList = (await (
+        await friendCtx.request.get("/api/profiles")
+      ).json()) as ApiProfile[];
+      const friendAfter = friendList.find((p) => p.id === friendSource.id)!;
+      expect(friendAfter.linkedUserId).toBeNull();
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
+  test("POST /api/profiles/:id/unlink works from the linked user's side too", async ({
+    browser,
+  }) => {
+    // The linked friend can call /unlink on the *owner's* profile —
+    // the server permits it because the friend appears in
+    // target.linkedUserId. Both sides clear in one shot.
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await createAndSignIn(friendCtx.request);
+      const friendSource = await createProfile(friendCtx.request, "OwnerSide");
+      const token = await mintLinkToken(friendCtx.request, friendSource.id);
+
+      await createAndSignIn(ownerCtx.request);
+      const alice = await createProfile(ownerCtx.request, "Alice");
+      const link = await ownerCtx.request.post(
+        `/api/profiles/${alice.id}/link`,
+        { data: { token } },
+      );
+      expect(link.status()).toBe(200);
+
+      // Owner creates a match with Alice — the friend should now see it
+      // through the visibility join on linkedUserId.
+      const gameRes = await ownerCtx.request.get("/api/games/7-wonders-duel");
+      const game = await gameRes.json();
+      const ownerProfiles = (await (
+        await ownerCtx.request.get("/api/profiles")
+      ).json()) as ApiProfile[];
+      const ownerSelf = ownerProfiles.find(
+        (p) => p.linkedUserId === p.ownerId,
+      )!;
+      const matchRes = await ownerCtx.request.post("/api/matches", {
+        data: {
+          gameId: game.id,
+          players: [
+            { profileId: ownerSelf.id, position: 0 },
+            { profileId: alice.id, position: 1 },
+          ],
+        },
+      });
+      const match = (await matchRes.json()) as { id: string };
+
+      const friendMatchesBefore = (await (
+        await friendCtx.request.get("/api/matches")
+      ).json()) as { id: string }[];
+      expect(friendMatchesBefore.some((m) => m.id === match.id)).toBe(true);
+
+      // Friend unlinks the owner's Alice (acting as the linked user).
+      const unlink = await friendCtx.request.post(
+        `/api/profiles/${alice.id}/unlink`,
+      );
+      expect(unlink.status()).toBe(200);
+
+      // Both halves clear; visibility drops on both sides.
+      const ownerList = (await (
+        await ownerCtx.request.get("/api/profiles")
+      ).json()) as ApiProfile[];
+      expect(ownerList.find((p) => p.id === alice.id)?.linkedUserId).toBeNull();
+      const friendList = (await (
+        await friendCtx.request.get("/api/profiles")
+      ).json()) as ApiProfile[];
+      expect(
+        friendList.find((p) => p.id === friendSource.id)?.linkedUserId,
+      ).toBeNull();
+
+      const friendMatchesAfter = (await (
+        await friendCtx.request.get("/api/matches")
+      ).json()) as { id: string }[];
+      expect(friendMatchesAfter.some((m) => m.id === match.id)).toBe(false);
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+    }
+  });
+
+  test("POST /api/profiles/:id/unlink rejects unrelated third parties", async ({
+    browser,
+  }) => {
+    const friendCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    const otherCtx = await browser.newContext();
+    try {
+      await createAndSignIn(friendCtx.request);
+      const friendSource = await createProfile(friendCtx.request, "OwnerSide");
+      const token = await mintLinkToken(friendCtx.request, friendSource.id);
+
+      await createAndSignIn(ownerCtx.request);
+      const alice = await createProfile(ownerCtx.request, "Alice");
+      await ownerCtx.request.post(`/api/profiles/${alice.id}/link`, {
+        data: { token },
+      });
+
+      await createAndSignIn(otherCtx.request);
+      const res = await otherCtx.request.post(
+        `/api/profiles/${alice.id}/unlink`,
+      );
+      expect(res.status()).toBe(403);
+    } finally {
+      await friendCtx.close();
+      await ownerCtx.close();
+      await otherCtx.close();
+    }
+  });
+
+  test("POST /api/profiles/:id/unlink refuses to detach the self-profile", async ({
+    request,
+  }) => {
+    await createAndSignIn(request);
+    const list = await request.get("/api/profiles");
+    const profiles = (await list.json()) as ApiProfile[];
+    const self = profiles.find((p) => p.linkedUserId === p.ownerId)!;
+
+    const res = await request.post(`/api/profiles/${self.id}/unlink`);
+    expect(res.status()).toBe(409);
+  });
+
+  test("POST /api/profiles/:targetId/merge rejects two linked profiles pointing at different users", async ({
+    browser,
+  }) => {
+    // The `@@unique([ownerId, linkedUserId])` constraint already
+    // prevents the owner from having two profiles linked to the same
+    // friend, so the only "two linked sides" scenario is two
+    // different friends. Merging those would silently destroy one
+    // friend's history — reject with 409.
+    const friendACtx = await browser.newContext();
+    const friendBCtx = await browser.newContext();
+    const ownerCtx = await browser.newContext();
+    try {
+      await createAndSignIn(friendACtx.request);
+      const aSource = await createProfile(friendACtx.request, "OwnerSideA");
+      const tokA = await mintLinkToken(friendACtx.request, aSource.id);
+      await createAndSignIn(friendBCtx.request);
+      const bSource = await createProfile(friendBCtx.request, "OwnerSideB");
+      const tokB = await mintLinkToken(friendBCtx.request, bSource.id);
+
+      await createAndSignIn(ownerCtx.request);
+      const alice = await createProfile(ownerCtx.request, "Alice");
+      const aleece = await createProfile(ownerCtx.request, "Aleece");
+      await ownerCtx.request.post(`/api/profiles/${aleece.id}/link`, {
+        data: { token: tokA },
+      });
+      await ownerCtx.request.post(`/api/profiles/${alice.id}/link`, {
+        data: { token: tokB },
+      });
+
+      const merge = await ownerCtx.request.post(
+        `/api/profiles/${aleece.id}/merge`,
+        { data: { sourceProfileId: alice.id } },
+      );
+      expect(merge.status()).toBe(409);
+    } finally {
+      await friendACtx.close();
+      await friendBCtx.close();
+      await ownerCtx.close();
+    }
   });
 });
 
@@ -529,6 +1155,17 @@ test.describe("API: Profiles (unauthenticated)", () => {
     const res = await request.post("/api/profiles", {
       data: { alias: "Alice" },
     });
+    expect(res.status()).toBe(401);
+  });
+
+  test("POST /api/profiles/:id/link-token returns 401 without auth", async ({
+    request,
+  }) => {
+    // Profile id doesn't matter — the auth middleware short-circuits
+    // before we even check the row.
+    const res = await request.post(
+      "/api/profiles/c00000000000000000000000/link-token",
+    );
     expect(res.status()).toBe(401);
   });
 });

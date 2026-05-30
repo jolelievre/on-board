@@ -1,8 +1,8 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../../lib/auth-client";
-import { patchProfile } from "../../../lib/mutations";
+import { patchProfile, unlinkProfile } from "../../../lib/mutations";
 import {
   useProfile,
   useProfileList,
@@ -20,7 +20,11 @@ import { Icon } from "../../../components/ui/Icon";
 import { Button } from "../../../components/ui/Button";
 import { AvatarUploader } from "../../../components/profiles/AvatarUploader";
 import { MergeDialog } from "../../../components/profiles/MergeDialog";
+import { LinkScanner } from "../../../components/profiles/LinkScanner";
+import { LinkCodeDisplay } from "../../../components/profiles/LinkCodeDisplay";
+import { MatchHistoryRow } from "../../../components/matches/MatchHistoryRow";
 import { displayProfileName } from "../../../../shared/players";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import styles from "./$profileId.module.css";
 
 export const Route = createFileRoute("/_authenticated/players/$profileId")({
@@ -69,12 +73,34 @@ function ProfileDetailBody({
   profile: LocalProfile3;
   viewerId: string | null;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const isSelf = profile.linkedUserId === viewerId;
+
+  // Owner-only page: every profile in the Players tab is one the
+  // viewer owns. Direct URL navigation to a profile we don't own (or
+  // the self-Profile, which is edited via Settings) sends the user
+  // back to the listing. Belt-and-braces guard — the same constraint
+  // is enforced server-side on every mutation.
+  useEffect(() => {
+    if (!viewerId) return;
+    if (profile.ownerId !== viewerId) {
+      navigate({ to: "/players", replace: true });
+      return;
+    }
+    if (profile.linkedUserId === viewerId) {
+      navigate({ to: "/settings", replace: true });
+    }
+  }, [profile.ownerId, profile.linkedUserId, viewerId, navigate]);
+
+  // Effectively always false after the redirect above lands, but kept
+  // for the brief pre-redirect render so isSelf-conditional UI doesn't
+  // flash incorrect badges.
+  const isSelf =
+    profile.linkedUserId === viewerId && profile.ownerId === viewerId;
   const isLinked = profile.linkedUserId !== null;
   const isOwner = profile.ownerId === viewerId;
-  const name = displayProfileName(profile, viewerId);
+  const ownedIndex = useOwnedProfileIndex(viewerId ?? undefined);
+  const name = displayProfileName(profile, ownedIndex);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [editingPhoto, setEditingPhoto] = useState(false);
 
@@ -87,7 +113,7 @@ function ProfileDetailBody({
   // it's already memoised in the page tree above.
   const { data: visibleProfiles } = useProfileList(viewerId ?? undefined);
   const selfProfileId = visibleProfiles?.find(
-    (p) => p.linkedUserId === viewerId,
+    (p) => p.linkedUserId === viewerId && p.ownerId === viewerId,
   )?.id;
   const headToHead = useHeadToHead(
     isSelf ? undefined : profile.id,
@@ -160,6 +186,20 @@ function ProfileDetailBody({
           </Group>
         )}
 
+        <LinkSection
+          profile={profile}
+          viewerId={viewerId}
+          isOwner={isOwner}
+          isSelf={isSelf}
+          isLinked={isLinked}
+          onMergedTo={(survivorId) =>
+            void navigate({
+              to: "/players/$profileId",
+              params: { profileId: survivorId },
+            })
+          }
+        />
+
         {!isSelf && headToHead && headToHead.matches > 0 && (
           <Group title={t("players.headToHead.title")}>
             <div className={styles.statsGrid}>
@@ -197,10 +237,12 @@ function ProfileDetailBody({
                 <Stat
                   value={stats.totalMatches}
                   label={t("players.stats.matches")}
+                  testid="profile-stats-matches"
                 />
                 <Stat
                   value={stats.totalWins}
                   label={t("players.stats.wins")}
+                  testid="profile-stats-wins"
                 />
                 <Stat
                   value={
@@ -237,26 +279,23 @@ function ProfileDetailBody({
 
         {recent && recent.length > 0 && (
           <Group title={t("players.recent.title")}>
-            <div className={styles.recentList}>
-              {recent.map((m) => (
-                <Link
-                  key={m.matchId}
-                  to="/matches/$id"
-                  params={{ id: m.matchId }}
-                  className={styles.recentRow}
+            <div
+              className={styles.recentList}
+              data-testid="profile-recent-list"
+            >
+              {recent.map((r) => (
+                <div
+                  key={r.match.id}
+                  data-testid="profile-recent-match"
                 >
-                  <div className={styles.recentMeta}>
-                    <span className={styles.recentTitle}>{m.gameName}</span>
-                    <span className={styles.recentSub}>
-                      {new Date(m.startedAt).toLocaleDateString()}
-                      {m.status === "IN_PROGRESS" &&
-                        ` · ${t("matches.history.inProgress")}`}
-                    </span>
-                  </div>
-                  {m.status === "COMPLETED" && m.isWinner === true && (
-                    <Icon name="trophy" size={18} title={t("players.recent.win")} />
-                  )}
-                </Link>
+                  <MatchHistoryRow
+                    match={r.match}
+                    gameSlug={r.gameSlug}
+                    gameName={r.gameName}
+                    locale={i18n.language}
+                    viewerId={viewerId}
+                  />
+                </div>
               ))}
             </div>
           </Group>
@@ -295,9 +334,257 @@ function ProfileDetailBody({
   );
 }
 
-function Stat({ value, label }: { value: number | string; label: string }) {
+function LinkSection({
+  profile,
+  viewerId,
+  isOwner,
+  isSelf,
+  isLinked,
+  onMergedTo,
+}: {
+  profile: LocalProfile3;
+  viewerId: string | null;
+  isOwner: boolean;
+  isSelf: boolean;
+  isLinked: boolean;
+  onMergedTo: (survivorId: string) => void;
+}) {
+  const { t } = useTranslation();
+  const [panel, setPanel] = useState<"none" | "show" | "scan">("none");
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+  const [unlinkError, setUnlinkError] = useState<string | null>(null);
+
+  // Self-profile carries no link UI under the new bilateral model —
+  // the QR is anchored to a profile representing the *other* person.
+  // The user gets to Show/Scan from their owned friend profiles
+  // instead. Skipping the render entirely keeps the surface focused
+  // on identity + alias editing.
+  if (isSelf) return null;
+
+  // Friend-profile path:
+  //  - Unclaimed + viewer owns it → two-button row (Show QR / Scan QR).
+  //  - Linked + viewer owns or is the linked friend → linked card +
+  //    Unlink with confirm modal.
+  if (!isOwner && profile.linkedUserId !== viewerId) return null;
+
+  const closePanel = () => setPanel("none");
+
+  // Keep the open panel sticky across the link transition. Without
+  // this, the moment the bilateral link writes to Dexie and
+  // `useProfile` re-fires, `isLinked` flips true and the linked-card
+  // branch below swaps the scanner/QR-display out — the celebration
+  // overlay never gets seen. The panel only closes when its child
+  // signals success via `onDone`/`onLinked` → `closePanel()`.
+  if (panel === "scan" && isOwner) {
+    return (
+      <Group title={t("link.unclaimedTitle")}>
+        <LinkScanner
+          profile={profile}
+          onDone={closePanel}
+          onMerged={(survivorId) => {
+            closePanel();
+            onMergedTo(survivorId);
+          }}
+        />
+      </Group>
+    );
+  }
+  if (panel === "show" && isOwner) {
+    return (
+      <Group title={t("link.unclaimedTitle")}>
+        <LinkCodeDisplay profile={profile} onLinked={closePanel} />
+        <div className={styles.linkActions}>
+          <Button type="button" variant="ghost" onClick={closePanel}>
+            {t("common.cancel")}
+          </Button>
+        </div>
+      </Group>
+    );
+  }
+
+  const handleUnlink = async () => {
+    setUnlinkError(null);
+    setUnlinking(true);
+    try {
+      await unlinkProfile({
+        profileId: profile.id,
+        // The linked friend (not the owner) loses visibility on
+        // success — the mutation deletes the local mirror so the
+        // Players list updates without waiting for a full re-pull.
+        asLinkedUser: !isOwner && profile.linkedUserId === viewerId,
+      });
+      setUnlinkConfirmOpen(false);
+    } catch (err) {
+      setUnlinkError(
+        err instanceof Error ? err.message : t("link.unlinkError"),
+      );
+    } finally {
+      setUnlinking(false);
+    }
+  };
+
+  if (isLinked) {
+    const linked = profile.linkedUser;
+    const friendDisplay =
+      linked?.alias || linked?.name || profile.alias || t("link.linkedUnknown");
+    return (
+      <>
+        <Group title={t("link.linkedTitle")}>
+          <div className={styles.linkedCard}>
+            {linked?.avatarUrl ? (
+              <img
+                src={linked.avatarUrl}
+                alt=""
+                className={styles.linkedAvatar}
+              />
+            ) : (
+              <span className={styles.linkedAvatarFallback}>
+                {(linked?.alias || linked?.name || "·")
+                  .slice(0, 1)
+                  .toUpperCase()}
+              </span>
+            )}
+            <div className={styles.linkedMeta}>
+              <span className={styles.linkedName}>
+                {linked?.alias || linked?.name || t("link.linkedUnknown")}
+              </span>
+              {linked?.email && (
+                <span className={styles.linkedEmail}>{linked.email}</span>
+              )}
+            </div>
+          </div>
+          {unlinkError && <p className={styles.linkError}>{unlinkError}</p>}
+          <div className={styles.linkActions}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setUnlinkError(null);
+                setUnlinkConfirmOpen(true);
+              }}
+              data-testid="profile-unlink"
+            >
+              {t("link.unlink")}
+            </Button>
+          </div>
+        </Group>
+        {unlinkConfirmOpen && (
+          <UnlinkConfirmDialog
+            friendName={friendDisplay}
+            error={unlinkError}
+            submitting={unlinking}
+            onCancel={() => setUnlinkConfirmOpen(false)}
+            onConfirm={() => void handleUnlink()}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Unclaimed + owner: two-button row + explainer.
   return (
-    <div className={styles.statCard}>
+    <Group title={t("link.unclaimedTitle")}>
+      <p className={styles.linkHint}>{t("link.unclaimedExplainer")}</p>
+      <div className={styles.linkButtonRow}>
+        <Button
+          type="button"
+          variant="secondary"
+          iconBefore={<Icon name="camera" size={16} />}
+          onClick={() => setPanel("scan")}
+          data-testid="profile-link-scan"
+        >
+          {t("link.scanCta")}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          iconBefore={<Icon name="link" size={16} />}
+          onClick={() => setPanel("show")}
+          data-testid="profile-link-show"
+        >
+          {t("link.showCta")}
+        </Button>
+      </div>
+    </Group>
+  );
+}
+
+function UnlinkConfirmDialog({
+  friendName,
+  error,
+  submitting,
+  onCancel,
+  onConfirm,
+}: {
+  friendName: string;
+  error: string | null;
+  submitting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onCancel]);
+
+  return (
+    <div
+      className={styles.unlinkBackdrop}
+      role="dialog"
+      aria-modal="true"
+      data-testid="unlink-dialog"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div className={styles.unlinkSheet}>
+        <h2 className={styles.unlinkTitle}>{t("link.unlinkConfirm.title")}</h2>
+        <p className={styles.unlinkBody}>
+          {t("link.unlinkConfirm.body", { friend: friendName })}
+        </p>
+        {error && <p className={styles.linkError}>{error}</p>}
+        <div className={styles.unlinkActions}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onCancel}
+            disabled={submitting}
+            data-testid="unlink-cancel"
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={submitting}
+            data-testid="unlink-confirm"
+          >
+            {submitting ? t("link.unlinking") : t("link.unlink")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stat({
+  value,
+  label,
+  testid,
+}: {
+  value: number | string;
+  label: string;
+  testid?: string;
+}) {
+  return (
+    <div className={styles.statCard} data-testid={testid}>
       <span className={styles.statValue}>{value}</span>
       <span className={styles.statLabel}>{label}</span>
     </div>

@@ -10,6 +10,8 @@ import type {
 } from "../match/HandMatchGrid";
 import { WinnerBanner } from "../match/WinnerBanner";
 import { displayPlayerName } from "../../../shared/players";
+import { useAuthSession } from "../../hooks/useAuthSession";
+import { useOwnedProfileIndex } from "../../hooks/data/useOwnedProfileIndex";
 import { Button } from "../ui/Button";
 import buttonStyles from "../ui/Button.module.css";
 import {
@@ -46,6 +48,8 @@ type Props = {
 
 export function SevenWondersDuelScorer({ match }: Props) {
   const { t } = useTranslation();
+  const { session } = useAuthSession();
+  const ownedIndex = useOwnedProfileIndex(session?.user.id);
   const matchId = match.id;
 
   const [values, setValues] = useState<ScoreGridValues>(() =>
@@ -137,12 +141,12 @@ export function SevenWondersDuelScorer({ match }: Props) {
     ? (match.players.find((p) => p.id === supremacy.playerId) ?? null)
     : null;
   const supremacyPlayerName = supremacyPlayer
-    ? displayPlayerName(supremacyPlayer)
+    ? displayPlayerName(supremacyPlayer, ownedIndex)
     : "";
 
   const displayPlayers = match.players.map((p) => ({
     id: p.id,
-    name: displayPlayerName(p),
+    name: displayPlayerName(p, ownedIndex),
   }));
 
   const [completing, setCompleting] = useState(false);
@@ -177,7 +181,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
   const winner = match.winnerId
     ? (match.players.find((p) => p.id === match.winnerId) ?? null)
     : null;
-  const winnerName = winner ? displayPlayerName(winner) : null;
+  const winnerName = winner ? displayPlayerName(winner, ownedIndex) : null;
   const winnerTotal = winner ? (totals[winner.id] ?? 0) : null;
   const loserTotal =
     isCompleted && winner
@@ -190,7 +194,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
     outcome.kind === "winner"
       ? (() => {
           const p = match.players.find((p) => p.id === outcome.winnerId);
-          return p ? displayPlayerName(p) : "";
+          return p ? displayPlayerName(p, ownedIndex) : "";
         })()
       : "";
 

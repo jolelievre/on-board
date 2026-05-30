@@ -1,0 +1,180 @@
+.matchCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: 0.75rem 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.matchHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.matchHeadLeft {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.matchDate {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-ink-faint);
+  letter-spacing: 0.04em;
+}
+
+.matchGame {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.players {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.playerCell {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  justify-content: space-between;
+  padding: 0.375rem 0.625rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.playerWinner {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.playerName {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: var(--color-ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.playerNameWinner {
+  color: var(--color-primary);
+}
+
+/* Heavy weight reserved for "this row represents me" — applies whether
+ * or not I won, so I can spot myself at a glance. Goes wide on
+ * purpose (default 400 → self 800) so the contrast survives the
+ * Caveat handwriting font where mid-range weights look near-identical.
+ * Stacks with `playerNameWinner` (winner-and-me ⇒ heavy + primary). */
+.playerNameSelf {
+  font-weight: 800;
+}
+
+.playerNameDim {
+  color: var(--color-ink-faint);
+}
+
+.playerScore {
+  font-family: var(--font-body);
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+
+.playerScoreWinner {
+  color: var(--color-primary);
+}
+
+.playerScoreDim {
+  color: var(--color-ink-faint);
+}
+
+.versus {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--color-ink-faint);
+  font-weight: 600;
+}
+
+/* Compact podium summary used for 3+ player matches: top three on a single
+ * line so the card stays as terse as the 2-player "vs" layout. The full
+ * standings live one tap deeper, on the match scoreboard. */
+.podium {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.podiumEntry {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.podiumEntry.podiumWinner {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.podiumRank {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--color-ink-faint);
+  letter-spacing: 0.04em;
+  flex: 0 0 auto;
+}
+
+.podiumName {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: var(--color-ink);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Compensate Caveat's italic lean so the last glyph isn't clipped. */
+  padding-inline-end: 0.25em;
+}
+
+/* Heavy weight on podium rows to flag "this is me" in 3+ player views.
+ * Same rule as `.playerNameSelf` for the compact "vs" layout. */
+.podiumNameSelf {
+  font-weight: 800;
+}
+
+.podiumMore {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-ink-faint);
+  letter-spacing: 0.04em;
+  flex: 0 0 auto;
+  align-self: baseline;
+}

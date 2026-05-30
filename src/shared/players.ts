@@ -1,70 +1,126 @@
 /**
- * Shared display-name resolution.
+ * Shared display-name and avatar resolution.
  *
- * Phase 6-A introduces the `Profile` domain entity as the canonical
- * person identity. Two helpers live here:
+ * Under the single-Profile model (PR 6-C) every Player references a
+ * Profile; display flows through that Profile exclusively — no
+ * fallback to a legacy `Player.name` snapshot.
  *
- *   - `displayProfileName(profile, viewerId?)` — the new primary path.
- *     Returns the profile's canonical alias, or — when the viewer is
- *     the linked user themselves — their own auth identity (so a
- *     friend who gave me a silly nickname doesn't override what I see
- *     of myself).
+ * Names are resolved against the viewer's **owned profile index** so
+ * the rendered label always reflects what the viewer chose locally:
  *
- *   - `displayPlayerName(player, viewerId?)` — back-compat wrapper.
- *     If the Player carries a denormalized `profile`, delegates to
- *     `displayProfileName`. Falls back to the legacy `linked user >
- *     player.name` path when no profile is attached (legacy cached
- *     rows pre-6-A, or server-side callers that don't join Profile).
+ *   1. If the row's profile id is one I own → use my profile.alias
+ *      (the inflated snapshot embedded in a match may be stale; my
+ *      Dexie row is the source of truth).
+ *   2. Else if the row carries a `linkedUserId` and I own a profile
+ *      with the same `linkedUserId` → use my profile.alias (this row
+ *      represents someone I've bilaterally linked with; show how I
+ *      label them, not how the other side does).
+ *   3. Otherwise → fall back to `profile.alias` from the snapshot
+ *      (the friend-of-friend case — I have no relation to this
+ *      profile beyond seeing it in a shared match).
+ *
+ * The `ownedIndex` parameter is **required** so TypeScript catches
+ * every call site if the contract evolves again. Pass the result of
+ * `useOwnedProfileIndex(viewerId)` from a React component.
  */
 
-export type ProfileDisplayInput = {
+/**
+ * Read-only view of "the profiles I own", keyed two ways. Built by
+ * the client's `useOwnedProfileIndex` hook from Dexie; defined here
+ * so this module stays free of client-side imports.
+ *
+ * Members are intentionally minimal — only what `displayProfileName`
+ * / `displayProfileAvatar` actually read.
+ */
+export type OwnedProfileEntry = {
+  id: string;
   alias: string;
+  customAvatarUrl: string | null;
+  useLinkedAvatar: boolean;
+  linkedUserId: string | null;
+  linkedUser: {
+    id: string;
+    name: string;
+    alias: string | null;
+    avatarUrl: string | null;
+  } | null;
+};
+
+export type OwnedProfileIndex = {
+  byId: Map<string, OwnedProfileEntry>;
+  byLinkedUserId: Map<string, OwnedProfileEntry>;
+};
+
+export type ProfileDisplayInput = {
+  id: string;
+  alias: string;
+  customAvatarUrl?: string | null;
+  useLinkedAvatar?: boolean;
   linkedUserId?: string | null;
   linkedUser?: {
     name: string;
     alias: string | null;
+    avatarUrl?: string | null;
   } | null;
 };
 
 export type PlayerDisplayInput = {
-  name: string;
-  /** Denormalized Profile join populated by `useMatch` / `useMatchList`. */
-  profile?: ProfileDisplayInput | null;
-  user?: {
-    name: string;
-    alias: string | null;
-  } | null;
+  /** Denormalized Profile join — required under the single-Profile
+   * model. The pull-sync projection embeds this on every Player row. */
+  profile: ProfileDisplayInput;
 };
 
 export function displayProfileName(
   profile: ProfileDisplayInput,
-  viewerId?: string | null,
+  ownedIndex: OwnedProfileIndex,
 ): string {
-  // When the viewer IS the linked user, prefer their own auth-account
-  // identity (which they edit via Settings → Alias). The owner's
-  // Profile.alias is what other viewers see, but a person should see
-  // themselves under the name they chose.
-  if (profile.linkedUserId && viewerId && profile.linkedUserId === viewerId) {
-    const ua = profile.linkedUser?.alias?.trim();
-    if (ua) return ua;
-    const un = profile.linkedUser?.name?.trim();
-    if (un) return un;
+  const ownById = ownedIndex.byId.get(profile.id);
+  if (ownById) return ownById.alias;
+  if (profile.linkedUserId) {
+    const ownByLinkedUser = ownedIndex.byLinkedUserId.get(profile.linkedUserId);
+    if (ownByLinkedUser) return ownByLinkedUser.alias;
   }
   return profile.alias;
 }
 
+/**
+ * Resolve the avatar URL for a Profile. The avatar choice is anchored
+ * in the row itself (the owner's `useLinkedAvatar` toggle plus their
+ * custom upload), so the renderer keeps reading the snapshot. The
+ * only viewer-specific case is "this is *my* row" — there the
+ * linked-user's auth avatar wins, because that's the canonical
+ * picture of me regardless of any nickname the owner chose. We
+ * detect "this is my row" by checking the owned index, mirroring
+ * `displayProfileName`'s lookup.
+ *
+ * Returns `null` when no avatar can be resolved — callers fall back
+ * to an initials-based monogram.
+ */
+export function displayProfileAvatar(
+  profile: ProfileDisplayInput,
+  ownedIndex: OwnedProfileIndex,
+): string | null {
+  // "This row is mine" iff the index has the id (i.e. I own the
+  // profile this match player references — my own self-Profile, or
+  // an owned friend-profile I've linked).
+  const mine = ownedIndex.byId.get(profile.id);
+  if (mine) {
+    const linkedAvatar = mine.linkedUser?.avatarUrl?.trim();
+    if (linkedAvatar) return linkedAvatar;
+    return mine.customAvatarUrl?.trim() || null;
+  }
+  if (profile.useLinkedAvatar !== false) {
+    const linked = profile.linkedUser?.avatarUrl?.trim();
+    if (linked) return linked;
+  }
+  return profile.customAvatarUrl?.trim() || null;
+}
+
 export function displayPlayerName(
   player: PlayerDisplayInput,
-  viewerId?: string | null,
+  ownedIndex: OwnedProfileIndex,
 ): string {
-  if (player.profile) return displayProfileName(player.profile, viewerId);
-  // Legacy path — no Profile attached. Used by the server-side
-  // suggestions endpoint and by any Dexie row that pre-dates 6-A.
-  const alias = player.user?.alias?.trim();
-  if (alias) return alias;
-  const userName = player.user?.name?.trim();
-  if (userName) return userName;
-  return player.name;
+  return displayProfileName(player.profile, ownedIndex);
 }
 
 /**
@@ -75,9 +131,7 @@ export function displayPlayerName(
  * Shared between the server (provisioning / mirroring the self-Profile
  * in `src/server/lib/profiles.ts`) and the client (Avatar / picker
  * fallbacks for fresh sessions before pullSync hydrates the
- * self-Profile) so all sites agree on the same fallback chain — drift
- * would manifest as a self chip showing "Me" on one surface and the
- * user's name on another.
+ * self-Profile) so all sites agree on the same fallback chain.
  */
 export function resolveSelfAlias(user: {
   name: string;

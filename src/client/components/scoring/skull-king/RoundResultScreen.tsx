@@ -11,6 +11,8 @@ import {
   SkullGlyph,
 } from "../../ui/sk/SkGlyphs";
 import { displayPlayerName } from "../../../../shared/players";
+import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import {
   EMPTY_SK_ROUND,
   SK_BONUS_MAX,
@@ -57,6 +59,8 @@ export function RoundResultScreen({
   onSubmit,
 }: Props) {
   const { t } = useTranslation();
+  const { session } = useAuthSession();
+  const ownedIndex = useOwnedProfileIndex(session?.user.id);
   const active = players[activeIndex] as Player | undefined;
 
   // Budget rule: the active seat's tricks must fit between the remaining
@@ -202,7 +206,7 @@ export function RoundResultScreen({
     <div className={`${shared.screen} ${styles.body}`} data-testid="sk-result">
       <div className={styles.scroll}>
         <div className={styles.headerStrip}>
-          <span className={styles.playerName}>{displayPlayerName(active)}</span>
+          <span className={styles.playerName}>{displayPlayerName(active, ownedIndex)}</span>
           <span className={styles.bidPair}>
             <span className={styles.label}>
               {t("scoring.skullKing.result.bidLabel")}
@@ -354,7 +358,7 @@ export function RoundResultScreen({
             data-testid="sk-result-next"
           >
             {t("scoring.skullKing.result.nextPlayer", {
-              name: displayPlayerName(nextPlayer),
+              name: displayPlayerName(nextPlayer, ownedIndex),
             })}
           </button>
         ) : (

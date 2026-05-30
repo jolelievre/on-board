@@ -150,22 +150,28 @@ The merge is **per-row Last-Write-Wins on `updatedAt`**: for each incoming match
 
 If `navigator.onLine` is false at the start of the call, `pullSync()` short-circuits immediately — there's no useful work to do.
 
-### Alias propagation special case
+### Link / unlink transitions (PR 6-C)
 
-Two denormalizations carry the user's alias offline:
+The bilateral profile link surfaces two server-side visibility changes that the `?since=` cursor cannot represent on its own. `mergeProfiles` watches every incoming profile row against its local copy and returns a `{ link, unlink }` flag pair:
 
-- Every `LocalPlayer` keeps a `player.user.alias` copy for legacy display paths.
-- The self-`LocalProfile` (`ownerId === linkedUserId === me`) holds the canonical alias that the Players tab, history rendering, and new-match suggestions all read.
+- **Link transition** (`linkedUserId` went from `null` to a value): the friend's pre-link matches were already on the server but their `Match.updatedAt` predates our last pull cursor, so a normal `?since=` delta misses them. After the merge transaction commits, `pullSync()` calls `resetPullCursors()` (drops `lastPullAt` + `lastProfilesPullAt`) and recursively re-invokes itself with `{ force: true }` to bypass the throttle. The recursive call refetches both endpoints with no `?since=` filter, so the friend's full history lands in a single follow-up round-trip. The scanner's `linkProfile` mutation also performs an eager reset+pull on success; the pull-side detection is the shower's path, since their celebration is driven by `LinkCodeDisplay` polling rather than a direct mutation.
 
-Alias edits don't bump `Match.updatedAt` on the server, so a profiles-only pull would propagate the new alias but a matches LWW pass would still skip every match — leaving `player.user.alias` stale. To work around this, `refreshLocalAliases(userId, newAlias)` rewrites both denormalizations in a single Dexie pass:
+- **Unlink transition** (`linkedUserId` went from a value to `null`): the matches that were only visible through the link drop out of the server's visibility filter, but `?since=` deltas can't represent deletions. After the merge, `pullSync()` calls `pruneLocalMatchesAgainstServer()` — a full `/api/matches` fetch whose IDs are diffed against Dexie, with the missing rows (and their child players/scores) removed locally. This path fires whenever *we* learn about the unlink through a pull (the friend pressed Unlink on their device); the local Unlink button has its own bilateral-unlink mutation that prunes synchronously.
 
-1. Every `LocalPlayer.user.alias` row joined to that user.
-2. Every `LocalProfile.linkedUser.alias` (forward-compat with the 6-C link feature, where a friend's owner-managed profile carries our auth alias).
-3. The self-`LocalProfile.alias` — mirroring the server's `resolveSelfAlias` fallback: trimmed `newAlias` when set, otherwise `linkedUser.name`, otherwise `"Me"`. The fallback matters when the user *clears* their alias via Settings, since the server-side `syncSelfProfileAlias` writes `User.name` (not an empty string) onto `Profile.alias`.
+Both transitions are detected inside the profiles' Dexie transaction so the flag is set strictly when the merge actually flipped state.
 
-Settings calls `refreshLocalAliases` directly after `updateProfile`. The Players-tab alias editor calls `patchProfile` instead, which is a normal Dexie + sync-queue write to the `profiles` row — no extra mirror call needed, because `useLiveQuery` over `profiles` already picks up the change reactively.
+### Alias propagation
 
-The `player.user.alias` half of this is still acknowledged as a tactical fix and is tracked in [issue #19](https://github.com/jolelievre/on-board/issues/19) — once the legacy `Player.userId`/`Player.name` columns are dropped (PR 6-E), the only canonical source becomes `Profile.alias` and the duplicate mirror collapses.
+The viewer's reactive owned-profile index (`useOwnedProfileIndex`) is the canonical source for friend-alias rendering. Every name-rendering call site (`MatchHistoryRow`, the scorer screens, `Avatar`) reads through the index, which is a `useLiveQuery` over `profiles` keyed on the viewer. A `patchProfile` Dexie write — what the Players-tab alias editor performs — immediately invalidates the live query and every consumer re-renders with the new alias. No mirror write-through is needed for friend aliases.
+
+The viewer's own `User.alias` is a separate problem: it's denormalized onto two locations that *can't* be reached through `profiles` alone, because Settings edits don't bump `Match.updatedAt`:
+
+1. Every `LocalPlayer.user.alias` row joined to that user (legacy display paths the scorers still read).
+2. The self-`LocalProfile.alias` — mirroring the server's `resolveSelfAlias` fallback: trimmed `newAlias` when set, otherwise `linkedUser.name`, otherwise `"Me"`. The fallback matters when the user *clears* their alias via Settings, since the server-side `syncSelfProfileAlias` writes `User.name` (not an empty string) onto `Profile.alias`.
+
+`refreshLocalAliases(userId, newAlias)` rewrites both in a single Dexie pass; Settings calls it directly after `updateProfile`.
+
+The `player.user.alias` half is acknowledged as a tactical fix and is tracked in [issue #19](https://github.com/jolelievre/on-board/issues/19) — once the legacy `Player.userId`/`Player.name` columns are dropped (PR 6-E), the only canonical source becomes `Profile.alias` and the duplicate mirror collapses.
 
 ---
 
@@ -231,12 +237,13 @@ Offline-no-cache pages (a game/match that the user has never pulled and tries to
 | `src/client/hooks/usePullOnAuth.ts` | One forced `pullSync()` + `syncEngine.flush()` on session ready |
 | `src/client/hooks/usePullSyncBackground.ts` | `visibilitychange` (forced) + route-change (throttled) pull triggers |
 | `src/client/hooks/usePlayerSuggestions.ts` | Dexie-only suggestions (self from self-Profile, friends from owned/linked profiles) |
+| `src/client/hooks/data/useOwnedProfileIndex.ts` | Reactive `{ byId, byLinkedUserId }` index of the viewer's owned profiles — canonical source for friend-alias rendering across `MatchHistoryRow`, the scorers, and `Avatar` |
 | `src/client/hooks/data/{useGame,useGames,useMatch,useMatchList,useProfile*}.ts` | `useLiveQuery`-backed reactive reads (matches denormalize the Profile join via `hydratePlayer.ts`) |
 | `src/client/lib/db.ts` | Dexie schema (v3) + v1→v2 and v2→v3 upgrade callbacks |
 | `src/client/lib/api-types.ts` | Shared API response types consumed by `db.ts` and `pull-sync.ts` |
 | `src/client/lib/mutations.ts` | `createMatch` / `upsertScores` / `patchMatch` / `completeMatch` / `createProfile` / `patchProfile` |
 | `src/client/lib/sync.ts` | `syncEngine` — queue replay + reactive `useStatus()` |
-| `src/client/lib/pull-sync.ts` | `pullSync()` (per-endpoint LWW merge) + `refreshLocalAliases` |
+| `src/client/lib/pull-sync.ts` | `pullSync()` (per-endpoint LWW merge), `resetPullCursors`, `pruneLocalMatchesAgainstServer`, link/unlink transition handling, `refreshLocalAliases` |
 | `src/client/lib/match-client/{seven-wonders,skull-king}.ts` | Pure payload builders for the scorers |
 | `src/client/components/sync/SyncStatus.tsx` | Global pill mounted from `_authenticated.tsx` |
 | `src/client/components/layout/OfflineBanner.tsx` | Amber banner shown briefly on disconnect |

@@ -15,17 +15,32 @@ export type ApiGame = {
   iconUrl?: string | null;
 };
 
+/** Embedded Profile projection on each Player row. The server always
+ * projects the full Profile (plus its linked-user join) on match
+ * responses so the client can render any player without a separate
+ * Profile lookup, even when the viewer can't pull the Profile row
+ * standalone (e.g. a friend's self-Profile). */
+export type ApiPlayerProfile = {
+  id: string;
+  ownerId: string;
+  linkedUserId: string | null;
+  alias: string;
+  customAvatarUrl: string | null;
+  useLinkedAvatar: boolean;
+  linkedUser: {
+    id: string;
+    name: string;
+    alias: string | null;
+    avatarUrl: string | null;
+  } | null;
+};
+
 export type ApiPlayer = {
   id: string;
   matchId?: string;
-  /** Phase 6-A: server resolves a Profile for every Player on create and
-   * returns its id here. Older snapshots (pre-6-A persisted cache) may
-   * lack the field, hence nullable. */
-  profileId?: string | null;
-  userId?: string | null;
-  name: string;
+  profileId: string;
   position: number;
-  user?: { name: string; alias: string | null } | null;
+  profile: ApiPlayerProfile;
   updatedAt?: string | null;
 };
 
@@ -37,6 +52,9 @@ export type ApiProfileLinkedUser = {
   name: string;
   alias: string | null;
   avatarUrl: string | null;
+  /** Shown on the linked-friend card so the owner can verify the
+   * link target. Added in PR 6-C. */
+  email: string;
 };
 
 export type ApiProfile = {

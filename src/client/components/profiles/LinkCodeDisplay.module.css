@@ -1,0 +1,48 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.qrFrame {
+  width: 14rem;
+  height: 14rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  background: #ffffff;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-border);
+}
+
+.qrFrame img,
+.qrFrame canvas,
+.qrFrame svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.countdown {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.countdownStale {
+  color: var(--color-danger, #b91c1c);
+}
+
+.error {
+  font-size: 0.875rem;
+  color: var(--color-danger, #b91c1c);
+  text-align: center;
+}
+
+.hint {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  max-width: 22rem;
+}

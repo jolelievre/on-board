@@ -5,7 +5,6 @@ import { requireAuth } from "./middleware/auth.js";
 import { gamesRoutes } from "./routes/games.js";
 import { matchesRoutes } from "./routes/matches.js";
 import { scoresRoutes } from "./routes/scores.js";
-import { playersRoutes } from "./routes/players.js";
 import { profilesRoutes } from "./routes/profiles.js";
 import { uploadsRoutes } from "./routes/uploads.js";
 
@@ -23,9 +22,6 @@ app.route("/games", gamesRoutes);
 app.use("/matches/*", requireAuth);
 app.route("/matches", matchesRoutes);
 app.route("/matches", scoresRoutes);
-
-app.use("/players/*", requireAuth);
-app.route("/players", playersRoutes);
 
 app.use("/profiles/*", requireAuth);
 app.route("/profiles", profilesRoutes);

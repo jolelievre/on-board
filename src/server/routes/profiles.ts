@@ -1,16 +1,20 @@
 import { Hono } from "hono";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { profileVisibilityWhere } from "../lib/profiles.js";
 import {
   AVATAR_MAX_UPLOAD_BYTES,
   deleteAvatars,
   writeAvatar,
 } from "../lib/avatar-storage.js";
 import {
-  mergeUnclaimedProfiles,
+  mergeProfiles,
   ProfileMergeError,
 } from "../lib/profile-merge.js";
+import {
+  createLinkToken,
+  LinkTokenError,
+  verifyLinkToken,
+} from "../lib/link-tokens.js";
 import type { AuthUser } from "../middleware/auth.js";
 
 type AuthEnv = {
@@ -41,6 +45,13 @@ const profileSelect = {
       name: true,
       alias: true,
       avatarUrl: true,
+      // The email is surfaced to the owner so they can confirm the
+      // QR they scanned belongs to the friend they expected. The
+      // friend's User row is otherwise opaque to other accounts;
+      // exposing email here is a deliberate, minimal disclosure
+      // gated by the visibility filter (only viewers who own or
+      // are the linked user see this projection at all).
+      email: true,
     },
   },
 } as const satisfies Prisma.ProfileSelect;
@@ -59,9 +70,15 @@ export const profilesRoutes = new Hono<AuthEnv>()
       sinceDate = parsed;
     }
 
+    // Under the single-Profile model, only owned profiles are listed.
+    // Friend-owned profiles linked to me are theirs to manage, not
+    // mine — I see them implicitly when they appear in matches
+    // (the Player row embeds the Profile projection), never in my own
+    // listing. The owner check covers both my self-Profile and every
+    // friend I've added.
     const profiles = await prisma.profile.findMany({
       where: {
-        ...profileVisibilityWhere(user.id),
+        ownerId: user.id,
         ...(sinceDate ? { updatedAt: { gt: sinceDate } } : {}),
       },
       select: profileSelect,
@@ -298,15 +315,15 @@ export const profilesRoutes = new Hono<AuthEnv>()
     }
 
     try {
-      const survivor = await prisma.$transaction(async (tx) => {
-        return mergeUnclaimedProfiles(tx, {
+      const survivorId = await prisma.$transaction(async (tx) => {
+        return mergeProfiles(tx, {
           callerId: user.id,
           targetProfileId: targetId,
           sourceProfileId,
         });
       });
       const profile = await prisma.profile.findUnique({
-        where: { id: survivor },
+        where: { id: survivorId },
         select: profileSelect,
       });
       return c.json({ status: "merged" as const, profile });
@@ -316,4 +333,324 @@ export const profilesRoutes = new Hono<AuthEnv>()
       }
       throw err;
     }
+  })
+  .get("/:id/link-status", async (c) => {
+    // Lightweight polling endpoint for the shower's `LinkCodeDisplay`.
+    // The component ticks this every 2 s while its QR is on screen and
+    // pivots to the "linked" celebration when `linkedUserId` flips
+    // non-null. A scoped endpoint keeps the polling cost minimal (no
+    // big profile projection / linkedUser join) and lives in the same
+    // namespace as `/link-token` and `/link` so the surface area of
+    // the link flow stays grouped.
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    if (!CUID_RE.test(id)) {
+      return c.json({ error: "Invalid profile id format" }, 400);
+    }
+
+    const profile = await prisma.profile.findUnique({
+      where: { id },
+      select: { ownerId: true, linkedUserId: true },
+    });
+    if (!profile) {
+      return c.json({ error: "Profile not found" }, 404);
+    }
+    if (profile.ownerId !== user.id) {
+      return c.json(
+        { error: "Only the owner can check this profile's link status" },
+        403,
+      );
+    }
+    return c.json({ linkedUserId: profile.linkedUserId });
+  })
+  .post("/:id/link-token", async (c) => {
+    // Profile-scoped token. The caller mints a token attesting that
+    // *they* are themselves AND that they're anchoring this link
+    // gesture onto their owned profile `:id`. The friend will later
+    // scan this and use it to bilaterally link `:id` (the source) with
+    // one of their own owned profiles (the target/scanner side).
+    //
+    // The session-derived userId is authoritative (never trust the
+    // client). `:id` must be owned by the caller and unclaimed —
+    // re-linking an already-linked profile is the merge_required path,
+    // handled on the link endpoint itself.
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    if (!CUID_RE.test(id)) {
+      return c.json({ error: "Invalid profile id format" }, 400);
+    }
+
+    const profile = await prisma.profile.findUnique({
+      where: { id },
+      select: { ownerId: true, linkedUserId: true },
+    });
+    if (!profile) {
+      return c.json({ error: "Profile not found" }, 404);
+    }
+    if (profile.ownerId !== user.id) {
+      return c.json(
+        { error: "Only the owner can mint a link code for this profile" },
+        403,
+      );
+    }
+    if (profile.linkedUserId !== null) {
+      return c.json(
+        { error: "This profile is already linked" },
+        409,
+      );
+    }
+
+    const { token, expiresAt } = createLinkToken({
+      userId: user.id,
+      sourceProfileId: id,
+    });
+    return c.json({ token, expiresAt });
+  })
+  .post("/:id/link", async (c) => {
+    // Bilateral link. The caller is the *scanner* and `:id` is their
+    // owned profile (the "target"). The token attests to the *shower*
+    // (`payload.userId`) and the profile they're offering up
+    // (`payload.sourceProfileId`). On success we set linkedUserId on
+    // both rows in one transaction so both sides flip in lockstep.
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    let body: { token?: string };
+    try {
+      body = (await c.req.json()) as { token?: string };
+    } catch {
+      return c.json({ error: "JSON body required" }, 400);
+    }
+    if (typeof body.token !== "string" || body.token.length === 0) {
+      return c.json({ error: "token is required" }, 400);
+    }
+
+    let showerUserId: string;
+    let sourceProfileId: string;
+    try {
+      const payload = verifyLinkToken(body.token);
+      showerUserId = payload.userId;
+      sourceProfileId = payload.sourceProfileId;
+    } catch (err) {
+      if (err instanceof LinkTokenError) {
+        return c.json({ error: err.message }, 400);
+      }
+      throw err;
+    }
+
+    if (showerUserId === user.id) {
+      // Scanning your own QR makes no sense; the token includes a
+      // source profile owned by the caller and we'd be linking it to
+      // another of the caller's profiles, which violates the per-owner
+      // unique constraint anyway.
+      return c.json({ error: "Cannot link a profile to your own account" }, 400);
+    }
+
+    // Load both sides up front so we can guard against the various
+    // collision cases before mutating.
+    const [target, source] = await Promise.all([
+      prisma.profile.findUnique({
+        where: { id },
+        select: { id: true, ownerId: true, linkedUserId: true, alias: true },
+      }),
+      prisma.profile.findUnique({
+        where: { id: sourceProfileId },
+        select: { id: true, ownerId: true, linkedUserId: true, alias: true },
+      }),
+    ]);
+
+    if (!target) {
+      return c.json({ error: "Profile not found" }, 404);
+    }
+    if (target.ownerId !== user.id) {
+      return c.json({ error: "Only the owner can link this profile" }, 403);
+    }
+    if (!source) {
+      // Token signature was valid but the source row is gone (deleted
+      // between QR mint and scan). Treat as a stale token so the user
+      // sees an actionable refresh prompt rather than a 404 inside a
+      // link error.
+      return c.json({ error: "Link token has expired" }, 400);
+    }
+    if (source.ownerId !== showerUserId) {
+      // The token is signed but the source profile no longer belongs
+      // to the user it was minted for (e.g. transferred via merge).
+      // Reject defensively — never silently bind to a row owned by a
+      // third party.
+      return c.json({ error: "Invalid link token" }, 400);
+    }
+
+    // Both already pointing at each other → idempotent re-link.
+    if (
+      target.linkedUserId === showerUserId &&
+      source.linkedUserId === user.id
+    ) {
+      const [profile, sourceProfile] = await Promise.all([
+        prisma.profile.findUnique({ where: { id }, select: profileSelect }),
+        prisma.profile.findUnique({
+          where: { id: sourceProfileId },
+          select: profileSelect,
+        }),
+      ]);
+      return c.json({
+        status: "linked" as const,
+        profile,
+        sourceProfile,
+      });
+    }
+
+    // One side already linked to a *different* user → reject. We
+    // don't auto-merge across friends.
+    if (
+      target.linkedUserId !== null &&
+      target.linkedUserId !== showerUserId
+    ) {
+      return c.json(
+        { error: "This profile is already linked to another account" },
+        409,
+      );
+    }
+    if (source.linkedUserId !== null && source.linkedUserId !== user.id) {
+      return c.json(
+        {
+          error:
+            "Your friend's profile is already linked to another account",
+        },
+        409,
+      );
+    }
+
+    // Scanner-side merge_required: caller already has *another* of
+    // their own profiles linked to the shower. UI prompts to merge.
+    const scannerExisting = await prisma.profile.findFirst({
+      where: {
+        ownerId: user.id,
+        linkedUserId: showerUserId,
+        NOT: { id },
+      },
+      select: { id: true, alias: true },
+    });
+    if (scannerExisting) {
+      return c.json({
+        status: "merge_required" as const,
+        side: "scanner" as const,
+        existing: scannerExisting,
+        target: { id: target.id, alias: target.alias },
+      });
+    }
+
+    // Shower-side merge_required: the shower already has *another* of
+    // their own profiles linked to the scanner. Surface as a
+    // non-actionable error — only the shower can resolve it on their
+    // own device. Proactive notification is a follow-up.
+    const showerExisting = await prisma.profile.findFirst({
+      where: {
+        ownerId: showerUserId,
+        linkedUserId: user.id,
+        NOT: { id: sourceProfileId },
+      },
+      select: { id: true, alias: true },
+    });
+    if (showerExisting) {
+      return c.json({
+        status: "merge_required" as const,
+        side: "shower" as const,
+        existingAlias: showerExisting.alias,
+        targetAlias: source.alias,
+      });
+    }
+
+    // Happy path — bilateral set in a single transaction. If either
+    // update fails (composite unique conflict, foreign key, ...), the
+    // other rolls back so we never leave a half-linked state.
+    const [profile, sourceProfile] = await prisma.$transaction([
+      prisma.profile.update({
+        where: { id },
+        data: { linkedUserId: showerUserId },
+        select: profileSelect,
+      }),
+      prisma.profile.update({
+        where: { id: sourceProfileId },
+        data: { linkedUserId: user.id },
+        select: profileSelect,
+      }),
+    ]);
+    return c.json({
+      status: "linked" as const,
+      profile,
+      sourceProfile,
+    });
+  })
+  .post("/:id/unlink", async (c) => {
+    // Bilateral unlink. Severing one side without the other leaves a
+    // confusing half-state under the bilateral link model, so we clear
+    // the counterpart (if it exists) in the same transaction. Either
+    // the owner or the currently linked user can initiate; both sides'
+    // profiles flip in lockstep.
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    const target = await prisma.profile.findUnique({
+      where: { id },
+      select: { id: true, ownerId: true, linkedUserId: true },
+    });
+    if (!target) {
+      return c.json({ error: "Profile not found" }, 404);
+    }
+    if (target.ownerId !== user.id && target.linkedUserId !== user.id) {
+      return c.json(
+        { error: "Only the owner or the linked user can unlink this profile" },
+        403,
+      );
+    }
+    if (target.linkedUserId === null) {
+      // Idempotent — return the current row so a queued retry succeeds.
+      const profile = await prisma.profile.findUnique({
+        where: { id },
+        select: profileSelect,
+      });
+      return c.json(profile);
+    }
+    // The self-Profile (ownerId === linkedUserId) is special: it
+    // represents "you" in your own suggestions and history. Unlinking
+    // would orphan it from your auth account; reject explicitly so
+    // the UI never offers it.
+    if (target.ownerId === target.linkedUserId) {
+      return c.json(
+        { error: "Cannot unlink your own self-profile" },
+        409,
+      );
+    }
+
+    // Find the counterpart profile (the other half of the bilateral
+    // link). It may not exist for legacy unilateral links — that's
+    // fine, we just clear `target` alone.
+    const counterpart = await prisma.profile.findFirst({
+      where: {
+        ownerId: target.linkedUserId,
+        linkedUserId: target.ownerId,
+      },
+      select: { id: true },
+    });
+
+    const updates = [
+      prisma.profile.update({
+        where: { id },
+        data: { linkedUserId: null },
+        select: profileSelect,
+      }),
+    ];
+    if (counterpart) {
+      updates.push(
+        prisma.profile.update({
+          where: { id: counterpart.id },
+          data: { linkedUserId: null },
+          select: profileSelect,
+        }),
+      );
+    }
+    const [profile] = await prisma.$transaction(updates);
+    return c.json(profile);
   });

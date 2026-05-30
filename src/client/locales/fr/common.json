@@ -305,6 +305,46 @@
     "confirm": "Fusionner",
     "confirming": "Fusion en cours…",
     "success": "Profils fusionnés.",
-    "linkedBlocked": "Les profils liés ne peuvent pas encore être fusionnés — fonction prévue en PR 6-C."
+    "linkedBlocked": "Utilisez la liaison par QR sur la page du profil pour fusionner des profils liés."
+  },
+  "link": {
+    "unclaimedTitle": "Lier au compte d'un ami",
+    "unclaimedExplainer": "Ouvrez le même profil sur vos deux téléphones, puis l'un appuie sur Afficher le QR et l'autre sur Scanner le QR. Vous verrez chacun les parties de l'autre.",
+    "showCta": "Afficher le QR",
+    "scanCta": "Scanner le QR",
+    "linkedTitle": "Compte lié",
+    "linkedUnknown": "Utilisateur lié",
+    "unlink": "Délier",
+    "unlinking": "Déliaison…",
+    "unlinkError": "Impossible de délier",
+    "unlinkConfirm": {
+      "title": "Délier ce profil ?",
+      "body": "La liaison sera retirée des deux côtés. Vous et {{friend}} ne verrez plus les parties de l'autre."
+    },
+    "celebration": {
+      "title": "Lié !",
+      "subtitle": "On joue mieux entre amis."
+    },
+    "code": {
+      "loading": "Génération du code…",
+      "expiresIn": "Expire dans {{seconds}} s",
+      "expired": "Ce code a expiré.",
+      "refresh": "Afficher un nouveau code",
+      "retry": "Réessayer",
+      "error": "Impossible de générer un code de liaison."
+    },
+    "scanner": {
+      "hint": "Pointez la caméra sur le code de liaison de votre ami.",
+      "submitting": "Liaison…",
+      "linked": "Lié !",
+      "error": "Impossible de lier",
+      "cameraError": "Impossible d'ouvrir la caméra. Autorisez l'accès à la caméra et réessayez.",
+      "retry": "Réessayer",
+      "mergePrompt": "Vous avez déjà un profil « {{existing}} » lié à cet ami. Fusionner « {{target}} » dans « {{existing}} » ? Toutes les parties sous « {{target}} » seront déplacées vers « {{existing}} ».",
+      "mergeConfirm": "Fusionner",
+      "merging": "Fusion…",
+      "merged": "Profils fusionnés.",
+      "showerMergeNeeded": "Votre ami a déjà un autre profil « {{existing}} » lié à vous. Demandez-lui de fusionner « {{target}} » dans « {{existing}} » depuis son appareil, puis réessayez."
+    }
   }
 }

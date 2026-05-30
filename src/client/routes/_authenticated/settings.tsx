@@ -56,11 +56,11 @@ function SettingsPage() {
             title={t("settings.alias.title", { defaultValue: "Alias" })}
           >
             {/* Render only when session is known. AliasInput's commit
-                path depends on session.user.id to refresh Dexie's
-                cached player.user.alias for matches linked to the
-                current user; rendering before session is loaded lets
-                a fast test (or user) fill + blur before myUserId is
-                set, skipping the refresh and leaving stale data. */}
+                path depends on session.user.id to refresh the cached
+                Profile rows linked to the current user; rendering
+                before session is loaded lets a fast test (or user)
+                fill + blur before myUserId is set, skipping the
+                refresh and leaving stale data. */}
             {session && (
               <AliasInput
                 initialValue={

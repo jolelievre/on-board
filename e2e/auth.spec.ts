@@ -35,8 +35,8 @@ test.describe("Authentication — universal", () => {
     const matchesRes = await request.get("/api/matches");
     expect(matchesRes.status()).toBe(401);
 
-    const playersRes = await request.get("/api/players/suggestions");
-    expect(playersRes.status()).toBe(401);
+    const profilesRes = await request.get("/api/profiles");
+    expect(profilesRes.status()).toBe(401);
   });
 });
 

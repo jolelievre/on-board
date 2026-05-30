@@ -1,23 +1,5 @@
 import { test, expect } from "@playwright/test";
-
-async function createTestMatch(
-  request: import("@playwright/test").APIRequestContext,
-) {
-  const gamesRes = await request.get("/api/games/7-wonders-duel");
-  const game = await gamesRes.json();
-
-  const createRes = await request.post("/api/matches", {
-    data: {
-      gameId: game.id,
-      players: [
-        { name: "Alice", position: 0 },
-        { name: "Bob", position: 1 },
-      ],
-    },
-  });
-
-  return createRes.json();
-}
+import { createTestMatch } from "../helpers/api";
 
 test.describe("API: Scores (authenticated)", () => {
   test("PATCH /api/matches/:id/scores saves scores", async ({ request }) => {
