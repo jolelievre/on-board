@@ -1,4 +1,4 @@
-import type { LocalProfile3 } from "../../lib/db";
+import type { LocalProfile } from "../../lib/db";
 import { displayProfileName } from "../../../shared/players";
 import { useOwnedProfileIndex } from "../../hooks/data/useOwnedProfileIndex";
 import styles from "./Avatar.module.css";
@@ -30,7 +30,7 @@ type CommonProps = {
 
 type ProfileSource = {
   profile: Pick<
-    LocalProfile3,
+    LocalProfile,
     | "id"
     | "ownerId"
     | "alias"

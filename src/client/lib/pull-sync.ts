@@ -5,7 +5,7 @@ import {
   type LocalGame,
   type LocalMatch,
   type LocalPlayer,
-  type LocalProfile3,
+  type LocalProfile,
   type LocalScore,
 } from "./db";
 import { resolveSelfAlias } from "../../shared/players";
@@ -249,12 +249,12 @@ async function mergeProfiles(
 
   const ids = rows.map((p) => p.id);
   const existing = await db.profiles.bulkGet(ids);
-  const existingById = new Map<string, LocalProfile3>();
+  const existingById = new Map<string, LocalProfile>();
   for (const p of existing) {
     if (p) existingById.set(p.id, p);
   }
 
-  const toPut: LocalProfile3[] = [];
+  const toPut: LocalProfile[] = [];
   let linkTransition = false;
   let unlinkTransition = false;
   for (const p of rows) {

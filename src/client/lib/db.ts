@@ -1,18 +1,4 @@
-import Dexie, { type EntityTable, type Table } from "dexie";
-
-/** Legacy v1/v2 Dexie table. Dropped at v3 in favour of the server-mirrored
- * `profiles` table. Kept as a type only so the v2→v3 upgrader can read
- * the rows during migration. */
-export type LocalProfile = {
-  /** Name used as the primary key (names are the identity for local profiles). */
-  name: string;
-  avatarUrl?: string | null;
-  /** Set when this profile has been linked to a server user. */
-  linkedUserId?: string | null;
-  /** ISO timestamp of last time this name was used — used for sorting suggestions. */
-  usedAt: string;
-  isSelf?: boolean;
-};
+import Dexie, { type EntityTable } from "dexie";
 
 export type LocalProfileLinkedUser = {
   id: string;
@@ -28,7 +14,7 @@ export type LocalProfileLinkedUser = {
 /** Server-mirrored Profile row (Phase 6-A). One per person the user knows.
  * Owned by the user when unclaimed; visible to both owner and linked user
  * once `linkedUserId` is set. UI reads through this table exclusively. */
-export type LocalProfile3 = {
+export type LocalProfile = {
   id: string;
   ownerId: string;
   linkedUserId: string | null;
@@ -42,20 +28,6 @@ export type LocalProfile3 = {
   updatedAt: string;
   /** Denormalized linked-user projection. Null when unclaimed. */
   linkedUser: LocalProfileLinkedUser | null;
-};
-
-export type LocalProfileGroup = {
-  id: string;
-  ownerId: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type LocalProfileGroupMember = {
-  groupId: string;
-  profileId: string;
-  position: number;
 };
 
 export type SyncQueueEntry = {
@@ -153,11 +125,7 @@ class OnBoardDB extends Dexie {
   matches!: EntityTable<LocalMatch, "id">;
   players!: EntityTable<LocalPlayer, "id">;
   scores!: EntityTable<LocalScore, "id">;
-  profiles!: EntityTable<LocalProfile3, "id">;
-  profileGroups!: EntityTable<LocalProfileGroup, "id">;
-  // Compound primary key (`[groupId+profileId]`) doesn't fit Dexie's
-  // `EntityTable` keyof-T type, so we drop to the plain `Table` form.
-  profileGroupMembers!: Table<LocalProfileGroupMember, [string, string]>;
+  profiles!: EntityTable<LocalProfile, "id">;
   syncMeta!: EntityTable<LocalSyncMeta, "key">;
 
   constructor() {
@@ -254,6 +222,22 @@ class OnBoardDB extends Dexie {
           .equals("lastMatchPullAt")
           .delete();
       });
+
+    // v5 — Phase 6-E cleanup: drop the unused `profileGroups` and
+    // `profileGroupMembers` stores. Phase 6-D (favorite player groups)
+    // was abandoned in favor of the "played-with" suggestions shipped
+    // in PR 6-B; neither store ever received any rows.
+    this.version(5).stores({
+      syncQueue: "++id, createdAt, status",
+      games: "id, slug",
+      matches: "id, gameId, status, startedAt, updatedAt, [createdById+startedAt]",
+      players: "id, matchId, profileId, profileLinkedUserId, [matchId+position]",
+      scores: "id, matchId, [matchId+playerId+category], updatedAt",
+      profiles: "id, ownerId, linkedUserId, usedAt, updatedAt",
+      profileGroups: null,
+      profileGroupMembers: null,
+      syncMeta: "key",
+    });
   }
 }
 

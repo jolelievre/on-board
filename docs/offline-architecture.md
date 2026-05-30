@@ -47,24 +47,22 @@ The Dexie-mirror design removes all three: `useLiveQuery` is reactive on Dexie w
 | Match list / detail | IndexedDB (Dexie `matches` + `players` + `scores`) | — | Permanent — incremental pull from `/api/matches?since=` |
 | Outbound mutation queue | IndexedDB (Dexie `syncQueue`) | — | Until flushed (or permanently failed) |
 | Pull-sync cursor | IndexedDB (Dexie `syncMeta`) | `lastPullAt` | Permanent — advanced on each successful pull |
-| Profiles (Players tab + new-match autocomplete) | IndexedDB (Dexie `profiles` + `profileGroups` + `profileGroupMembers`) | — | Permanent — pulled by `pullSync` from `/api/profiles?since=` |
+| Profiles (Players tab + new-match autocomplete) | IndexedDB (Dexie `profiles`) | — | Permanent — pulled by `pullSync` from `/api/profiles?since=` |
 
 The auth session stays on `localStorage` because better-auth needs it synchronously on first render. Everything else is async via Dexie.
 
 ### Dexie schema
 
-The current schema is version 3 (declared in `src/client/lib/db.ts`):
+The current schema is version 5 (declared in `src/client/lib/db.ts`):
 
 | Table | Primary key | Indexes |
 |---|---|---|
 | `syncQueue` | `++id` | `createdAt`, `status` |
 | `games` | `id` | `slug` |
 | `matches` | `id` | `gameId`, `status`, `startedAt`, `updatedAt`, `[createdById+startedAt]` |
-| `players` | `id` | `matchId`, `userId`, `profileId`, `[matchId+position]` |
+| `players` | `id` | `matchId`, `profileId`, `profileLinkedUserId`, `[matchId+position]` |
 | `scores` | `id` | `matchId`, `[matchId+playerId+category]`, `updatedAt` |
 | `profiles` | `id` | `ownerId`, `linkedUserId`, `usedAt`, `updatedAt` |
-| `profileGroups` | `id` | `ownerId`, `updatedAt` |
-| `profileGroupMembers` | `[groupId+profileId]` (compound) | `groupId`, `profileId` |
 | `syncMeta` | `key` | — |
 
 #### v1 → v2 upgrade
@@ -78,7 +76,11 @@ The `matchDrafts` table from v1 is dropped (`stores: { matchDrafts: null }`) —
 
 #### v2 → v3 upgrade
 
-Introduced by PR 6-A (Profile entity + Players tab). The upgrade drops the v2 `localProfiles` table — its purpose (name-keyed autocomplete + linked-user metadata) is now served by the server-mirrored `profiles` table, which is repopulated from `/api/profiles` on the next `pullSync()`. Three new tables are added (`profiles`, `profileGroups`, `profileGroupMembers`) and the `players` index gains `profileId` for the per-profile match-history queries.
+Introduced by PR 6-A (Profile entity + Players tab). The upgrade drops the v2 `localProfiles` table — its purpose (name-keyed autocomplete + linked-user metadata) is now served by the server-mirrored `profiles` table, which is repopulated from `/api/profiles` on the next `pullSync()`. The `profiles` table is added (alongside `profileGroups` / `profileGroupMembers`, which v5 later removes) and the `players` index gains `profileId` for the per-profile match-history queries.
+
+#### v4 → v5 upgrade
+
+Drops the unused `profileGroups` and `profileGroupMembers` stores. Phase 6-D (favorite player groups) was abandoned in favor of the "played-with" suggestions shipped in PR 6-B; neither store ever received any rows.
 
 ---
 

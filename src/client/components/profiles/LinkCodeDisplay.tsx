@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import QRCode from "qrcode";
 import { requestLinkToken } from "../../lib/mutations";
 import { pullSync, resetPullCursors } from "../../lib/pull-sync";
-import { db, type LocalProfile3 } from "../../lib/db";
+import { db, type LocalProfile } from "../../lib/db";
 import { Button } from "../ui/Button";
 import { LinkCelebration } from "./LinkCelebration";
 import styles from "./LinkCodeDisplay.module.css";
@@ -39,11 +39,11 @@ export function LinkCodeDisplay({
   profile,
   onLinked,
 }: {
-  profile: LocalProfile3;
+  profile: LocalProfile;
   /** Called when the bilateral link lands. Parent typically collapses
    * the QR panel + the linked-card view takes over (which is driven by
    * Dexie's reactive read of the profile). */
-  onLinked?: (linkedProfile: LocalProfile3) => void;
+  onLinked?: (linkedProfile: LocalProfile) => void;
 }) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
