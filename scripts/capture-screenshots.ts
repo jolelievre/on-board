@@ -399,16 +399,34 @@ async function captureSevenWondersFlow(page: Page, suffix: string) {
   await shoot(page, `09-7wd-history${suffix}`);
 }
 
+/**
+ * Pick a digit in either the bidding picker or the round-result tricks
+ * picker. Both render via `DigitGrid` (buttons keyed by `data-value`).
+ * The bidding screen auto-advances to the next unbid seat once a row
+ * commits, so successive calls land on successive players.
+ */
+async function pickDigit(page: Page, gridTestId: string, value: number) {
+  await page.click(
+    `[data-testid='${gridTestId}'] button[data-value='${value}']:not([data-disabled='true'])`,
+  );
+}
+
+/**
+ * Walk through the full Skull King flow:
+ *   1. Create a 3-player match
+ *   2. Round 1: bidding → recap → result → transition
+ *   3. Scoreboard overlay
+ *   4. Seed rounds 2–9 via API to jump to round 10
+ *   5. Round 10: bidding → result → match complete
+ *   6. Back to game detail to show history.
+ * Each phase captures one screenshot.
+ */
 async function captureSkullKingFlow(page: Page, suffix: string) {
-  // New SK match. Three players so the seating screen shows non-trivial
-  // rows; reuse the seeded profiles by alias.
   await page.goto(`${BASE_URL}/games/skull-king/new`);
   await page.waitForLoadState("domcontentloaded");
   await page.waitForSelector("[data-testid='new-match-player-0']");
 
-  // SK minimum is 2 players; add a third row, then fill three aliases.
   const aliases = ["Alice", "Bob", "Charlie"];
-  // The form starts at minPlayers (2). Add until we have 3 rows.
   while (
     (await page.locator("[data-testid^='new-match-player-']").count()) <
     aliases.length
@@ -421,20 +439,187 @@ async function captureSkullKingFlow(page: Page, suffix: string) {
   }
   await page.click("[data-testid='new-match-submit']");
   await page.waitForURL(/\/matches\/[a-z0-9-]+/i);
+  const matchId = page.url().split("/").pop() as string;
   await page.waitForSelector("[data-testid='sk-match-start']");
   await shoot(page, `10-sk-match-start${suffix}`);
 
-  // Tap into bidding for round 1.
+  // ── Round 1 ────────────────────────────────────────────────────────
   await page.click("[data-testid='sk-match-start-cta']");
   await page.waitForSelector("[data-testid='sk-bid']");
-  await page.waitForTimeout(150);
-  await shoot(page, `11-sk-bidding${suffix}`);
+  await page.waitForTimeout(200);
+  await shoot(page, `11-sk-r1-bidding${suffix}`);
 
-  // Back to game detail (history shows the seeded completed match).
-  await page.goto(`${BASE_URL}/games/skull-king`);
+  // Round 1 each player has 1 card → max bid = 1. All bid 1 — the
+  // bidding screen auto-advances seat after every pick.
+  await pickDigit(page, "sk-bid-digit-grid", 1);
+  await pickDigit(page, "sk-bid-digit-grid", 1);
+  await pickDigit(page, "sk-bid-digit-grid", 1);
+  await page.click("[data-testid='sk-bid-reveal']");
+  await page.waitForSelector("[data-testid='sk-bid-recap']");
+  await page.waitForTimeout(150);
+  await shoot(page, `12-sk-r1-recap${suffix}`);
+
+  await page.click("[data-testid='sk-bid-recap-continue']");
+  await page.waitForSelector("[data-testid='sk-result']");
+  await page.waitForTimeout(150);
+  await shoot(page, `13-sk-r1-result${suffix}`);
+
+  // Tricks for round 1 must sum to 1. Alice 1, Bob 0, Charlie 0 → Alice
+  // hits her bid, the other two miss.
+  await pickDigit(page, "sk-result-tricks", 1);
+  await page.click("[data-testid='sk-result-next']");
+  await pickDigit(page, "sk-result-tricks", 0);
+  await page.click("[data-testid='sk-result-next']");
+  await pickDigit(page, "sk-result-tricks", 0);
+  await page.click("[data-testid='sk-result-end-round']");
+  await page.waitForSelector("[data-testid='sk-transition']");
+  await page.waitForTimeout(200);
+  await shoot(page, `14-sk-r1-transition${suffix}`);
+
+  // ── Scoreboard overlay ─────────────────────────────────────────────
+  await page.click("[data-testid='sk-scoreboard-toggle']");
+  await page.waitForSelector("[data-testid='sk-scoreboard']");
+  await page.waitForTimeout(200);
+  await shoot(page, `15-sk-scoreboard${suffix}`);
+  await page.click("[data-testid='sk-scoreboard-close']");
+  await page.waitForSelector("[data-testid='sk-transition']");
+
+  // ── Fast-forward to round 10 via API ───────────────────────────────
+  // Get player order so we can seed scores by playerId.
+  const matchSummary = (await (
+    await page.context().request.get(`/api/matches/${matchId}`)
+  ).json()) as { players: { id: string; profileId: string }[] };
+  // Match the order we filled the form in (Alice, Bob, Charlie).
+  const [aliceId, bobId, charlieId] = matchSummary.players.map((p) => p.id);
+  await seedSkullKingRounds(page, matchId, {
+    aliceId,
+    bobId,
+    charlieId,
+  });
+
+  // Reload the match page so the scorer reads the new rounds and lands
+  // on round 10's bidding screen.
+  await page.goto(`${BASE_URL}/matches/${matchId}`);
   await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='sk-bid']");
+  await page.waitForTimeout(300);
+  await shoot(page, `16-sk-r10-bidding${suffix}`);
+
+  // Round 10 max bid = 10. Spread the picks so the recap looks
+  // distinct from round 1.
+  await pickDigit(page, "sk-bid-digit-grid", 7);
+  await pickDigit(page, "sk-bid-digit-grid", 4);
+  await pickDigit(page, "sk-bid-digit-grid", 2);
+  await page.click("[data-testid='sk-bid-reveal']");
+  await page.waitForSelector("[data-testid='sk-bid-recap']");
+  await page.click("[data-testid='sk-bid-recap-continue']");
+  await page.waitForSelector("[data-testid='sk-result']");
+  await page.waitForTimeout(200);
+  // Fill tricks for Alice first so the result screen shows the
+  // cumulative-total panel populated from the 9 seeded rounds — that's
+  // the late-game state we want the design session to see.
+  await pickDigit(page, "sk-result-tricks", 7);
+  await shoot(page, `17-sk-r10-result${suffix}`);
+
+  await page.click("[data-testid='sk-result-next']");
+  await pickDigit(page, "sk-result-tricks", 3);
+  await page.click("[data-testid='sk-result-next']");
+  await pickDigit(page, "sk-result-tricks", 0);
+  await page.click("[data-testid='sk-result-end-round']");
+  await page.waitForSelector("[data-testid='sk-match-complete']");
+  await page.waitForTimeout(300);
+  await shoot(page, `18-sk-match-complete${suffix}`);
+
+  // ── Back to game detail history ────────────────────────────────────
+  await page.click("[data-testid='back-to-game']");
+  await page.waitForURL(`${BASE_URL}/games/skull-king`);
   await page.waitForSelector("[data-testid='match-history']");
-  await shoot(page, `12-sk-history${suffix}`);
+  await shoot(page, `19-sk-history${suffix}`);
+}
+
+/**
+ * Seed Skull King rounds 2–9 directly via the score API so we can
+ * jump straight to round 10 without driving the UI through 18 phases.
+ *
+ * Each round writes one row per player with the full
+ * `SkullKingRoundEntry` shape in metadata; the scorer reads it back
+ * via `parseRoundCategory("round_N")` and recomputes totals client-
+ * side. The hardcoded picks below give the three players visibly
+ * different running totals so the scoreboard/result screens have
+ * interesting state to render.
+ */
+async function seedSkullKingRounds(
+  page: Page,
+  matchId: string,
+  ids: { aliceId: string; bobId: string; charlieId: string },
+) {
+  const { aliceId, bobId, charlieId } = ids;
+
+  // Per-round picks. bid+tricks fully determine the round score; the
+  // other entry fields stay zero (no 14s/mermaid/etc. shenanigans —
+  // the design brief doesn't need every bonus permutation seeded).
+  const picks: Record<
+    number,
+    { alice: [number, number]; bob: [number, number]; charlie: [number, number] }
+  > = {
+    2: { alice: [1, 1], bob: [1, 0], charlie: [0, 1] }, // hit, miss, miss
+    3: { alice: [2, 2], bob: [1, 1], charlie: [0, 0] }, // all hit
+    4: { alice: [2, 2], bob: [3, 1], charlie: [1, 1] }, // hit, miss, hit
+    5: { alice: [3, 3], bob: [2, 2], charlie: [0, 0] }, // all hit
+    6: { alice: [2, 2], bob: [4, 4], charlie: [0, 0] }, // all hit
+    7: { alice: [4, 3], bob: [3, 3], charlie: [0, 1] }, // miss, hit, miss
+    8: { alice: [5, 5], bob: [2, 2], charlie: [1, 1] }, // all hit
+    9: { alice: [4, 4], bob: [3, 4], charlie: [2, 1] }, // hit, miss, miss
+  };
+
+  const seatToId = (seat: "alice" | "bob" | "charlie") =>
+    seat === "alice" ? aliceId : seat === "bob" ? bobId : charlieId;
+
+  const rows: {
+    playerId: string;
+    category: string;
+    value: number;
+    metadata: Record<string, number>;
+  }[] = [];
+  for (const [roundStr, seats] of Object.entries(picks)) {
+    const round = Number(roundStr);
+    for (const seat of ["alice", "bob", "charlie"] as const) {
+      const [bid, tricks] = seats[seat];
+      // Client-side scoring approximation matching `scoreSkullKingRound`
+      // for the basic hit/miss case: bid > 0 hit → bid × 20; bid 0 hit
+      // → round × 10; miss → -|bid - tricks| × 10. Bonus fields stay 0.
+      let value: number;
+      if (bid === tricks) {
+        value = bid === 0 ? round * 10 : bid * 20;
+      } else {
+        value = -Math.abs(bid - tricks) * 10;
+      }
+      rows.push({
+        playerId: seatToId(seat),
+        category: `round_${round}`,
+        value,
+        metadata: {
+          bid,
+          tricks,
+          color14: 0,
+          black14: 0,
+          mermaidByPirate: 0,
+          pirateBySK: 0,
+          skByMermaid: 0,
+        },
+      });
+    }
+  }
+
+  const res = await page.context().request.patch(
+    `/api/matches/${matchId}/scores`,
+    { data: { scores: rows } },
+  );
+  if (!res.ok()) {
+    throw new Error(
+      `seedSkullKingRounds(${matchId}) -> ${res.status()} ${await res.text()}`,
+    );
+  }
 }
 
 async function capturePlayersAndProfile(
@@ -445,14 +630,14 @@ async function capturePlayersAndProfile(
   await page.goto(`${BASE_URL}/players`);
   await page.waitForLoadState("domcontentloaded");
   await page.waitForSelector("[data-testid='players-list']");
-  await shoot(page, `13-players-list${suffix}`);
+  await shoot(page, `20-players-list${suffix}`);
 
   // "+Add profile" expanded.
   await page.click("[data-testid='players-add-profile']");
   await page.waitForSelector("[data-testid='players-add-profile-form']");
   await page.fill("[data-testid='players-add-profile-input']", "New friend");
   await page.waitForTimeout(120);
-  await shoot(page, `14-players-add-profile${suffix}`);
+  await shoot(page, `21-players-add-profile${suffix}`);
   // Close without submitting so we don't accumulate spurious profiles.
   await page.keyboard.press("Escape").catch(() => {});
   // The form doesn't bind Escape; fall back to reloading the list.
@@ -466,7 +651,7 @@ async function capturePlayersAndProfile(
   await page.waitForLoadState("domcontentloaded");
   await page.waitForSelector("[data-testid='profile-edit-avatar']");
   await page.waitForTimeout(200);
-  await shoot(page, `15-profile-detail${suffix}`);
+  await shoot(page, `22-profile-detail${suffix}`);
 }
 
 async function captureAvatarUploader(page: Page, suffix: string, friend: SeededFriend) {
@@ -478,7 +663,7 @@ async function captureAvatarUploader(page: Page, suffix: string, friend: SeededF
   await page.click("[data-testid='profile-edit-avatar']");
   await page.waitForSelector("[data-testid='avatar-uploader']");
   await page.waitForTimeout(150);
-  await shoot(page, `16-avatar-uploader-idle${suffix}`);
+  await shoot(page, `23-avatar-uploader-idle${suffix}`);
 
   // Camera mode. The stubbed getUserMedia returns a canvas stream;
   // wait for the video element to start playing before screenshotting.
@@ -489,7 +674,7 @@ async function captureAvatarUploader(page: Page, suffix: string, friend: SeededF
     return v instanceof HTMLVideoElement && v.readyState >= 2;
   }, { timeout: 5_000 }).catch(() => { /* still capture even if readyState stalls */ });
   await page.waitForTimeout(400);
-  await shoot(page, `17-avatar-uploader-camera${suffix}`);
+  await shoot(page, `24-avatar-uploader-camera${suffix}`);
 
   // Exit cleanly so the camera shuts down before the next screen.
   await page.click("[data-testid='avatar-camera-cancel']");
@@ -520,7 +705,7 @@ async function captureLinkSurfaces(page: Page, suffix: string, friend: SeededFri
     }
   }, { timeout: 5_000 }).catch(() => { /* capture anyway */ });
   await page.waitForTimeout(200);
-  await shoot(page, `18-link-code-display${suffix}`);
+  await shoot(page, `25-link-code-display${suffix}`);
 
   // Back out and open scanner.
   await page.goto(`${BASE_URL}/players/${friend.id}`);
@@ -558,7 +743,7 @@ async function captureLinkSurfaces(page: Page, suffix: string, friend: SeededFri
     )
     .catch(() => { /* capture anyway */ });
   await page.waitForTimeout(400);
-  await shoot(page, `19-link-scanner${suffix}`);
+  await shoot(page, `26-link-scanner${suffix}`);
 
   // Exit scanner.
   await page.goto(`${BASE_URL}/players/${friend.id}`);
@@ -572,7 +757,7 @@ async function captureMergeDialog(page: Page, suffix: string, friend: SeededFrie
   await page.click("[data-testid='profile-merge-action']");
   await page.waitForSelector("[role='dialog']").catch(() => {});
   await page.waitForTimeout(200);
-  await shoot(page, `20-merge-dialog${suffix}`);
+  await shoot(page, `27-merge-dialog${suffix}`);
   await page.keyboard.press("Escape");
 }
 
@@ -585,7 +770,7 @@ async function captureSettings(page: Page, theme: Theme, suffix: string) {
   await ensureLanguage(page, "en");
   await ensureTheme(page, theme);
   await page.waitForSelector("[data-testid='profile-edit-avatar']");
-  await shoot(page, `21-settings${suffix}`);
+  await shoot(page, `28-settings${suffix}`);
 
   // Open the avatar editor on the self-Profile — this is the only path
   // where the linked-avatar toggle is visible (self-Profile is linked
@@ -593,11 +778,11 @@ async function captureSettings(page: Page, theme: Theme, suffix: string) {
   await page.click("[data-testid='profile-edit-avatar']");
   await page.waitForSelector("[data-testid='avatar-uploader']");
   await page.waitForTimeout(150);
-  await shoot(page, `22-settings-avatar-editing${suffix}`);
+  await shoot(page, `29-settings-avatar-editing${suffix}`);
   await page.click("[data-testid='avatar-done']").catch(() => {});
 
   await ensureLanguage(page, "fr");
-  await shoot(page, `23-settings-french${suffix}`);
+  await shoot(page, `30-settings-french${suffix}`);
   await ensureLanguage(page, "en");
 }
 
