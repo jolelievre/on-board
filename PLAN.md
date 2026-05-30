@@ -887,69 +887,29 @@ Each PR is sized to land in one Claude session, ships an end-to-end testable cha
 | `e2e/players-tab-excludes-self.spec.ts` | New |
 | `e2e/api/profiles.spec.ts` | Drop mirror-flow assertions; add new visibility tests |
 
-#### PR 6-D — Favorite player groups (`feat/profiles-groups`, ~1 day)
+#### PR 6-D — Favorite player groups *(ABANDONED, not shipping)*
 
-**Goal**: ship saved player groupings ("Wednesday Skull King crew") so a recurring crew is one tap away on the new-match form. Independent of everything before — `ProfileGroup` and `ProfileGroupMember` tables already exist (added in 6-A) but stay empty until this PR.
+Originally scoped as saved player groupings ("Wednesday Skull King crew") with their own `ProfileGroup` + `ProfileGroupMember` tables (added defensively in 6-A's migration but never populated by any UI). **The "played-with" suggestions that landed in PR 6-B already cover the recurring-crew use case** — picking the most-recent grouping is one tap, with no extra management surface to maintain. The groups feature added a second way to do the same thing for marginal benefit.
 
-**Requires**: PR 6-C merged (purely ordering — no hard dependency on link/QR; this lands last because it's the least interesting slice).
+Dropped in the Phase 6 wrap-up PR (`chore/profiles-wrap-up`):
+- Prisma models `ProfileGroup` + `ProfileGroupMember` removed from `prisma/schema.prisma`; new migration `<ts>_drop_profile_groups` drops both tables.
+- Dexie v5 nullifies `profileGroups` and `profileGroupMembers`; `LocalProfileGroup*` types removed.
+- The defensive `ProfileGroupMember` rewrite block in `src/server/lib/profile-merge.ts` is gone.
+- No server routes, client mutations, hooks, components, i18n keys, or tests ever existed for groups — nothing else to clean up.
 
-**Schema**: no change (`ProfileGroup`, `ProfileGroupMember` already shipped in 6-A's migration).
+#### PR 6-E — Phase 6 wrap-up (`chore/profiles-wrap-up`)
 
-**Server**:
-- `GET /api/profile-groups` — list groups owned by me (with members ordered by `position`). Supports `?since=` for pull-sync.
-- `POST /api/profile-groups` — create a group (client CUID accepted). Body includes ordered `profileIds[]`.
-- `PATCH /api/profile-groups/:id` — rename group, replace members.
-- `DELETE /api/profile-groups/:id` — delete group + cascade members.
-- Integration tests for every route.
+Bundles the remaining Phase 6 follow-ups and a small UX polish into a single PR scoped to the Profiles surface:
 
-**Client**:
-- `src/client/lib/mutations.ts`: add `createProfileGroup`, `patchProfileGroup`, `deleteProfileGroup`.
-- `src/client/lib/pull-sync.ts`: extend with `/api/profile-groups` pull.
-- New hooks: `useProfileGroups()`, `useProfileGroup(id)`.
-- New components: `src/client/components/profiles/{GroupEditor, GroupPicker}.tsx`.
-- New route: `players/groups.tsx` (favorite groups manager — list, create, edit, delete).
-- Entry point into the groups route from the Players tab header.
-- `games/$slug_.new.tsx`: add group chips row above the player slots (alongside the existing "played with" chips from 6-B). Tapping a group fills slots in saved order.
-- i18n keys under `groups.*` namespace.
+- **Drop `ProfileGroup` infrastructure** — see above.
+- **Cosmetic Dexie rename** — `LocalProfile3` → `LocalProfile` across `src/client/`. The `3` suffix dated from the v3 schema bump (when a legacy `LocalProfile` still existed); the legacy type is gone, so the suffix no longer adds information. Pure search-and-replace, no behavior change.
+- **`User.alias` propagation to friend devices** — `syncSelfProfileAlias` (better-auth `user.update.after` hook) now compares the new alias to the existing self-Profile row and, when it actually changed, bumps `Match.updatedAt = NOW()` on every Match whose Player set joins through a Profile linked to that user. Friend devices' next routine pull-sync refreshes the embedded `linkedUser.alias` snapshots. New E2E `e2e/alias-propagates-to-friend.spec.ts` drives the cross-context UI flow.
+- **"+ Add profile" action on the Players tab** — header trigger opens an inline alias form; submit calls the existing `createProfile` mutation and navigates straight to `/players/$profileId` so the new unclaimed profile is immediately ready to scan a friend's link code. i18n: `players.addProfile`, `players.addProfileForm.{placeholder,submit}`. New E2E `e2e/add-profile.spec.ts`.
+- **Blur input after picker selection in the new-match form** — `SlotRow` now captures the input via `useRef` and calls `inputRef.current?.blur()` from both the `SuggestionChip` `onClick` and the "+ Create profile" inline-row `onClick`, so the mobile keyboard collapses as soon as a pick commits. New assertions in `e2e/new-match.spec.ts`.
+- **Camera facing-mode default per editing context** — `useCamera` accepts an `{ initialFacingMode }` option; `AvatarUploader` derives it from the existing `isSelf` check (self-Profile → `"user"` for selfie, friend-Profile → `"environment"` because you're aiming the phone at them). The flip control still works on both paths. `LinkScanner` is untouched (it uses `qr-scanner` directly with `preferredCamera: "environment"`, correct for QR).
+- **Settings avatar editor + shared `EditableAvatar` component** — extracted `src/client/components/profiles/EditableAvatar.tsx` (avatar preview + pencil edit button → swap to `AvatarUploader`-inside-`Group`). Used by both the profile detail page (replacing the inline `editingPhoto` JSX) and Settings (replacing the read-only `<img>` block). New `useSelfProfile` reactive hook returns the viewer's self-Profile from Dexie. Existing `data-testid="profile-edit-avatar"` is preserved so detail-page E2E selectors keep matching; new E2E `e2e/settings-avatar-edit.spec.ts` covers the Settings surface.
 
-**Acceptance** (manual, in the app):
-- Players tab → "Groups" → create "Wednesday crew" with 4 profiles in chosen order.
-- Open new-match form → tap "Wednesday crew" chip → 4 slots populate in order.
-- Edit the group (rename, reorder, swap a member) → new chip behavior reflects the edit.
-- Delete the group → chip disappears from new-match form.
-- Offline: create group → reload → group persists; reconnect → server has it with the client CUID.
-
-#### PR 6-E (optional, hold) — Cosmetic Dexie type rename (`chore/rename-localprofile3`, ~15 min)
-
-Phase 6-E was originally scoped as a soak-window cleanup PR: drop `Player.userId` / `Player.name`, mark `Player.profileId NOT NULL`, retire `/api/players/suggestions`, tighten client types. **All of that landed in PR 6-C as part of the single-Profile refactor** — the legacy columns weren't compatible with the new model so we couldn't keep them dormant.
-
-What's left is one purely cosmetic rename: the Dexie row type is still named `LocalProfile3` because the v3 schema bump introduced it alongside a legacy `LocalProfile` that's since been removed. The `3` suffix no longer adds information; rename to `LocalProfile`. Pure search-and-replace across the client code, no behavior change.
-
-**Skip this entirely if not bothered by the suffix** — it's the only thing left in this slot and has zero runtime impact.
-
-#### PR 6-E follow-up: `User.alias` propagation to friend devices
-
-When a user edits their `User.alias` from Settings, `refreshLocalAliases` already pushes the new alias into their own local Dexie projections (self-Profile row + every Player row's `linkedUser.alias` snapshot owned by them). The friend's device, however, only sees the new alias when its next pull-sync fetches a Match row whose `updatedAt` was bumped after the edit — `User.alias` edits don't touch any Match row, so the friend's `?since=` delta misses the change indefinitely.
-
-Cleanest fix: on the server, when `User.alias` changes, also `Match.updatedAt = NOW()` for every Match whose Player set joins through a Profile linked to that User. The friend's next routine pullSync then refreshes the embedded `linkedUser.alias` snapshots and the new alias shows in their match history rows. Local-side: nothing changes — `useOwnedProfileIndex` already handles the viewer's own edits live, and the snapshot-fallback in `displayProfileName` is exactly the path that benefits from this server bump.
-
-Out of scope for the name-rendering PR that introduced `useOwnedProfileIndex` — that work makes alias edits propagate instantly *on the editor's device*; this follow-up extends the same freshness to the friend's device.
-
-#### PR 6-E follow-up: "Add profile" action on the Players tab
-
-Today the only way to create an owned profile is from the new-match form's inline-create path. That blocks the QR link flow whenever a friend wants to scan you and you haven't yet played a match with them — you have no profile of theirs to open, no scan button to tap. Add a "+ Add profile" action on `/players` that opens an inline form (or sheet) to create an unclaimed owned profile by alias, then navigates to its detail page so the user can immediately tap Show/Scan QR.
-
-#### PR 6-E follow-up: shower-side feedback when a scan needs a merge
-
-When the scanner submits a token and the server returns `merge_required` (either side), today only the scanner sees the prompt. The shower's `LinkCodeDisplay` keeps polling and keeps showing the QR with no signal that anything happened. Two cases:
-- **Scanner-side merge_required** (caller has a stale duplicate they need to merge before linking): shower should see "Your friend is sorting out their profiles — hold on" / "they need to merge on their side first before we can try again".
-- **Shower-side merge_required** (shower has a stale duplicate): scanner already shows the non-actionable error; shower should see "You need to merge profile «X» into «Y» before this link can complete" with a one-tap action to do it.
-
-Implementation sketch: extend `GET /api/profiles/:id/link-status` to also surface a `{ pendingScan: { side, existingAlias?, targetAlias? } }` field. The server keeps a short-lived (token-TTL bounded) record of the most recent failed link attempt against that source profile. `LinkCodeDisplay` reads that field on each poll and, when present, hides the QR and renders the appropriate message + action.
-
-#### PR 6-E follow-up: blur input after picker selection in the new-match form
-
-On mobile, tapping a suggestion chip or "Create profile" in the new-match form fills the slot but leaves keyboard focus on the input — the on-screen keyboard stays up and covers the next slot. Programmatically `blur()` the input on `onClick` of the suggestion / create-row so the keyboard collapses immediately.
+Out of scope (decided during planning, not shipping): **shower-side feedback when a scan needs a merge**. The implementation cost (transient server state + a new state branch in `LinkCodeDisplay` + i18n + E2E) is disproportionate to the rare two-stale-duplicates-at-once case it addresses.
 
 ### Critical files
 

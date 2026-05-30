@@ -237,6 +237,11 @@
     "you": "Vous",
     "linked": "Lié",
     "unclaimed": "Sans compte",
+    "addProfile": "Ajouter un profil",
+    "addProfileForm": {
+      "placeholder": "Nom de l'ami(e)",
+      "submit": "Ajouter"
+    },
     "alias": {
       "title": "Nom affiché",
       "placeholder": "ex. Jo",

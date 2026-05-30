@@ -60,3 +60,21 @@ export async function syncSelfProfileAlias(userId: string): Promise<void> {
   });
 }
 
+/**
+ * Bump `Match.updatedAt` on every Match where the given Profile is a
+ * Player. Used after the owner edits the Profile's display fields
+ * (alias today, custom avatar later) so any device that sees those
+ * matches but does not own a Profile of its own for this person —
+ * the only case in which the embedded `Player.profile.alias`
+ * snapshot drives the rendered name — picks up the change on its
+ * next routine pull-sync. Devices that *do* own a profile for the
+ * person already render through their own owned profile and don't
+ * need this nudge.
+ */
+export async function bumpMatchesForProfile(profileId: string): Promise<void> {
+  await prisma.match.updateMany({
+    where: { players: { some: { profileId } } },
+    data: { updatedAt: new Date() },
+  });
+}
+

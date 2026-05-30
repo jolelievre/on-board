@@ -10,15 +10,14 @@ import {
   useProfileRecentMatches,
   useHeadToHead,
 } from "../../../hooks/data/useProfiles";
-import type { LocalProfile3 } from "../../../lib/db";
+import type { LocalProfile } from "../../../lib/db";
 import { Header } from "../../../components/layout/Header";
-import { Avatar } from "../../../components/ui/Avatar";
 import { Group } from "../../../components/ui/Group";
 import { Input } from "../../../components/ui/Input";
 import { Pill } from "../../../components/ui/Pill";
 import { Icon } from "../../../components/ui/Icon";
 import { Button } from "../../../components/ui/Button";
-import { AvatarUploader } from "../../../components/profiles/AvatarUploader";
+import { EditableAvatar } from "../../../components/profiles/EditableAvatar";
 import { MergeDialog } from "../../../components/profiles/MergeDialog";
 import { LinkScanner } from "../../../components/profiles/LinkScanner";
 import { LinkCodeDisplay } from "../../../components/profiles/LinkCodeDisplay";
@@ -70,7 +69,7 @@ function ProfileDetailBody({
   profile,
   viewerId,
 }: {
-  profile: LocalProfile3;
+  profile: LocalProfile;
   viewerId: string | null;
 }) {
   const { t, i18n } = useTranslation();
@@ -102,7 +101,6 @@ function ProfileDetailBody({
   const ownedIndex = useOwnedProfileIndex(viewerId ?? undefined);
   const name = displayProfileName(profile, ownedIndex);
   const [mergeOpen, setMergeOpen] = useState(false);
-  const [editingPhoto, setEditingPhoto] = useState(false);
 
   const stats = useProfileStats(profile.id);
   const recent = useProfileRecentMatches(profile.id, 10);
@@ -124,61 +122,26 @@ function ProfileDetailBody({
     <>
       <Header back={{ to: "/players", label: t("nav.players") }} />
       <div className="px-5">
-        {editingPhoto && isOwner && viewerId ? (
-          // Edit mode: the uploader replaces the hero avatar block
-          // entirely, wrapped in the standard `Group` card so the
-          // boundary reads clearly against the surrounding sections.
-          // Name + badges still render below so the user keeps their
-          // sense of place.
-          <>
-            <Group title={t("avatar.title")}>
-              <AvatarUploader
-                profile={profile}
-                viewerId={viewerId}
-                onDone={() => setEditingPhoto(false)}
-              />
-            </Group>
-            <div className={styles.heroTextOnly}>
-              <h1 className={styles.title}>{name}</h1>
-              <div className={styles.heroBadges}>
-                {isSelf ? (
-                  <Pill tone="primary">{t("players.you")}</Pill>
-                ) : isLinked ? (
-                  <Pill tone="success">{t("players.linked")}</Pill>
-                ) : (
-                  <Pill tone="muted">{t("players.unclaimed")}</Pill>
-                )}
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className={styles.hero}>
-            <div className={styles.heroAvatar}>
-              <Avatar profile={profile} viewerId={viewerId} size="xl" />
-              {isOwner && (
-                <button
-                  type="button"
-                  onClick={() => setEditingPhoto(true)}
-                  className={styles.heroEditButton}
-                  aria-label={t("avatar.edit")}
-                  data-testid="profile-edit-avatar"
-                >
-                  <Icon name="pencil" size={12} />
-                </button>
-              )}
-            </div>
-            <h1 className={styles.title}>{name}</h1>
-            <div className={styles.heroBadges}>
-              {isSelf ? (
-                <Pill tone="primary">{t("players.you")}</Pill>
-              ) : isLinked ? (
-                <Pill tone="success">{t("players.linked")}</Pill>
-              ) : (
-                <Pill tone="muted">{t("players.unclaimed")}</Pill>
-              )}
-            </div>
+        <div className={styles.hero}>
+          {viewerId && (
+            <EditableAvatar
+              profile={profile}
+              viewerId={viewerId}
+              size="xl"
+              canEdit={isOwner}
+            />
+          )}
+          <h1 className={styles.title}>{name}</h1>
+          <div className={styles.heroBadges}>
+            {isSelf ? (
+              <Pill tone="primary">{t("players.you")}</Pill>
+            ) : isLinked ? (
+              <Pill tone="success">{t("players.linked")}</Pill>
+            ) : (
+              <Pill tone="muted">{t("players.unclaimed")}</Pill>
+            )}
           </div>
-        )}
+        </div>
 
         {isOwner && (
           <Group title={t("players.alias.title")}>
@@ -342,7 +305,7 @@ function LinkSection({
   isLinked,
   onMergedTo,
 }: {
-  profile: LocalProfile3;
+  profile: LocalProfile;
   viewerId: string | null;
   isOwner: boolean;
   isSelf: boolean;

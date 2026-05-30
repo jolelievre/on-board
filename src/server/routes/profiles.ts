@@ -10,6 +10,7 @@ import {
   mergeProfiles,
   ProfileMergeError,
 } from "../lib/profile-merge.js";
+import { bumpMatchesForProfile } from "../lib/profiles.js";
 import {
   createLinkToken,
   LinkTokenError,
@@ -181,7 +182,7 @@ export const profilesRoutes = new Hono<AuthEnv>()
 
     const existing = await prisma.profile.findUnique({
       where: { id },
-      select: { ownerId: true },
+      select: { ownerId: true, alias: true },
     });
     if (!existing) {
       return c.json({ error: "Profile not found" }, 404);
@@ -193,14 +194,30 @@ export const profilesRoutes = new Hono<AuthEnv>()
       return c.json({ error: "Only the owner can edit this profile" }, 403);
     }
 
+    const trimmedAlias = alias !== undefined ? alias.trim() : undefined;
+    const aliasChanged =
+      trimmedAlias !== undefined && trimmedAlias !== existing.alias;
+
     const profile = await prisma.profile.update({
       where: { id },
       data: {
-        ...(alias !== undefined ? { alias: alias.trim() } : {}),
+        ...(trimmedAlias !== undefined ? { alias: trimmedAlias } : {}),
         ...(useLinkedAvatar !== undefined ? { useLinkedAvatar } : {}),
       },
       select: profileSelect,
     });
+
+    // When the alias actually changed, bump Match.updatedAt on every
+    // Match where this profile is a player. That refreshes the
+    // embedded `Player.profile.alias` snapshot on any other device
+    // that sees those matches but doesn't own a Profile for this
+    // person — the only path that reads the snapshot. Pull-sync
+    // filters by Match.updatedAt and a profile patch doesn't touch
+    // any Match by itself, so without the bump the friend's `?since=`
+    // delta would skip those matches indefinitely.
+    if (aliasChanged) {
+      await bumpMatchesForProfile(id);
+    }
 
     return c.json(profile);
   })

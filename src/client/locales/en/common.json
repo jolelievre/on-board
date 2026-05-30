@@ -237,6 +237,11 @@
     "you": "You",
     "linked": "Linked",
     "unclaimed": "Unclaimed",
+    "addProfile": "Add profile",
+    "addProfileForm": {
+      "placeholder": "Friend's name",
+      "submit": "Add"
+    },
     "alias": {
       "title": "Display name",
       "placeholder": "e.g. Jo",

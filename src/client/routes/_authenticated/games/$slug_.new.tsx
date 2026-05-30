@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useTranslation } from "react-i18next";
 import { createId } from "@paralleldrive/cuid2";
@@ -529,6 +529,7 @@ function SlotRow({
   fallbackAvatarClass: string;
 }) {
   const { t } = useTranslation();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const pickedProfile = useLiveQuery(
     async () => (slot.profileId ? db.profiles.get(slot.profileId) : null),
@@ -553,6 +554,12 @@ function SlotRow({
   const initialChar =
     displayValue.trim().slice(0, 1).toUpperCase() || String(index + 1);
 
+  // After picking a suggestion or creating a new profile, drop focus
+  // from the input so the mobile keyboard collapses. The picker buttons
+  // already prevent the mousedown-driven blur so the chip stays
+  // clickable; this fires once the pick commits.
+  const blurInput = () => inputRef.current?.blur();
+
   return (
     <div className={styles.slot}>
       <label className={styles.label} htmlFor={`new-match-player-${index}`}>
@@ -572,6 +579,7 @@ function SlotRow({
               </span>
             )}
             <input
+              ref={inputRef}
               id={`new-match-player-${index}`}
               type="text"
               name={`player-${index}`}
@@ -625,7 +633,10 @@ function SlotRow({
               index={index}
               suggestion={s}
               viewerId={viewerId}
-              onPick={() => onPick(s.id, s.alias)}
+              onPick={() => {
+                blurInput();
+                onPick(s.id, s.alias);
+              }}
             />
           ))}
           {showCreateRow && (
@@ -638,6 +649,7 @@ function SlotRow({
                 e.preventDefault();
               }}
               onClick={() => {
+                blurInput();
                 const id = createId();
                 void createProfile({ ownerId: viewerId, alias: trimmed, id });
                 onPick(id, trimmed);

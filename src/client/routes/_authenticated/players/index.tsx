@@ -1,10 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../../lib/auth-client";
 import { useProfileList } from "../../../hooks/data/useProfiles";
-import type { LocalProfile3 } from "../../../lib/db";
+import { createProfile } from "../../../lib/mutations";
+import type { LocalProfile } from "../../../lib/db";
 import { Header } from "../../../components/layout/Header";
 import { Avatar } from "../../../components/ui/Avatar";
+import { Button } from "../../../components/ui/Button";
+import { Input } from "../../../components/ui/Input";
 import { Pill } from "../../../components/ui/Pill";
 import { Icon } from "../../../components/ui/Icon";
 import { displayProfileName } from "../../../../shared/players";
@@ -25,8 +29,13 @@ function PlayersPage() {
     <>
       <Header />
       <div className="px-5">
-        <h1 className={styles.title}>{t("players.title")}</h1>
-        <p className={styles.subtitle}>{t("players.subtitle")}</p>
+        <div className={styles.titleRow}>
+          <div>
+            <h1 className={styles.title}>{t("players.title")}</h1>
+            <p className={styles.subtitle}>{t("players.subtitle")}</p>
+          </div>
+          {viewerId && <AddProfileTrigger viewerId={viewerId} />}
+        </div>
 
         {status === "loading" && (
           <p className={styles.empty}>{t("common.loading")}</p>
@@ -52,11 +61,103 @@ function PlayersPage() {
   );
 }
 
+/**
+ * "+ Add profile" entry point. Opens an inline form for a friend's
+ * alias, creates an unclaimed Profile owned by the viewer, and jumps
+ * straight to the new profile's detail page so the user can immediately
+ * scan a friend's link code without having to start a match first.
+ */
+function AddProfileTrigger({ viewerId }: { viewerId: string }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [alias, setAlias] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const trimmed = alias.trim();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    try {
+      const { profileId } = await createProfile({
+        ownerId: viewerId,
+        alias: trimmed,
+      });
+      setAlias("");
+      setOpen(false);
+      void navigate({
+        to: "/players/$profileId",
+        params: { profileId },
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        iconBefore={<Icon name="plus" size={14} />}
+        onClick={() => setOpen(true)}
+        data-testid="players-add-profile"
+      >
+        {t("players.addProfile")}
+      </Button>
+    );
+  }
+
+  return (
+    <form
+      className={styles.addProfileForm}
+      onSubmit={(e) => void handleSubmit(e)}
+      data-testid="players-add-profile-form"
+    >
+      <Input
+        type="text"
+        autoFocus
+        value={alias}
+        onChange={(e) => setAlias(e.target.value)}
+        placeholder={t("players.addProfileForm.placeholder")}
+        data-testid="players-add-profile-input"
+        disabled={submitting}
+      />
+      <div className={styles.addProfileActions}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setAlias("");
+            setOpen(false);
+          }}
+          disabled={submitting}
+        >
+          {t("common.cancel")}
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          size="sm"
+          disabled={!trimmed || submitting}
+          data-testid="players-add-profile-submit"
+        >
+          {t("players.addProfileForm.submit")}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function ProfileRow({
   profile,
   viewerId,
 }: {
-  profile: LocalProfile3;
+  profile: LocalProfile;
   viewerId: string | null;
 }) {
   const { t } = useTranslation();
