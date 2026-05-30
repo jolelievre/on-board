@@ -935,6 +935,22 @@ Cleanest fix: on the server, when `User.alias` changes, also `Match.updatedAt = 
 
 Out of scope for the name-rendering PR that introduced `useOwnedProfileIndex` — that work makes alias edits propagate instantly *on the editor's device*; this follow-up extends the same freshness to the friend's device.
 
+#### PR 6-E follow-up: "Add profile" action on the Players tab
+
+Today the only way to create an owned profile is from the new-match form's inline-create path. That blocks the QR link flow whenever a friend wants to scan you and you haven't yet played a match with them — you have no profile of theirs to open, no scan button to tap. Add a "+ Add profile" action on `/players` that opens an inline form (or sheet) to create an unclaimed owned profile by alias, then navigates to its detail page so the user can immediately tap Show/Scan QR.
+
+#### PR 6-E follow-up: shower-side feedback when a scan needs a merge
+
+When the scanner submits a token and the server returns `merge_required` (either side), today only the scanner sees the prompt. The shower's `LinkCodeDisplay` keeps polling and keeps showing the QR with no signal that anything happened. Two cases:
+- **Scanner-side merge_required** (caller has a stale duplicate they need to merge before linking): shower should see "Your friend is sorting out their profiles — hold on" / "they need to merge on their side first before we can try again".
+- **Shower-side merge_required** (shower has a stale duplicate): scanner already shows the non-actionable error; shower should see "You need to merge profile «X» into «Y» before this link can complete" with a one-tap action to do it.
+
+Implementation sketch: extend `GET /api/profiles/:id/link-status` to also surface a `{ pendingScan: { side, existingAlias?, targetAlias? } }` field. The server keeps a short-lived (token-TTL bounded) record of the most recent failed link attempt against that source profile. `LinkCodeDisplay` reads that field on each poll and, when present, hides the QR and renders the appropriate message + action.
+
+#### PR 6-E follow-up: blur input after picker selection in the new-match form
+
+On mobile, tapping a suggestion chip or "Create profile" in the new-match form fills the slot but leaves keyboard focus on the input — the on-screen keyboard stays up and covers the next slot. Programmatically `blur()` the input on `onClick` of the suggestion / create-row so the keyboard collapses immediately.
+
 ### Critical files
 
 | File | Action |

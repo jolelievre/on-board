@@ -7,7 +7,11 @@ import {
   type LocalScore,
 } from "./db";
 import { syncEngine } from "./sync";
-import { pullSync, resetPullCursors } from "./pull-sync";
+import {
+  pullSync,
+  pruneLocalMatchesAgainstServer,
+  resetPullCursors,
+} from "./pull-sync";
 
 const nowIso = () => new Date().toISOString();
 
@@ -676,58 +680,6 @@ export async function unlinkProfile(input: {
   // friend's own device will pick up the unlink on its next
   // `/api/profiles` pull.
   await pruneLocalMatchesAgainstServer();
-}
-
-async function pruneLocalMatchesAgainstServer(): Promise<void> {
-  if (!navigator.onLine) return;
-  let visibleIds: Set<string>;
-  try {
-    const res = await fetch("/api/matches", { credentials: "include" });
-    if (!res.ok) return;
-    const list = (await res.json()) as { id: string }[];
-    visibleIds = new Set(list.map((m) => m.id));
-  } catch {
-    return;
-  }
-
-  // Anything queued for POST hasn't reached the server yet — if we
-  // pruned it, the next flush would re-create it but the local
-  // state would have flickered to empty in between. The queue
-  // entries store the path; the match id sits inside the JSON
-  // body.
-  const queued = await db.syncQueue.toArray();
-  const queuedIds = new Set<string>();
-  for (const entry of queued) {
-    if (
-      entry.url === "/api/matches" &&
-      entry.method === "POST" &&
-      entry.body
-    ) {
-      try {
-        const body = JSON.parse(entry.body) as { id?: string };
-        if (body.id) queuedIds.add(body.id);
-      } catch {
-        // Malformed queue entry — skip; the queue runner will
-        // surface the failure separately.
-      }
-    }
-  }
-
-  const localIds = (await db.matches.toCollection().primaryKeys()) as string[];
-  const stale = localIds.filter(
-    (id) => !visibleIds.has(id) && !queuedIds.has(id),
-  );
-  if (stale.length === 0) return;
-
-  await db.transaction(
-    "rw",
-    [db.matches, db.players, db.scores],
-    async () => {
-      await db.players.where("matchId").anyOf(stale).delete();
-      await db.scores.where("matchId").anyOf(stale).delete();
-      await db.matches.bulkDelete(stale);
-    },
-  );
 }
 
 export type PatchProfileInput = {

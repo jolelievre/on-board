@@ -689,6 +689,90 @@ test.describe("Profile linking (bilateral)", () => {
     }
   });
 
+  test("Unlink initiated on one side prunes the other side's /games/:slug history via pull-sync", async ({
+    browser,
+  }) => {
+    // Reproduces the manual bug: Mobile (initiator) unlinks; Desktop
+    // (didn't initiate) gets a correct profile-detail update but the
+    // /games/:slug history still shows the cross-user match because
+    // the incremental ?since= matches pull can't represent deletions.
+    // Fix: pull-sync detects the linked→unclaimed transition on the
+    // friend's profile and runs `pruneLocalMatchesAgainstServer`,
+    // which does a full /api/matches re-fetch and drops anything
+    // missing from the visible set.
+    //
+    // To keep the test deterministic against the pullSync throttle
+    // (MIN_PULL_INTERVAL_MS), we drive each pull through real
+    // navigation actions: navigate, wait for the match to land or
+    // drop, then assert.
+    const mobileCtx = await browser.newContext();
+    const desktopCtx = await browser.newContext();
+    try {
+      const userM = await signUp(mobileCtx);
+      await signUp(desktopCtx);
+      const desktopForMobile = await createUnclaimedProfile(
+        desktopCtx.request,
+        "Mobile",
+      );
+
+      const mobilePage = await mobileCtx.newPage();
+      const matchId = await createMatchViaForm(mobilePage, {
+        gameSlug: "7-wonders-duel",
+        playerNames: [userM.name, "Desktop"],
+      });
+      const mobileForDesktop = await awaitProfileWithAlias(mobileCtx, "Desktop");
+
+      await openProfile(mobilePage, mobileForDesktop);
+      await performBilateralLink({
+        ownerPage: mobilePage,
+        friendCtx: desktopCtx,
+        ownerTargetProfileId: mobileForDesktop,
+        friendSourceProfileId: desktopForMobile.id,
+      });
+
+      // Desktop opens the game history; the bilateral link makes
+      // Mobile's match visible. Force a wait until pull-sync has
+      // landed it.
+      const desktopPage = await desktopCtx.newPage();
+      await desktopPage.goto("/games/7-wonders-duel");
+      await desktopPage.waitForLoadState("domcontentloaded");
+      await expect(
+        desktopPage.locator(`[data-testid='match-history-row-${matchId}']`),
+      ).toBeVisible({ timeout: 10_000 });
+
+      // Mobile unlinks via the confirm modal — bilateral, so both
+      // sides flip server-side. Desktop's local Dexie still holds
+      // the match snapshot; only the next pull-sync can reconcile.
+      await openProfile(mobilePage, mobileForDesktop);
+      await mobilePage.click("[data-testid='profile-unlink']");
+      await mobilePage.click("[data-testid='unlink-confirm']");
+      await expect(
+        mobilePage.locator("[data-testid='profile-link-scan']"),
+      ).toBeVisible({ timeout: 5000 });
+
+      // Bridge: give the desktop session time to reach the unlinked
+      // server state by navigating away and back. Each navigation
+      // mounts `_authenticated` which triggers `pullSync({ force })`,
+      // bypassing the throttle. The first navigation flips the
+      // profile to unclaimed locally (link→unclaimed transition);
+      // the prune runs in the same pullSync call.
+      await desktopPage.goto("/players");
+      await desktopPage.waitForLoadState("domcontentloaded");
+      await desktopPage.goto("/games/7-wonders-duel");
+      await desktopPage.waitForLoadState("domcontentloaded");
+
+      // Mobile's match must be gone from Desktop's history — the
+      // bug was that it stayed because the pull-sync delta couldn't
+      // represent the deletion.
+      await expect(
+        desktopPage.locator(`[data-testid='match-history-row-${matchId}']`),
+      ).toHaveCount(0, { timeout: 10_000 });
+    } finally {
+      await mobileCtx.close();
+      await desktopCtx.close();
+    }
+  });
+
   test("Re-linking after an unlink restores bilateral visibility", async ({
     browser,
   }) => {

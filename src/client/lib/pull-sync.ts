@@ -173,7 +173,14 @@ export async function pullSync(
   // When detected we clear the matches cursor and re-pull at the end
   // — the friend's pre-link history doesn't carry a fresh
   // `Match.updatedAt`, so the `?since=` delta above would miss it.
+  //
+  // Symmetric case: a previously-linked owned profile may have lost
+  // its `linkedUserId` because the friend unlinked from their device.
+  // The matches that were only visible via that link drop out of the
+  // server's visibility filter, but the `?since=` cursor can't
+  // represent deletions — so we run a full prune after the merge.
   let linkTransitionDetected = false;
+  let unlinkTransitionDetected = false;
   const profiles = pullEntity(
     api<ApiProfile[]>(profilesUrl),
     async (rows) => {
@@ -182,7 +189,8 @@ export async function pullSync(
         [db.profiles, db.syncMeta],
         async () => {
           const transitions = await mergeProfiles(rows);
-          if (transitions) linkTransitionDetected = true;
+          if (transitions.link) linkTransitionDetected = true;
+          if (transitions.unlink) unlinkTransitionDetected = true;
           await setSyncMeta(SYNC_META_LAST_PROFILE_PULL, pulledAt);
         },
       );
@@ -198,6 +206,12 @@ export async function pullSync(
     // accept the second round-trip.
     lastPullStartedAt = 0;
     await pullSync({ force: true });
+  } else if (unlinkTransitionDetected) {
+    // Reconcile against the now-narrower visible match set. The
+    // recursive pull above would already cover the link-transition
+    // case (it re-pulls everything fresh), so we only do the explicit
+    // prune when there's no link transition to share that work.
+    await pruneLocalMatchesAgainstServer();
   }
 }
 
@@ -214,8 +228,24 @@ async function pullEntity<T>(
   }
 }
 
-async function mergeProfiles(rows: ApiProfile[]): Promise<boolean> {
-  if (rows.length === 0) return false;
+export type ProfileMergeTransitions = {
+  /** Set when a previously-unclaimed (or absent) owned profile gained a
+   * `linkedUserId`. Triggers a cursor reset + recursive full pull so
+   * the friend's pre-link match history lands. */
+  link: boolean;
+  /** Set when a previously-linked owned profile lost its `linkedUserId`
+   * (e.g. the friend unlinked from their device — we learn about it
+   * through pull-sync because *we* never called Unlink locally). The
+   * incremental `?since=` matches pull doesn't represent deletions, so
+   * the caller must run `pruneLocalMatchesAgainstServer` to drop the
+   * matches that are no longer visible. */
+  unlink: boolean;
+};
+
+async function mergeProfiles(
+  rows: ApiProfile[],
+): Promise<ProfileMergeTransitions> {
+  if (rows.length === 0) return { link: false, unlink: false };
 
   const ids = rows.map((p) => p.id);
   const existing = await db.profiles.bulkGet(ids);
@@ -226,6 +256,7 @@ async function mergeProfiles(rows: ApiProfile[]): Promise<boolean> {
 
   const toPut: LocalProfile3[] = [];
   let linkTransition = false;
+  let unlinkTransition = false;
   for (const p of rows) {
     const local = existingById.get(p.id);
     // LWW on updatedAt: skip when the local copy is at least as fresh.
@@ -245,6 +276,18 @@ async function mergeProfiles(rows: ApiProfile[]): Promise<boolean> {
     ) {
       linkTransition = true;
     }
+    // Detect linked → unclaimed transition. The friend unlinked from
+    // their device; our local copy still says "linked" but the server
+    // is returning a cleared row. Pull-sync's `?since=` cursor can't
+    // tell us which matches dropped out of visibility, so the caller
+    // must run `pruneLocalMatchesAgainstServer` to reconcile.
+    if (
+      local &&
+      local.linkedUserId !== null &&
+      p.linkedUserId === null
+    ) {
+      unlinkTransition = true;
+    }
     toPut.push({
       id: p.id,
       ownerId: p.ownerId,
@@ -259,7 +302,65 @@ async function mergeProfiles(rows: ApiProfile[]): Promise<boolean> {
     });
   }
   if (toPut.length > 0) await db.profiles.bulkPut(toPut);
-  return linkTransition;
+  return { link: linkTransition, unlink: unlinkTransition };
+}
+
+/**
+ * Reconcile the local match cache against the server's current visible
+ * set. Used when something happens that the incremental `?since=`
+ * cursor can't represent: an explicit unlink (drops matches that were
+ * only visible via the now-broken link) or pull-sync detecting that
+ * the friend unlinked from their device.
+ *
+ * Anything still pending a POST in the sync queue is preserved —
+ * pruning a not-yet-flushed match would cause the next queue flush to
+ * re-create it after a flicker to empty.
+ */
+export async function pruneLocalMatchesAgainstServer(): Promise<void> {
+  if (!navigator.onLine) return;
+  let visibleIds: Set<string>;
+  try {
+    const res = await fetch("/api/matches", { credentials: "include" });
+    if (!res.ok) return;
+    const list = (await res.json()) as { id: string }[];
+    visibleIds = new Set(list.map((m) => m.id));
+  } catch {
+    return;
+  }
+
+  const queued = await db.syncQueue.toArray();
+  const queuedIds = new Set<string>();
+  for (const entry of queued) {
+    if (
+      entry.url === "/api/matches" &&
+      entry.method === "POST" &&
+      entry.body
+    ) {
+      try {
+        const body = JSON.parse(entry.body) as { id?: string };
+        if (body.id) queuedIds.add(body.id);
+      } catch {
+        // Malformed queue entry — skip; the queue runner will surface
+        // the failure separately.
+      }
+    }
+  }
+
+  const localIds = (await db.matches.toCollection().primaryKeys()) as string[];
+  const stale = localIds.filter(
+    (id) => !visibleIds.has(id) && !queuedIds.has(id),
+  );
+  if (stale.length === 0) return;
+
+  await db.transaction(
+    "rw",
+    [db.matches, db.players, db.scores],
+    async () => {
+      await db.players.where("matchId").anyOf(stale).delete();
+      await db.scores.where("matchId").anyOf(stale).delete();
+      await db.matches.bulkDelete(stale);
+    },
+  );
 }
 
 // NOTE — server-side profile deletions (link-time merge, friend-side
