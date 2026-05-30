@@ -1,6 +1,13 @@
+/* `align-self: center` keeps the preview hugging the avatar's
+ * intrinsic width even when the parent uses `align-items: stretch`
+ * (which the hero containers do so the AvatarUploader's Group card
+ * can fill the column in edit mode). Without this the avatar would
+ * sit at the left edge and the absolutely-positioned pencil would
+ * jump to the right edge of the row. */
 .preview {
   position: relative;
   display: inline-flex;
+  align-self: center;
 }
 
 .editButton {
