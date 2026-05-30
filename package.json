@@ -25,7 +25,7 @@
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "db:test:reset": "DATABASE_URL=\"postgresql://postgres:postgres@localhost:5432/onboard_test\" prisma db push --force-reset"
+    "db:test:reset": "./scripts/test-setup.sh"
   },
   "dependencies": {
     "@fontsource/caveat": "^5.2.8",
