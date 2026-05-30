@@ -1,6 +1,6 @@
 /**
  * Captures mobile-viewport (Pixel 5) screenshots of every current screen into
- * `plan-assets/screenshots/` to ship with the Phase 3 design brief.
+ * `plan-assets/screenshots/` to ship with a design brief.
  *
  * Both themes are captured in a single run: each authenticated screen produces
  * a parchment (light, no suffix) and a candlelit (dark, `-dark` suffix) PNG.
@@ -8,17 +8,29 @@
  * Standalone — not part of the E2E test campaign. Run via:
  *   npm run screenshots
  *
- * The npm script resets the test DB first, then this script:
- *   1. Boots a fresh Vite dev server in test mode (VITE_TEST_AUTH=true, NODE_ENV=test)
- *   2. Captures the signed-out login screens in parchment
- *   3. Signs up a throwaway test user via the dev-only email/password form
- *   4. Walks the app twice (parchment then candlelit), capturing one PNG per
- *      screen per theme. The theme is flipped via the real Settings toggle so
- *      the change persists server-side and the session-sync effect doesn't
- *      fight a localStorage-only override.
- *   5. Signs out and captures the login screens in candlelit
- *      (localStorage carries the theme across the sign-out)
- *   6. Tears the dev server down
+ * Flow:
+ *   1. Boots a fresh Vite dev server in test mode (VITE_TEST_AUTH=true).
+ *   2. Stubs `navigator.mediaDevices.getUserMedia` with a canvas-driven
+ *      stream so the avatar uploader's camera view and the link scanner's
+ *      QR viewport render without real camera hardware.
+ *   3. Captures the signed-out login screens in parchment.
+ *   4. Signs up a throwaway user, then seeds friend profiles + completed
+ *      matches across both games via the API so that:
+ *        - Players tab shows multiple rows
+ *        - Profile detail shows stats + recent matches
+ *        - "Played with" chips appear on the new-match form
+ *        - Game detail shows match history
+ *   5. Walks the app twice (parchment then candlelit), capturing every
+ *      screen per theme. Theme + language are flipped via the real
+ *      Settings pills so changes persist server-side.
+ *   6. Captures the signed-out login screens in candlelit.
+ *   7. Tears the dev server down.
+ *
+ * Numbering groups screens by area so the design session has a natural
+ * reading order: 01 login → 02 games → 03 game detail → 04-05 new-match
+ * → 06-08 7WD scoring → 09 7WD history → 10-11 Skull King → 12 SK history
+ * → 13-14 Players → 15 profile detail → 16-17 avatar editor
+ * → 18-19 link surfaces → 20 merge dialog → 21-23 settings.
  */
 
 import { chromium, devices, type Page } from "playwright";
@@ -37,6 +49,11 @@ const PASSES: ReadonlyArray<{ theme: Theme; suffix: string }> = [
   { theme: "parchment", suffix: "" },
   { theme: "candlelit", suffix: "-dark" },
 ];
+
+const FRIEND_ALIASES = ["Alice", "Bob", "Charlie", "Diana"] as const;
+
+type SeededFriend = { id: string; alias: string };
+type SeededGame = { id: string; slug: string };
 
 async function waitForPort(port: number, timeoutMs = 30_000) {
   const start = Date.now();
@@ -91,10 +108,7 @@ async function shoot(page: Page, name: string) {
   });
 }
 
-// Click a PillSwitch radio button by its visible label. Used for both the
-// language and theme toggles on /settings, which both render as
-// `button[role='radio']` with stable label text (English/Français and, when
-// the UI is in English, Parchment/Candlelit).
+// Click a PillSwitch radio button by its visible label.
 async function clickPillOption(page: Page, label: string) {
   const button = page
     .locator("button[role='radio']", { hasText: new RegExp(`^${label}$`) })
@@ -105,14 +119,12 @@ async function clickPillOption(page: Page, label: string) {
 
 async function ensureLanguage(page: Page, lang: "en" | "fr") {
   await clickPillOption(page, lang === "en" ? "English" : "Français");
-  // i18next swap is sync but DOM updates land on next tick.
   await page.waitForTimeout(200);
 }
 
 async function ensureTheme(page: Page, theme: Theme) {
   const current = await page.evaluate(() => document.documentElement.dataset.theme);
   if (current === theme) return;
-  // ThemeToggle labels are translated; only stable when the UI is in English.
   await clickPillOption(page, theme === "parchment" ? "Parchment" : "Candlelit");
   await page.waitForFunction(
     (t) => document.documentElement.dataset.theme === t,
@@ -132,17 +144,140 @@ async function signUp(page: Page) {
   await page.waitForURL(`${BASE_URL}/games`, { timeout: 10_000 });
 }
 
+/**
+ * Seed friend profiles + completed past matches via the API. Runs in
+ * the signed-in browser context so cookies stick. After this returns
+ * we reload the SPA so Dexie pulls everything we just wrote.
+ */
+async function seedData(
+  page: Page,
+): Promise<{ friends: SeededFriend[]; games: Record<string, SeededGame> }> {
+  const req = page.context().request;
+  const friends: SeededFriend[] = [];
+  for (const alias of FRIEND_ALIASES) {
+    const res = await req.post("/api/profiles", { data: { alias } });
+    if (!res.ok()) throw new Error(`seed createProfile(${alias}) ${res.status()}`);
+    const body = (await res.json()) as { id: string };
+    friends.push({ id: body.id, alias });
+  }
+
+  const games: Record<string, SeededGame> = {};
+  for (const slug of ["7-wonders-duel", "skull-king"]) {
+    const res = await req.get(`/api/games/${slug}`);
+    const game = (await res.json()) as { id: string; slug: string };
+    games[slug] = { id: game.id, slug: game.slug };
+  }
+
+  // Two completed 7WD matches → game detail history populated +
+  // played-with chips on the new-match form. Different player pairings
+  // so the chip row shows multiple groupings.
+  await playCompletedMatch(page, games["7-wonders-duel"].id, [friends[0], friends[1]], "7wd");
+  await playCompletedMatch(page, games["7-wonders-duel"].id, [friends[0], friends[2]], "7wd");
+
+  // One completed Skull King match → SK game detail history populated.
+  await playCompletedMatch(
+    page,
+    games["skull-king"].id,
+    [friends[0], friends[1], friends[2]],
+    "sk",
+  );
+
+  await page.goto(`${BASE_URL}/games`);
+  await page.waitForLoadState("domcontentloaded");
+
+  return { friends, games };
+}
+
+/**
+ * Create + complete a past match via API. Hardcoded scores per game
+ * type — the scorer's exact category names don't matter for the
+ * design brief; what matters is that the match shows up as completed
+ * in history with a winner.
+ */
+async function playCompletedMatch(
+  page: Page,
+  gameId: string,
+  players: SeededFriend[],
+  kind: "7wd" | "sk",
+) {
+  const req = page.context().request;
+  const matchRes = await req.post("/api/matches", {
+    data: {
+      gameId,
+      players: players.map((p, i) => ({ profileId: p.id, position: i })),
+    },
+  });
+  if (!matchRes.ok()) {
+    throw new Error(`seed createMatch ${matchRes.status()} ${await matchRes.text()}`);
+  }
+  const match = (await matchRes.json()) as {
+    id: string;
+    players: { id: string; profileId: string }[];
+  };
+
+  const scoreRows: { playerId: string; category: string; value: number }[] = [];
+  if (kind === "7wd") {
+    // Two seats. Seat 0 wins.
+    const cats = [
+      { c: "civil", a: 12, b: 4 },
+      { c: "scientific", a: 6, b: 9 },
+      { c: "wonders", a: 5, b: 3 },
+      { c: "treasury", a: 4, b: 2 },
+      { c: "commercial", a: 3, b: 1 },
+    ];
+    for (const { c, a, b } of cats) {
+      scoreRows.push({ playerId: match.players[0].id, category: c, value: a });
+      scoreRows.push({ playerId: match.players[1].id, category: c, value: b });
+    }
+  } else {
+    // Skull King: 10 round totals per player. Single "round-N" category
+    // per row matches what the scorer persists; design only needs the
+    // match-complete winner banner + history row.
+    const totals = [
+      [20, 30, -10, 40, 60, 30, 40, 70, 50, 80], // winner
+      [10, 20, 30, 20, 30, 40, 20, 30, 50, 30],
+      [10, -10, 20, 30, -20, 30, 30, 40, 20, 60],
+    ];
+    for (let pi = 0; pi < players.length; pi++) {
+      for (let r = 0; r < 10; r++) {
+        scoreRows.push({
+          playerId: match.players[pi].id,
+          category: `round-${r + 1}`,
+          value: totals[pi][r],
+        });
+      }
+    }
+  }
+
+  const scoreRes = await req.patch(`/api/matches/${match.id}/scores`, {
+    data: { scores: scoreRows },
+  });
+  if (!scoreRes.ok()) {
+    throw new Error(`seed PATCH scores ${scoreRes.status()} ${await scoreRes.text()}`);
+  }
+
+  const putRes = await req.put(`/api/matches/${match.id}`, {
+    data: {
+      status: "COMPLETED",
+      // 2-5 days ago so the timestamps look real and distinct.
+      completedAt: new Date(
+        Date.now() - (2 + Math.floor(Math.random() * 4)) * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+    },
+  });
+  if (!putRes.ok()) {
+    throw new Error(`seed PUT match ${putRes.status()} ${await putRes.text()}`);
+  }
+}
+
 async function captureLoginScreens(page: Page, suffix: string) {
   await page.context().clearCookies();
   await page.goto(BASE_URL);
   await page.waitForLoadState("domcontentloaded");
   await page.waitForSelector("h1");
 
-  // (a) dev variant — the email/password form actually rendered here.
   await shoot(page, `01-login-dev${suffix}`);
 
-  // (b) production variant — swap the test form for the real Google button
-  // via DOM only, so the design session sees what real users encounter.
   await page.evaluate(() => {
     const form = document.querySelector("form");
     if (!form) return;
@@ -156,24 +291,59 @@ async function captureLoginScreens(page: Page, suffix: string) {
   await shoot(page, `01-login-prod${suffix}`);
 }
 
-async function captureScoringFlow(page: Page, suffix: string) {
+async function captureGamesAndNewMatch(
+  page: Page,
+  suffix: string,
+  friends: SeededFriend[],
+) {
+  await page.goto(`${BASE_URL}/games`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("h1");
+  await shoot(page, `02-games-list${suffix}`);
+
+  await page.goto(`${BASE_URL}/games/7-wonders-duel`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='new-match-button']");
+  await shoot(page, `03-game-detail-7wd${suffix}`);
+
+  await page.goto(`${BASE_URL}/games/7-wonders-duel/new`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='new-match-player-0']");
+  // Empty form; played-with chips show because seed populated them.
+  await shoot(page, `04-new-match-form${suffix}`);
+
+  // Focus an input and type a letter so the picker opens and shows
+  // suggestion chips from the seeded profiles. Use the first letter of
+  // the second friend so we get a clear single-match suggestion.
+  const probe = friends[1].alias.slice(0, 1);
+  await page.fill("[data-testid='new-match-player-0']", probe);
+  await page.focus("[data-testid='new-match-player-0']");
+  await page.waitForSelector("[data-testid='new-match-suggestions-0']");
+  await page.waitForTimeout(200);
+  await shoot(page, `05-new-match-picker${suffix}`);
+  // Reset before moving on.
+  await page.fill("[data-testid='new-match-player-0']", "");
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+}
+
+async function captureSevenWondersFlow(page: Page, suffix: string) {
   const p1 = "Alice";
   const p2 = "Bob";
 
   await page.goto(`${BASE_URL}/games/7-wonders-duel/new`);
   await page.waitForLoadState("domcontentloaded");
+  // Use raw filling — when the input matches a seeded profile alias
+  // exactly, the submit handler resolves it to the existing Profile
+  // (no duplicate). Blur before submit so the picker collapses.
   await page.fill("[data-testid='new-match-player-0']", p1);
+  await page.locator("[data-testid='new-match-player-0']").blur();
   await page.fill("[data-testid='new-match-player-1']", p2);
-  // Dismiss the autocomplete dropdown that opened on the last filled input —
-  // its chips appear below the input and shift layout while the click
-  // resolves, which can race the submit click in pass 2 where prior players
-  // have populated the suggestions list.
   await page.locator("[data-testid='new-match-player-1']").blur();
   await page.click("[data-testid='new-match-submit']");
   await page.waitForURL(/\/matches\/[a-z0-9-]+/i);
   await page.waitForSelector("[data-testid^='score-grid-player-']");
 
-  await shoot(page, `05-scoring-empty${suffix}`);
+  await shoot(page, `06-7wd-scoring-empty${suffix}`);
 
   const playerId = (name: string) =>
     page
@@ -203,67 +373,274 @@ async function captureScoringFlow(page: Page, suffix: string) {
   await fill(p2Id, "guilds", 4);
   await fill(p2Id, "military", 2);
 
-  await page.waitForFunction(
-    () =>
-      document
-        .querySelector("[data-testid='save-status']")
-        ?.getAttribute("data-status") === "saved",
-    { timeout: 5_000 },
-  );
+  // Wait for the queue to drain. SyncStatus renders nothing while idle,
+  // shows "saving" mid-flight, briefly "saved", then unmounts again —
+  // any of "missing" / "saved" / "idle" means the score writes landed.
+  await page
+    .waitForFunction(
+      () => {
+        const el = document.querySelector("[data-testid='sync-status']");
+        if (!el) return true;
+        return el.getAttribute("data-status") !== "saving";
+      },
+      { timeout: 5_000 },
+    )
+    .catch(() => {});
 
-  await shoot(page, `06-scoring-filled${suffix}`);
+  await shoot(page, `07-7wd-scoring-filled${suffix}`);
 
   await page.click("[data-testid='complete-match']");
   await page.waitForSelector("[data-testid='winner-banner']");
-  await shoot(page, `07-match-completed${suffix}`);
+  await shoot(page, `08-7wd-match-completed${suffix}`);
 
   await page.click("[data-testid='back-to-game']");
   await page.waitForURL(`${BASE_URL}/games/7-wonders-duel`);
   await page.waitForSelector("[data-testid='match-history']");
-  await shoot(page, `08-game-detail-with-history${suffix}`);
+  await shoot(page, `09-7wd-history${suffix}`);
 }
 
-async function captureAuthScreens(page: Page, theme: Theme, suffix: string) {
-  // Establish baseline: English language (so the theme button labels are
-  // stable) and the requested theme. Both pill toggles live on /settings.
+async function captureSkullKingFlow(page: Page, suffix: string) {
+  // New SK match. Three players so the seating screen shows non-trivial
+  // rows; reuse the seeded profiles by alias.
+  await page.goto(`${BASE_URL}/games/skull-king/new`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='new-match-player-0']");
+
+  // SK minimum is 2 players; add a third row, then fill three aliases.
+  const aliases = ["Alice", "Bob", "Charlie"];
+  // The form starts at minPlayers (2). Add until we have 3 rows.
+  while (
+    (await page.locator("[data-testid^='new-match-player-']").count()) <
+    aliases.length
+  ) {
+    await page.click("[data-testid='new-match-add-player']");
+  }
+  for (let i = 0; i < aliases.length; i++) {
+    await page.fill(`[data-testid='new-match-player-${i}']`, aliases[i]);
+    await page.locator(`[data-testid='new-match-player-${i}']`).blur();
+  }
+  await page.click("[data-testid='new-match-submit']");
+  await page.waitForURL(/\/matches\/[a-z0-9-]+/i);
+  await page.waitForSelector("[data-testid='sk-match-start']");
+  await shoot(page, `10-sk-match-start${suffix}`);
+
+  // Tap into bidding for round 1.
+  await page.click("[data-testid='sk-match-start-cta']");
+  await page.waitForSelector("[data-testid='sk-bid']");
+  await page.waitForTimeout(150);
+  await shoot(page, `11-sk-bidding${suffix}`);
+
+  // Back to game detail (history shows the seeded completed match).
+  await page.goto(`${BASE_URL}/games/skull-king`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='match-history']");
+  await shoot(page, `12-sk-history${suffix}`);
+}
+
+async function capturePlayersAndProfile(
+  page: Page,
+  suffix: string,
+  friends: SeededFriend[],
+) {
+  await page.goto(`${BASE_URL}/players`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='players-list']");
+  await shoot(page, `13-players-list${suffix}`);
+
+  // "+Add profile" expanded.
+  await page.click("[data-testid='players-add-profile']");
+  await page.waitForSelector("[data-testid='players-add-profile-form']");
+  await page.fill("[data-testid='players-add-profile-input']", "New friend");
+  await page.waitForTimeout(120);
+  await shoot(page, `14-players-add-profile${suffix}`);
+  // Close without submitting so we don't accumulate spurious profiles.
+  await page.keyboard.press("Escape").catch(() => {});
+  // The form doesn't bind Escape; fall back to reloading the list.
+  await page.goto(`${BASE_URL}/players`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='players-list']");
+
+  // Profile detail for first friend — fully populated (stats + recent).
+  const target = friends[0];
+  await page.goto(`${BASE_URL}/players/${target.id}`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='profile-edit-avatar']");
+  await page.waitForTimeout(200);
+  await shoot(page, `15-profile-detail${suffix}`);
+}
+
+async function captureAvatarUploader(page: Page, suffix: string, friend: SeededFriend) {
+  await page.goto(`${BASE_URL}/players/${friend.id}`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='profile-edit-avatar']");
+
+  // Open the editor.
+  await page.click("[data-testid='profile-edit-avatar']");
+  await page.waitForSelector("[data-testid='avatar-uploader']");
+  await page.waitForTimeout(150);
+  await shoot(page, `16-avatar-uploader-idle${suffix}`);
+
+  // Camera mode. The stubbed getUserMedia returns a canvas stream;
+  // wait for the video element to start playing before screenshotting.
+  await page.click("[data-testid='avatar-open-camera']");
+  await page.waitForSelector("[data-testid='avatar-camera-capture']");
+  await page.waitForFunction(() => {
+    const v = document.querySelector("video");
+    return v instanceof HTMLVideoElement && v.readyState >= 2;
+  }, { timeout: 5_000 }).catch(() => { /* still capture even if readyState stalls */ });
+  await page.waitForTimeout(400);
+  await shoot(page, `17-avatar-uploader-camera${suffix}`);
+
+  // Exit cleanly so the camera shuts down before the next screen.
+  await page.click("[data-testid='avatar-camera-cancel']");
+  await page.click("[data-testid='avatar-done']").catch(() => {});
+}
+
+async function captureLinkSurfaces(page: Page, suffix: string, friend: SeededFriend) {
+  await page.goto(`${BASE_URL}/players/${friend.id}`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='profile-link-show']");
+
+  // QR display.
+  await page.click("[data-testid='profile-link-show']");
+  // QR is drawn into a canvas once the /link-token POST resolves.
+  await page.waitForFunction(() => {
+    const c = document.querySelector("canvas");
+    if (!(c instanceof HTMLCanvasElement)) return false;
+    const ctx = c.getContext("2d");
+    if (!ctx) return false;
+    try {
+      const d = ctx.getImageData(0, 0, c.width, c.height).data;
+      // Any non-transparent pixel means the QR has rendered.
+      for (let i = 3; i < d.length; i += 1024) if (d[i] !== 0) return true;
+      return false;
+    } catch {
+      // Stub canvases without a real backing context — still proceed.
+      return true;
+    }
+  }, { timeout: 5_000 }).catch(() => { /* capture anyway */ });
+  await page.waitForTimeout(200);
+  await shoot(page, `18-link-code-display${suffix}`);
+
+  // Back out and open scanner.
+  await page.goto(`${BASE_URL}/players/${friend.id}`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='profile-link-scan']");
+  await page.click("[data-testid='profile-link-scan']");
+  await page.waitForSelector("[data-testid='link-scanner']");
+  await page.waitForTimeout(800);
+  // qr-scanner doesn't reliably attach the chromium fake-device stream
+  // to its <video> in headless runs — its `start()` resolves cleanly
+  // but the element ends up with no srcObject. For screenshot purposes
+  // we don't need the QR-decode pipeline, just a viewport that looks
+  // like a live camera, so we paint one in directly when qr-scanner
+  // has left it empty.
+  await page
+    .evaluate(async () => {
+      const video = document.querySelector(
+        "[data-testid='link-scanner'] video",
+      ) as HTMLVideoElement | null;
+      if (!video || video.srcObject) return;
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
+      await video.play();
+    })
+    .catch(() => { /* capture anyway */ });
+  await page
+    .waitForFunction(
+      () => {
+        const v = document.querySelector(
+          "[data-testid='link-scanner'] video",
+        ) as HTMLVideoElement | null;
+        return !!v && v.readyState >= 2 && v.videoWidth > 0;
+      },
+      { timeout: 4_000 },
+    )
+    .catch(() => { /* capture anyway */ });
+  await page.waitForTimeout(400);
+  await shoot(page, `19-link-scanner${suffix}`);
+
+  // Exit scanner.
+  await page.goto(`${BASE_URL}/players/${friend.id}`);
+  await page.waitForLoadState("domcontentloaded");
+}
+
+async function captureMergeDialog(page: Page, suffix: string, friend: SeededFriend) {
+  await page.goto(`${BASE_URL}/players/${friend.id}`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='profile-merge-action']");
+  await page.click("[data-testid='profile-merge-action']");
+  await page.waitForSelector("[role='dialog']").catch(() => {});
+  await page.waitForTimeout(200);
+  await shoot(page, `20-merge-dialog${suffix}`);
+  await page.keyboard.press("Escape");
+}
+
+async function captureSettings(page: Page, theme: Theme, suffix: string) {
+  await page.goto(`${BASE_URL}/settings`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("h1");
+  // Re-assert theme + English in case prior steps changed them. Theme
+  // pill labels are stable when the UI is in English.
+  await ensureLanguage(page, "en");
+  await ensureTheme(page, theme);
+  await page.waitForSelector("[data-testid='profile-edit-avatar']");
+  await shoot(page, `21-settings${suffix}`);
+
+  // Open the avatar editor on the self-Profile — this is the only path
+  // where the linked-avatar toggle is visible (self-Profile is linked
+  // to the viewer), so the screenshot captures a distinct UI state.
+  await page.click("[data-testid='profile-edit-avatar']");
+  await page.waitForSelector("[data-testid='avatar-uploader']");
+  await page.waitForTimeout(150);
+  await shoot(page, `22-settings-avatar-editing${suffix}`);
+  await page.click("[data-testid='avatar-done']").catch(() => {});
+
+  await ensureLanguage(page, "fr");
+  await shoot(page, `23-settings-french${suffix}`);
+  await ensureLanguage(page, "en");
+}
+
+async function captureAuthPass(
+  page: Page,
+  theme: Theme,
+  suffix: string,
+  friends: SeededFriend[],
+) {
+  // Baseline: English + requested theme via Settings pills.
   await page.goto(`${BASE_URL}/settings`);
   await page.waitForLoadState("domcontentloaded");
   await page.waitForSelector("h1");
   await ensureLanguage(page, "en");
   await ensureTheme(page, theme);
 
-  await page.goto(`${BASE_URL}/games`);
-  await page.waitForLoadState("domcontentloaded");
-  await page.waitForSelector("h1");
-  await shoot(page, `02-games-list${suffix}`);
+  await captureGamesAndNewMatch(page, suffix, friends);
+  await captureSevenWondersFlow(page, suffix);
+  await captureSkullKingFlow(page, suffix);
+  await capturePlayersAndProfile(page, suffix, friends);
+  await captureAvatarUploader(page, suffix, friends[0]);
+  await captureLinkSurfaces(page, suffix, friends[0]);
+  await captureMergeDialog(page, suffix, friends[0]);
+  await captureSettings(page, theme, suffix);
+}
 
-  await page.goto(`${BASE_URL}/games/7-wonders-duel`);
-  await page.waitForLoadState("domcontentloaded");
-  await page.waitForSelector("[data-testid='new-match-button']");
-  await shoot(page, `03-game-detail-empty${suffix}`);
-
-  await page.goto(`${BASE_URL}/games/7-wonders-duel/new`);
-  await page.waitForLoadState("domcontentloaded");
-  await page.waitForSelector("[data-testid='new-match-player-0']");
-  await shoot(page, `04-new-match-form${suffix}`);
-
-  await captureScoringFlow(page, suffix);
-
-  await page.goto(`${BASE_URL}/settings`);
-  await page.waitForLoadState("domcontentloaded");
-  await page.waitForSelector("h1");
-  await shoot(page, `09-settings${suffix}`);
-
-  await ensureLanguage(page, "fr");
-  await shoot(page, `10-settings-french${suffix}`);
-
-  // Reset language so the next pass (or the post-loop login capture) starts
-  // from a known English baseline.
-  await ensureLanguage(page, "en");
+async function clearOutDir() {
+  // Wipe so renumbered set doesn't sit next to orphaned old files.
+  try {
+    const entries = await fs.readdir(OUT_DIR);
+    await Promise.all(
+      entries
+        .filter((f) => f.endsWith(".png"))
+        .map((f) => fs.unlink(path.join(OUT_DIR, f))),
+    );
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
 }
 
 async function main() {
   await fs.mkdir(OUT_DIR, { recursive: true });
+  await clearOutDir();
   await killPort(PORT);
 
   console.log("Starting dev server (test mode)…");
@@ -274,24 +651,37 @@ async function main() {
     await waitForPort(PORT);
     console.log("Dev server ready. Launching browser…");
 
-    browser = await chromium.launch();
-    const ctx = await browser.newContext({ ...devices["Pixel 5"] });
+    // `--use-fake-device-for-media-stream` injects a built-in synthetic
+    // video stream so `getUserMedia` resolves without real camera
+    // hardware, with `--use-fake-ui-for-media-stream` auto-granting the
+    // permission. This drives both the avatar uploader's camera mode
+    // and the QR scanner's viewport. The canvas-based stub previously
+    // tried in `stubCamera` doesn't survive the video element's
+    // `play()` promise reliably.
+    browser = await chromium.launch({
+      args: [
+        "--use-fake-ui-for-media-stream",
+        "--use-fake-device-for-media-stream",
+      ],
+    });
+    const ctx = await browser.newContext({
+      ...devices["Pixel 5"],
+      baseURL: BASE_URL,
+      permissions: ["camera"],
+    });
     const page = await ctx.newPage();
 
-    // Signed-out, parchment (default theme on a fresh visit).
     await captureLoginScreens(page, "");
-
-    // Sign up — server defaults user.theme to "parchment".
     await signUp(page);
 
-    // Authenticated screens, both themes.
+    console.log("Seeding profiles + completed matches…");
+    const { friends } = await seedData(page);
+
     for (const { theme, suffix } of PASSES) {
-      await captureAuthScreens(page, theme, suffix);
+      console.log(`Pass: ${theme}`);
+      await captureAuthPass(page, theme, suffix, friends);
     }
 
-    // Signed-out, candlelit. The Settings toggle persisted candlelit to
-    // localStorage; clearing cookies in captureLoginScreens drops the session
-    // but keeps localStorage, so the login page renders in dark.
     await captureLoginScreens(page, "-dark");
 
     console.log(`Captured screenshots into ${OUT_DIR}`);
