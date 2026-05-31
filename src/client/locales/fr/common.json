@@ -246,6 +246,9 @@
       "placeholder": "Nom de l'ami(e)",
       "submit": "Ajouter"
     },
+    "editProfile": {
+      "title": "Modifier le profil"
+    },
     "alias": {
       "title": "Nom affiché",
       "placeholder": "ex. Jo",
@@ -307,7 +310,7 @@
     }
   },
   "studio": {
-    "eyebrow": "MODIFIER LE PROFIL",
+    "eyebrow": "MODIFIER LA PHOTO",
     "currentStamp": "VOTRE TIMBRE ACTUEL",
     "noPhotoYet": "PAS ENCORE DE PHOTO",
     "newPhoto": {

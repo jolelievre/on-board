@@ -2,6 +2,7 @@
  * Per-screen styles live in their own `.module.css` files. */
 
 .root {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -19,10 +20,18 @@
   margin: 0;
 }
 
-.hubFooter {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 4px;
+/* Done button — absolutely anchored to the studio root's top-right
+ * corner so it sits visibly outside the in-flow Hub content and
+ * doesn't visually wedge between the avatar and any sibling sections
+ * (alias / link / merge) inside the ProfileEditPanel wrapping Group.
+ * Tighter padding than the default Button.sm to keep the corner
+ * footprint small. */
+.doneButton {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0.3rem 0.65rem;
+  z-index: 2;
 }
 
 /* Shared header eyebrow used by every studio screen — uppercase mono

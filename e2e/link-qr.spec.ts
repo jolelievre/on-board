@@ -92,9 +92,24 @@ async function createMatchViaForm(
   return id;
 }
 
-async function openProfile(page: Page, profileId: string) {
+async function openProfile(
+  page: Page,
+  profileId: string,
+  { enterEditor = true }: { enterEditor?: boolean } = {},
+) {
   await page.goto(`/players/${profileId}`);
   await page.waitForLoadState("domcontentloaded");
+  if (!enterEditor) return;
+  // Every link / unlink / merge / alias affordance now lives inside
+  // the profile editor — click the pencil to open it. Tests that
+  // only inspect the read-only profile view (e.g. match history
+  // rendering) pass `enterEditor: false`.
+  const pencil = page.locator("[data-testid='profile-edit-avatar']");
+  await expect(pencil).toBeVisible({ timeout: 10_000 });
+  await pencil.click();
+  await expect(page.locator("[data-testid='profile-editor']")).toBeVisible({
+    timeout: 5_000,
+  });
 }
 
 /**

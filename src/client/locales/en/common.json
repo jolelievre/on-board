@@ -246,6 +246,9 @@
       "placeholder": "Friend's name",
       "submit": "Add"
     },
+    "editProfile": {
+      "title": "Edit profile"
+    },
     "alias": {
       "title": "Display name",
       "placeholder": "e.g. Jo",
@@ -307,7 +310,7 @@
     }
   },
   "studio": {
-    "eyebrow": "EDIT PROFILE",
+    "eyebrow": "EDIT PHOTO",
     "currentStamp": "YOUR CURRENT STAMP",
     "noPhotoYet": "NO PHOTO YET",
     "newPhoto": {

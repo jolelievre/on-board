@@ -7,7 +7,6 @@ import type {
 import { Avatar } from "../../ui/Avatar";
 import { Icon } from "../../ui/Icon";
 import { patchProfile } from "../../../lib/mutations";
-import shared from "./Studio.module.css";
 import styles from "./StudioHub.module.css";
 
 type Props = {
@@ -19,28 +18,28 @@ type Props = {
   onNewPhoto: () => void;
   onFromGallery: () => void;
   onStyleStamp: () => void;
-  onClearPhoto: () => void;
 };
 
 /**
- * Phase 7 (revised) — Capture Studio Hub. Compact layout: large stamp
- * preview at the top with a pencil overlay that opens the Style screen,
- * plus a 2-column grid of icon buttons for source actions.
+ * Capture Studio Hub. Compact layout: large stamp preview on top,
+ * 2-column icon grid of source actions underneath.
  *
- * Buttons rendered (in order):
- *   1. **Camera** — always available
- *   2. **Gallery** — always available
- *   3. **Online account photo** — when the profile is linked (uses the
- *      generic `globe` icon so the affordance generalizes to other
- *      providers in the future). Switches `useLinkedAvatar = true`.
- *   4. **Monogram letter** — when a custom photo exists (renders the
- *      alias's first letter inside the button so the result is obvious
- *      at a glance). Clears the photo + sets `useLinkedAvatar = false`
- *      so the Avatar falls back to the initial-letter chip.
+ * Action buttons (in order):
+ *   1. **Photo** — open the camera.
+ *   2. **Gallery** — native file picker → reposition.
+ *   3. **Account** — only on linked profiles. Acts as a TOGGLE between
+ *      the linked Google photo and the custom upload (preserves
+ *      `customAvatarUrl`, flips `useLinkedAvatar`). The button's
+ *      `aria-pressed` flips with the current state so the same icon
+ *      is both visible and indicates which side is active.
+ *   4. **Style** — opens the Style screen (frame + ring picker). Was
+ *      previously a small sparkle overlay on the preview avatar; promoted
+ *      to a first-class grid button per the feedback round so the
+ *      Style affordance is consistent with the other source actions.
  *
- * The earlier stacked action rows + "Use friend's photo" toggle row are
- * gone — the online-account button is the new affordance for the same
- * state change, and the layout footprint shrinks accordingly.
+ * The earlier "Initial" monogram clear-photo button is gone — the
+ * Account toggle replaces it for linked profiles, and unlinked
+ * profiles re-upload to change the photo.
  */
 export function StudioHub({
   profile,
@@ -51,61 +50,32 @@ export function StudioHub({
   onNewPhoto,
   onFromGallery,
   onStyleStamp,
-  onClearPhoto,
 }: Props) {
   const { t } = useTranslation();
 
-  const hasCustomPhoto = Boolean(profile.customAvatarUrl);
   const hasLinkedAccount =
     profile.linkedUserId !== null && profile.linkedUser !== null;
-  // The monogram fallback is the initial-letter chip — show only when
-  // a custom photo exists (the user has something to clear).
-  const showMonogramButton = hasCustomPhoto;
-  // The "use account photo" affordance only makes sense when the
-  // profile is linked (and not already preferring the linked photo).
-  const showAccountButton = hasLinkedAccount && !profile.useLinkedAvatar;
+  const showAccountToggle = hasLinkedAccount;
+  const accountActive = profile.useLinkedAvatar;
 
-  // Monogram preview char — mirrors the initial-letter fallback drawn
-  // by `<Avatar>` so the button literally shows what choosing it will
-  // produce. Defensive fallback for an empty alias keeps render safe.
-  const initial = (profile.alias.trim()[0] ?? "?").toUpperCase();
-
-  const handleUseLinkedAvatar = () => {
-    void patchProfile({ profileId: profile.id, useLinkedAvatar: true });
+  const handleToggleAccount = () => {
+    void patchProfile({
+      profileId: profile.id,
+      useLinkedAvatar: !accountActive,
+    });
   };
 
   return (
     <div className={styles.root}>
-      <header className={styles.header}>
-        <span className={shared.eyebrow}>{t("studio.eyebrow")}</span>
-      </header>
-
       <div className={styles.previewBlock}>
-        <span className={styles.previewWrap}>
-          <Avatar
-            profile={profile}
-            viewerId={viewerId}
-            size="lg"
-            frame={previewFrame}
-            ring={previewRing}
-            className={styles.preview}
-          />
-          {/* Sparkle overlay — opens the Style screen. Sparkle (not
-              pencil) per the design handoff; pencil is reserved for
-              the EditableAvatar "enter edit mode" affordance one
-              level up. The Style screen lets the user adjust the
-              frame/ring of the initial-letter fallback too. */}
-          <button
-            type="button"
-            className={styles.styleEdit}
-            onClick={onStyleStamp}
-            disabled={isSubmitting}
-            aria-label={t("studio.styleStamp.title")}
-            data-testid="studio-style-stamp"
-          >
-            <Icon name="sparkle" size={16} />
-          </button>
-        </span>
+        <Avatar
+          profile={profile}
+          viewerId={viewerId}
+          size="lg"
+          frame={previewFrame}
+          ring={previewRing}
+          className={styles.preview}
+        />
         <span className={styles.alias}>{profile.alias}</span>
       </div>
 
@@ -128,57 +98,61 @@ export function StudioHub({
           <Icon name="image" size={30} />
         </ActionButton>
 
-        {showAccountButton && (
+        {showAccountToggle && (
           <ActionButton
-            onClick={handleUseLinkedAvatar}
+            onClick={handleToggleAccount}
             disabled={isSubmitting}
             label={t("studio.useAccount.title")}
             testid="studio-use-account"
+            pressed={accountActive}
           >
             <Icon name="globe" size={30} />
           </ActionButton>
         )}
 
-        {showMonogramButton && (
-          <ActionButton
-            onClick={onClearPhoto}
-            disabled={isSubmitting}
-            label={t("studio.useMonogram.title")}
-            testid="studio-clear-photo"
-          >
-            <span className={styles.monogramGlyph} aria-hidden="true">
-              {initial}
-            </span>
-          </ActionButton>
-        )}
+        <ActionButton
+          onClick={onStyleStamp}
+          disabled={isSubmitting}
+          label={t("studio.styleStamp.title")}
+          testid="studio-style-stamp"
+        >
+          <Icon name="sparkle" size={30} />
+        </ActionButton>
       </div>
     </div>
   );
 }
 
 /** Hub action button — stacks the icon over a short caption so the
- * affordance reads in one glance. The accessible label and tooltip
- * mirror the visible caption. */
+ * affordance reads in one glance. `pressed` turns the button into a
+ * toggle (Account uses this — the icon stays the same, the active
+ * state is conveyed by `aria-pressed` + a visual highlight). */
 function ActionButton({
   onClick,
   disabled,
   label,
   testid,
+  pressed,
   children,
 }: {
   onClick: () => void;
   disabled?: boolean;
   label: string;
   testid: string;
+  pressed?: boolean;
   children: React.ReactNode;
 }) {
+  const className = pressed
+    ? `${styles.actionButton} ${styles.actionButtonPressed}`
+    : styles.actionButton;
   return (
     <button
       type="button"
-      className={styles.actionButton}
+      className={className}
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
+      aria-pressed={pressed}
       title={label}
       data-testid={testid}
     >

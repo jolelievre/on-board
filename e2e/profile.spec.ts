@@ -50,7 +50,10 @@ test.describe("Profile detail — merge", () => {
     await dupeRow.click();
     await page.waitForURL(/\/players\/[a-z0-9-]+$/);
 
-    // Trigger merge.
+    // Trigger merge — the action button lives inside the profile
+    // editor now, so open it via the pencil first.
+    await page.click("[data-testid='profile-edit-avatar']");
+    await expect(page.locator("[data-testid='profile-editor']")).toBeVisible();
     await page.click("[data-testid='profile-merge-action']");
     const survivorButton = page
       .locator("[data-testid^='merge-candidate-']", { hasText: survivor })
@@ -142,19 +145,18 @@ test.describe("Profile detail — avatar uploader", () => {
     await expect(page.locator("[data-testid='studio-saved']")).toBeVisible();
     await page.click("[data-testid='studio-saved-done']");
 
-    // Re-enter the studio to verify the dashed "Use my X monogram" row
-    // is now visible (only when the profile has a custom photo) and
-    // that clearing it puts us back in the no-photo state.
+    // Re-enter the editor to verify the studio Hub mounted with the
+    // saved stamp + a working Done button. The "Initial" /
+    // clear-photo affordance was removed in the Hub redesign — its
+    // role is now covered by Account-toggle (linked profiles) or by
+    // simply re-uploading; we no longer assert it.
     await page.click("[data-testid='profile-edit-avatar']");
     await expect(
-      page.locator("[data-testid='studio-clear-photo']"),
+      page.locator("[data-testid='avatar-uploader']"),
     ).toBeVisible();
-    await page.click("[data-testid='studio-clear-photo']");
-    await expect(
-      page.locator("[data-testid='studio-clear-photo']"),
-    ).toHaveCount(0);
 
-    // Close the studio via the hub's Cancel footer.
+    // Close the editor via the studio's Done button (now a primary
+    // pill anchored to the studio's top-right corner).
     await page.click("[data-testid='avatar-done']");
     await expect(
       page.locator("[data-testid='avatar-uploader']"),

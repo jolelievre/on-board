@@ -63,18 +63,13 @@ export function StudioStyle({
 }: Props) {
   const { t } = useTranslation();
 
-  // When previewOverrideUrl is set (new capture pending upload), the
-  // <Avatar> still reads from `profile`, so we synthesise a profile-
-  // shaped object that points at the override URL. The override always
-  // wins over `useLinkedAvatar`, since it's the user's current pick.
-  const previewProfile =
-    previewOverrideUrl !== null
-      ? {
-          ...profile,
-          customAvatarUrl: previewOverrideUrl,
-          useLinkedAvatar: false,
-        }
-      : profile;
+  // No previewProfile synthesis any more — instead we pass the
+  // override straight through Avatar's `imageUrlOverride` prop, which
+  // bypasses the viewer-aware resolver entirely. The old "synthesise
+  // a profile-shaped object with customAvatarUrl=override" trick was
+  // defeated by `useOwnedProfileIndex` looking the viewer up by id /
+  // linkedUserId and pulling their CURRENT customAvatarUrl from
+  // Dexie — so the override was silently overridden.
 
   return (
     <div className={styles.root} data-testid="studio-style">
@@ -82,11 +77,15 @@ export function StudioStyle({
 
       <div className={styles.previewWrap}>
         <Avatar
-          profile={previewProfile}
+          profile={profile}
           viewerId={viewerId}
           size="xl"
           frame={frame}
           ring={ring}
+          // `imageUrlOverride` wins over the resolver — `undefined`
+          // means "use the resolver's normal output" (the profile's
+          // current photo); a string forces the just-baked blob.
+          imageUrlOverride={previewOverrideUrl ?? undefined}
           className={styles.preview}
         />
       </div>

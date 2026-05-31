@@ -121,6 +121,9 @@ export function BiddingScreen({
 
       <div className={styles.sheet}>
         <div className={styles.sheetHeader}>
+          {active && (
+            <Avatar profile={active.profile} viewerId={viewerId} size="md" />
+          )}
           <span className={styles.sheetTitle}>
             {active
               ? t("scoring.skullKing.bid.playerBid", {

@@ -2,12 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AvatarFrame, AvatarRing, LocalProfile } from "../../lib/db";
 import { type CameraErrorKey } from "../../hooks/useCamera";
-import {
-  uploadAvatar,
-  clearCustomAvatar,
-  patchProfile,
-} from "../../lib/mutations";
+import { uploadAvatar, patchProfile } from "../../lib/mutations";
 import { Button } from "../ui/Button";
+import { Icon } from "../ui/Icon";
 import { StudioHub } from "./studio/StudioHub";
 import { StudioCamera } from "./studio/StudioCamera";
 import { StudioReposition } from "./studio/StudioReposition";
@@ -144,23 +141,6 @@ export function AvatarUploader({
     setScreen("style");
   };
 
-  // Hub → clear (the dashed "Use my X monogram" row)
-  const handleClearPhoto = async () => {
-    setSaveError(null);
-    setSubmitting(true);
-    try {
-      await clearCustomAvatar({ profileId: profile.id });
-    } catch (err) {
-      setSaveError(
-        err instanceof Error
-          ? err.message
-          : t("avatar.clearFailed"),
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   // Style → save
   const handleSave = async () => {
     setSaveError(null);
@@ -211,7 +191,6 @@ export function AvatarUploader({
           onNewPhoto={handleOpenCamera}
           onFromGallery={handleOpenGallery}
           onStyleStamp={handleOpenStyle}
-          onClearPhoto={() => void handleClearPhoto()}
           // Pending style state is mirrored into the hub's stamp
           // preview so a user who saved a new ring earlier still sees
           // it on re-enter even before the next pull-sync round-trip.
@@ -289,16 +268,17 @@ export function AvatarUploader({
           have nowhere to escape to since the studio IS the page — the
           button just disappears in that case. */}
       {screen === "hub" && onDone && (
-        <div className={studioStyles.hubFooter}>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onDone}
-            data-testid="avatar-done"
-          >
-            {t("common.done")}
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          onClick={onDone}
+          iconBefore={<Icon name="check" size={14} />}
+          className={studioStyles.doneButton}
+          data-testid="avatar-done"
+        >
+          {t("common.done")}
+        </Button>
       )}
     </div>
   );

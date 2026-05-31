@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createProfile, signUpContext } from "./helpers/api";
+import { openProfile } from "./helpers/ui";
 
 /**
  * Feedback-round polish: the link-section explainer used to render
@@ -27,8 +28,9 @@ test.describe("Profile detail — link section explainer toggle", () => {
       const friend = await createProfile(ctx.request, `Friend-${aliasSuffix}`);
 
       const page = await ctx.newPage();
-      await page.goto(`/players/${friend.id}`);
-      await page.waitForLoadState("domcontentloaded");
+      // All link affordances now live inside the profile editor —
+      // open it via the helper so the info button is in the DOM.
+      await openProfile(page, friend.id);
 
       const infoButton = page.locator("[data-testid='profile-link-info']");
       await expect(infoButton).toBeVisible();

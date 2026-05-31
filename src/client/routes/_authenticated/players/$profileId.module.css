@@ -14,17 +14,99 @@
 .hero {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;
   gap: 0.75rem;
   margin: 0.75rem 0 0.5rem;
   text-align: center;
 }
 
-.heroBadges {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
+/* Wraps the avatar so the pencil edit button can anchor to its
+ * bottom-right corner. The inline-flex sizing makes the wrap collapse
+ * to the avatar's intrinsic width, anchoring the pencil correctly
+ * regardless of the parent's alignment. */
+.heroAvatar {
+  position: relative;
+  display: inline-flex;
+}
+
+.editButton {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border: 2px solid var(--color-surface);
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--color-ink) 18%, transparent);
+}
+
+.editButton:hover,
+.editButton:focus-visible {
+  filter: brightness(1.05);
+}
+
+/* Edit-mode container — sits inside a single outer `<Group>` titled
+ * "Edit profile". All editing sub-surfaces (studio, alias input,
+ * link / unlink / QR, merge) stack vertically in this column with
+ * small section labels separating them. */
+.editorBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+/* Alias + link sub-sections inside the editor body. Tight margin so
+ * everything reads as part of the same card. */
+.aliasSection,
+.linkSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.sectionLabel {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.6875rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+  margin: 0;
+}
+
+/* Wraps the h1 alias + the absolutely-positioned status badge so
+ * the badge sticks to the alias's bottom-right corner regardless of
+ * the page's centre alignment. Inline-block lets it shrink to the
+ * alias's actual width, anchoring the badge tight against the text. */
+.titleBlock {
+  position: relative;
+  display: inline-block;
+}
+
+/* Small status pill stuck to the alias's bottom-right, sticking out
+ * well past the text — reads as a "label" tacked onto the bottom
+ * corner of a name plate. The `translateX` overhang puts most of
+ * the badge to the right of the alias rather than under it. */
+.statusBadge {
+  position: absolute;
+  /* Slightly above the alias's bottom edge so the pill overlaps the
+   * lower edge of the text — reads as a sticker pinned across the
+   * corner rather than a separate badge below it. */
+  bottom: -0.1rem;
+  right: 0;
+  transform: translateX(85%);
+  /* Local override (only on this surface) — the badge is decorative
+   * here so a smaller body fits the corner-sticker proportions; the
+   * underlying `Pill` keeps its larger default font everywhere else
+   * (header pills on game cards etc.). */
+  font-size: 0.6rem;
+  padding: 0.18rem 0.5rem;
 }
 
 .aliasRow {

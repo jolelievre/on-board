@@ -76,6 +76,13 @@ type CommonProps = {
    * skull-king standings. Sized automatically from the `size`
    * variant. */
   winner?: boolean;
+  /** Bypass the resolver entirely and render this URL as the avatar
+   * photo. `null` forces the initial-letter fallback; `undefined`
+   * (default) routes through `displayProfileAvatar`. Used by the
+   * studio's Style preview to show a freshly-captured blob that
+   * isn't in Dexie yet — the viewer-aware resolver would otherwise
+   * pick up the viewer's existing self-profile URL. */
+  imageUrlOverride?: string | null;
 };
 
 type ProfileSource = {
@@ -153,10 +160,17 @@ export function Avatar(props: Props) {
   const ownedIndex = useOwnedProfileIndex(viewerForIndex);
 
   // Resolved URL changes when props change OR when the viewer's owned
-  // profiles refresh (e.g. they upload a new photo). The onError
-  // fallback below also feeds back into this state by clearing the URL.
+  // profiles refresh (e.g. they upload a new photo). `imageUrlOverride`
+  // wins outright when set — that's how the studio's preview shows a
+  // brand-new blob that the ownedIndex resolver doesn't know about
+  // yet. The onError fallback below also feeds back into this state
+  // by clearing the URL.
   const resolvedUrl =
-    "profile" in props ? displayProfileAvatar(props.profile, ownedIndex) : null;
+    props.imageUrlOverride !== undefined
+      ? props.imageUrlOverride
+      : "profile" in props
+        ? displayProfileAvatar(props.profile, ownedIndex)
+        : null;
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   // When the resolved URL changes, clear any stale "this URL failed"
   // memo so the new URL gets a fresh chance.

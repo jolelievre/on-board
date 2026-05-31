@@ -97,19 +97,15 @@ test.describe("Avatar Capture Studio — gallery → reposition → style → sa
       page.locator("[data-testid='avatar-uploader']"),
     ).toHaveCount(0);
 
-    // Re-open the studio — the Hub should now show the "Use my X
-    // monogram" clear row (only renders when customAvatarUrl is set),
-    // confirming the upload completed.
+    // Re-open the editor + studio — the Style action is now a
+    // first-class grid button (replaced the previous sparkle overlay
+    // on the avatar preview). Re-entering Style should reflect the
+    // previously saved frame + ring on first paint, no flicker
+    // through defaults.
     await page.click("[data-testid='profile-edit-avatar']");
     await expect(
-      page.locator("[data-testid='studio-clear-photo']"),
-    ).toBeVisible();
-    // The "Style stamp" row should be enabled (we have a photo now).
-    await expect(
       page.locator("[data-testid='studio-style-stamp']"),
-    ).toBeEnabled();
-
-    // Re-entering Style should reflect the previously saved frame + ring.
+    ).toBeVisible();
     await page.click("[data-testid='studio-style-stamp']");
     await expect(page.locator("[data-testid='studio-style']")).toBeVisible();
     await expect(

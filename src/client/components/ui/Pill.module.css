@@ -14,8 +14,9 @@
 }
 
 .muted {
-  background: transparent;
+  background: color-mix(in srgb, var(--color-ink-faint) 12%, transparent);
   color: var(--color-ink-faint);
+  border-color: color-mix(in srgb, var(--color-ink-faint) 30%, transparent);
 }
 
 .primary {
