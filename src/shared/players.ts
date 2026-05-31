@@ -32,11 +32,26 @@
  * Members are intentionally minimal — only what `displayProfileName`
  * / `displayProfileAvatar` actually read.
  */
+/** Mirrors `LocalProfile`'s stamp fields. Kept as a structural alias
+ * so the shared resolver doesn't need to import the Dexie type. */
+export type ProfileStampStyle = {
+  /** "circle" | "rounded" | "tag" */
+  avatarFrame: string;
+  /** One of the 8 category keys, or null. */
+  avatarRing: string | null;
+};
+
 export type OwnedProfileEntry = {
   id: string;
   alias: string;
   customAvatarUrl: string | null;
   useLinkedAvatar: boolean;
+  /** Phase 7 — owner-controlled stamp style. Read by
+   * `displayProfileStyle` so the viewer sees their own frame + ring
+   * even on friend-created matches where the embedded Player.profile
+   * snapshot carries the friend's choice. */
+  avatarFrame: string;
+  avatarRing: string | null;
   linkedUserId: string | null;
   linkedUser: {
     id: string;
@@ -56,6 +71,10 @@ export type ProfileDisplayInput = {
   alias: string;
   customAvatarUrl?: string | null;
   useLinkedAvatar?: boolean;
+  /** Phase 7 stamp style on the snapshot. Used as the fallback when
+   * no owned-profile override applies (friend-of-friend case). */
+  avatarFrame?: string;
+  avatarRing?: string | null;
   linkedUserId?: string | null;
   linkedUser?: {
     name: string;
@@ -135,6 +154,42 @@ function resolveAvatarFromEntry(entry: OwnedProfileEntry): string | null {
     if (linked) return linked;
   }
   return entry.customAvatarUrl?.trim() || null;
+}
+
+/**
+ * Resolve the stamp style (frame + ring) for a Profile. Mirrors
+ * `displayProfileName` and `displayProfileAvatar` exactly: when the
+ * row points at the viewer via id OR `linkedUserId`, return the
+ * viewer's own profile's stamp (their self-chosen frame + ring).
+ * Otherwise fall through to the embedded snapshot's stamp.
+ *
+ * Without this, a friend-created match would render the viewer's
+ * seat with the FRIEND's stamp choice for that profile — which is
+ * confusing on the viewer's side, since the viewer's own self-stamp
+ * is what they expect to see for themselves.
+ *
+ * Defaults are baked in so callers never have to think about
+ * `undefined`: missing/`undefined` frame → `"circle"`, missing/`undefined`
+ * ring → `null`.
+ */
+export function displayProfileStyle(
+  profile: ProfileDisplayInput,
+  ownedIndex: OwnedProfileIndex,
+): ProfileStampStyle {
+  let mine = ownedIndex.byId.get(profile.id);
+  if (!mine && profile.linkedUserId) {
+    mine = ownedIndex.byLinkedUserId.get(profile.linkedUserId);
+  }
+  if (mine) {
+    return {
+      avatarFrame: mine.avatarFrame || "circle",
+      avatarRing: mine.avatarRing ?? null,
+    };
+  }
+  return {
+    avatarFrame: profile.avatarFrame || "circle",
+    avatarRing: profile.avatarRing ?? null,
+  };
 }
 
 export function displayPlayerName(

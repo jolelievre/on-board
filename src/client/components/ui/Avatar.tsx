@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import type { AvatarFrame, AvatarRing, LocalProfile } from "../../lib/db";
-import { displayProfileAvatar, displayProfileName } from "../../../shared/players";
+import {
+  displayProfileAvatar,
+  displayProfileName,
+  displayProfileStyle,
+} from "../../../shared/players";
 import { useOwnedProfileIndex } from "../../hooks/data/useOwnedProfileIndex";
 import { WinnerBadge } from "./WinnerBadge";
 import styles from "./Avatar.module.css";
@@ -139,25 +143,29 @@ export function Avatar(props: Props) {
   const size: AvatarSize = props.size ?? "md";
   const sizeClass = SIZE_CLASS[size];
 
-  const frame: AvatarFrame =
-    props.frame ??
-    ("profile" in props ? (props.profile.avatarFrame ?? "circle") : "circle");
-  const ring: AvatarRing =
-    props.ring !== undefined
-      ? props.ring
-      : "profile" in props
-        ? (props.profile.avatarRing ?? null)
-        : null;
-
-  const frameClass = FRAME_CLASS[frame];
-  const ringClass = ring ? `${styles.hasRing} ${RING_CLASS[ring]}` : "";
-
   // Hook is called unconditionally so the rules-of-hooks stay happy
   // across both render branches. Pass null when this Avatar isn't a
   // profile-source — the hook short-circuits to the empty index.
   const viewerForIndex =
     "profile" in props ? (props.viewerId ?? null) : null;
   const ownedIndex = useOwnedProfileIndex(viewerForIndex);
+
+  // Stamp style (frame + ring): explicit props win; otherwise route
+  // through `displayProfileStyle`, which mirrors the name/avatar
+  // resolvers — owned-profile match (by id or linkedUserId) overrides
+  // the embedded snapshot, so the viewer's own stamp wins on
+  // friend-created matches.
+  const style: { avatarFrame: string; avatarRing: string | null } =
+    "profile" in props
+      ? displayProfileStyle(props.profile, ownedIndex)
+      : { avatarFrame: "circle", avatarRing: null };
+  const frame: AvatarFrame =
+    props.frame ?? (style.avatarFrame as AvatarFrame) ?? "circle";
+  const ring: AvatarRing =
+    props.ring !== undefined ? props.ring : (style.avatarRing as AvatarRing);
+
+  const frameClass = FRAME_CLASS[frame];
+  const ringClass = ring ? `${styles.hasRing} ${RING_CLASS[ring]}` : "";
 
   // Resolved URL changes when props change OR when the viewer's owned
   // profiles refresh (e.g. they upload a new photo). `imageUrlOverride`
