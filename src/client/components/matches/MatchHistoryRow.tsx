@@ -17,9 +17,7 @@ import styles from "./MatchHistoryRow.module.css";
 
 type ScoreRow = { playerId: string; category: string; value: number };
 
-/** Sum of round_N values per player. Skull King writes one Score row per
- * (player, round_N) with the round's total in `value`, so a flat sum is
- * the match total. */
+/** Sum of round_N values per player. */
 function computeSkullKingTotalsByPlayer(
   scores: ScoreRow[],
 ): Record<string, number> {
@@ -40,24 +38,24 @@ function computeMatchTotalsBySlug(
 }
 
 /**
- * One-row preview of a match (Phase 7 design refactor). Used on both
- * `/games/:slug` (the per-game history list) and `/players/:profileId`
- * (the recent-matches list under a profile). Two layouts by player
- * count, sharing a common header (game glyph + date) and "me"
- * highlight scheme.
+ * One-row preview of a match (Phase 7 design refactor, revised).
  *
- * - **2 players** (e.g. 7 Wonders Duel): symmetric `avatar — VS —
- *   avatar`. Winner side gets the gold `WinnerBadge` + accent score.
- *   Centered `VsMark` with the date beneath.
- * - **3+ players** (e.g. Skull King): winner leads (avatar + crown +
- *   name), then "beat" + an overlapping stack of the other players'
- *   avatars (cap 4 then `+N`), with the winner's score + date on the
- *   right.
+ * Two layouts share a card body with the game glyph floated in the
+ * top-left corner — it's a label, not part of the row content, so the
+ * two name blocks (2-player) or the leader name (3+) get the full
+ * width.
  *
- * `viewerId` powers the "this is me" treatment: a teal edge tab on the
- * row, a `Highlighter` swipe behind my name, and a teal ring on my
- * avatar. Pass `null` (used on `/players/:profileId`) to suppress —
- * every row there is already that person, so highlighting is noise.
+ * - **2 players**: symmetric `avatar + name+score | VsMark+date |
+ *   name+score + avatar`. Both sides take equal width.
+ * - **3+ players**: bigger winner avatar on the left; winner name
+ *   anchored to its top-right; a smaller row of the other players'
+ *   avatars beneath the name (cap 4, then `+N`). The score + date
+ *   stack on the right.
+ *
+ * Pass `viewerId` to drive the teal edge tab + Highlighter swipe +
+ * accent avatar ring "me" treatment. The original design rule that
+ * suppressed it on profile-detail surfaces was relaxed during the
+ * feedback round — both surfaces now share the same visual.
  */
 export function MatchHistoryRow({
   match,
@@ -70,8 +68,6 @@ export function MatchHistoryRow({
   gameSlug: string;
   gameName?: string;
   locale: string;
-  /** The viewer (signed-in user) for the me-highlight, or null to
-   * suppress (e.g. on a profile-detail page). */
   viewerId: string | null;
 }) {
   const { t } = useTranslation();
@@ -89,24 +85,16 @@ export function MatchHistoryRow({
   const isCompleted = match.status === "COMPLETED";
   const compact = match.players.length === 2;
 
-  // "This is me" — link the row to the signed-in user via the embedded
-  // profile's `linkedUserId`. When `viewerId === null` (profile page),
-  // every check returns false, so no row is highlighted.
   const isMe = (player: Player): boolean =>
     viewerId !== null && player.profile.linkedUserId === viewerId;
 
-  // Multi-player rows sort by score (leader first), 2-player rows keep
-  // position order for the symmetric VS layout.
   const orderedPlayers = compact
     ? match.players
     : [...match.players].sort(
         (a, b) => (totals[b.id] ?? 0) - (totals[a.id] ?? 0),
       );
 
-  // Row gets the teal edge tab when the signed-in user is one of the
-  // match's players.
   const rowHasMe = match.players.some(isMe);
-
   const gameGlyph = renderGameGlyph(gameSlug);
 
   return (
@@ -114,11 +102,16 @@ export function MatchHistoryRow({
       to="/matches/$id"
       params={{ id: match.id }}
       data-testid={`match-history-row-${match.id}`}
-      // `data-me` lets E2E assert the me-highlight is applied without
-      // poking at CSS module class names (those are hashed at build time).
       data-me={rowHasMe || undefined}
       className={`${styles.matchCard} ${rowHasMe ? styles.matchCardMe : ""}`}
     >
+      {/* Floating game glyph — top-left corner of the card. Takes no
+          layout space inside the row so the name blocks below get the
+          full width. */}
+      <span className={styles.gameGlyph} aria-hidden="true">
+        {gameGlyph}
+      </span>
+
       {compact ? (
         <TwoPlayerLayout
           players={orderedPlayers}
@@ -128,7 +121,6 @@ export function MatchHistoryRow({
           isMe={isMe}
           ownedIndex={ownedIndex}
           dateText={dateText}
-          gameGlyph={gameGlyph}
           inProgressLabel={
             !isCompleted ? t("matches.history.inProgress") : null
           }
@@ -142,9 +134,7 @@ export function MatchHistoryRow({
           isMe={isMe}
           ownedIndex={ownedIndex}
           dateText={dateText}
-          gameGlyph={gameGlyph}
           gameName={gameName}
-          beatLabel={t("matches.history.beat")}
           moreCountLabel={(extra: number) =>
             t("matches.history.moreCount", { count: extra })
           }
@@ -157,16 +147,14 @@ export function MatchHistoryRow({
   );
 }
 
-/** Per-game leading glyph. Reuses existing primitives — no new game
- * needs new icons here, just a new entry in the switch. */
 function renderGameGlyph(slug: string) {
   if (slug === "7-wonders-duel") {
-    return <CatGlyph id="wonders" size={20} />;
+    return <CatGlyph id="wonders" size={16} />;
   }
   if (slug === "skull-king") {
-    return <Icon name="skull-king" size={22} />;
+    return <Icon name="skull-king" size={18} />;
   }
-  return <Icon name="dice" size={20} />;
+  return <Icon name="dice" size={16} />;
 }
 
 type LayoutCommon = {
@@ -177,7 +165,6 @@ type LayoutCommon = {
   isMe: (player: Player) => boolean;
   ownedIndex: ReturnType<typeof useOwnedProfileIndex>;
   dateText: string;
-  gameGlyph: React.ReactNode;
   inProgressLabel: string | null;
 };
 
@@ -189,18 +176,12 @@ function TwoPlayerLayout({
   isMe,
   ownedIndex,
   dateText,
-  gameGlyph,
   inProgressLabel,
 }: LayoutCommon) {
   const [left, right] = players;
   if (!left || !right) return null;
-
   return (
     <div className={styles.twoPlayerRoot}>
-      <span className={styles.gameGlyph} aria-hidden="true">
-        {gameGlyph}
-      </span>
-
       <TwoPlayerSide
         player={left}
         score={totals[left.id] ?? 0}
@@ -209,15 +190,13 @@ function TwoPlayerLayout({
         isMe={isMe(left)}
         ownedIndex={ownedIndex}
       />
-
       <div className={styles.vsBlock}>
-        <VsMark size={32} />
+        <VsMark size={30} />
         <span className={styles.vsDate}>{dateText}</span>
         {inProgressLabel && (
           <Pill tone="warning">{inProgressLabel}</Pill>
         )}
       </div>
-
       <TwoPlayerSide
         player={right}
         score={totals[right.id] ?? 0}
@@ -260,10 +239,6 @@ function TwoPlayerSide({
         <Avatar
           profile={player.profile}
           size="md"
-          // The me-highlight forces the teal accent ring regardless of
-          // the profile's own stamp ring choice, so the viewer can spot
-          // themselves at a glance. Stamps still show on every other
-          // avatar in the row.
           ring={isMe ? null : undefined}
           className={isMe ? styles.meRing : undefined}
         />
@@ -293,7 +268,6 @@ function TwoPlayerSide({
 
 type MultiProps = LayoutCommon & {
   gameName?: string;
-  beatLabel: string;
   moreCountLabel: (extra: number) => string;
 };
 
@@ -305,77 +279,71 @@ function MultiPlayerLayout({
   isMe,
   ownedIndex,
   dateText,
-  gameGlyph,
   gameName,
-  beatLabel,
   moreCountLabel,
   inProgressLabel,
 }: MultiProps) {
-  // First player in `players` is the leader (sorted by score in the
-  // parent). When there's a confirmed winner, that's the same person —
-  // we use the explicit `winnerId` to drive the crown badge so an
-  // in-progress match doesn't pre-crown the current leader.
   const [leader, ...others] = players;
   if (!leader) return null;
   const isWinner = winnerId === leader.id;
   const leaderName = displayPlayerName(leader, ownedIndex);
-
   const visibleOthers = others.slice(0, 4);
   const extraCount = others.length - visibleOthers.length;
 
   return (
     <div className={styles.multiRoot}>
-      <span className={styles.gameGlyph} aria-hidden="true">
-        {gameGlyph}
+      {/* Left column: big winner avatar (lg-ish). The crown overlays
+          its top-right when a winner has been declared (or it's a
+          live leader). */}
+      <span className={styles.multiAvatarWrap}>
+        <Avatar
+          profile={leader.profile}
+          size="lg"
+          ring={isMe(leader) ? null : undefined}
+          className={isMe(leader) ? styles.meRing : undefined}
+        />
+        {isWinner && <WinnerBadge overlay size={24} />}
       </span>
 
-      <span className={styles.multiLeader} data-self={isMe(leader) || undefined}>
-        <span className={styles.avatarWrap}>
-          <Avatar
-            profile={leader.profile}
-            size="md"
-            ring={isMe(leader) ? null : undefined}
-            className={isMe(leader) ? styles.meRing : undefined}
-          />
-          {isWinner && <WinnerBadge overlay size={20} />}
-        </span>
-        <span className={styles.nameWrap}>
+      {/* Centre column: leader name (top), stack of other players
+          (under the name). The stack avatars stay small (sm) so the
+          eye lands on the leader first. */}
+      <span className={styles.multiCentre}>
+        <span className={styles.multiName}>
           {isMe(leader) && <Highlighter />}
           <span
-            className={styles.nameText}
+            className={styles.multiNameText}
             data-testid={`match-history-score-${leader.id}`}
             data-score={totals[leader.id] ?? 0}
           >
             {leaderName}
           </span>
         </span>
+        <span className={styles.othersStack}>
+          {visibleOthers.map((p, idx) => (
+            <span
+              key={p.id}
+              className={styles.othersItem}
+              style={{ zIndex: visibleOthers.length - idx }}
+              data-self={isMe(p) || undefined}
+            >
+              <Avatar
+                profile={p.profile}
+                size="sm"
+                ring={isMe(p) ? null : undefined}
+                className={isMe(p) ? styles.meRing : undefined}
+              />
+            </span>
+          ))}
+          {extraCount > 0 && (
+            <span className={styles.othersOverflow}>
+              {moreCountLabel(extraCount)}
+            </span>
+          )}
+        </span>
       </span>
 
-      <span className={styles.beat}>{beatLabel}</span>
-
-      <span className={styles.stack}>
-        {visibleOthers.map((p, idx) => (
-          <span
-            key={p.id}
-            className={styles.stackItem}
-            style={{ zIndex: visibleOthers.length - idx }}
-            data-self={isMe(p) || undefined}
-          >
-            <Avatar
-              profile={p.profile}
-              size="sm"
-              ring={isMe(p) ? null : undefined}
-              className={isMe(p) ? styles.meRing : undefined}
-            />
-          </span>
-        ))}
-        {extraCount > 0 && (
-          <span className={styles.stackOverflow}>
-            {moreCountLabel(extraCount)}
-          </span>
-        )}
-      </span>
-
+      {/* Right column: score (when completed) + date stacked. */}
       <span className={styles.multiMeta}>
         {inProgressLabel ? (
           <Pill tone="warning">{inProgressLabel}</Pill>

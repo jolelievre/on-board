@@ -147,12 +147,10 @@ export function StudioCamera({
           onClick={onPickFromGallery}
           className={styles.roundButton}
           aria-label={t("studio.camera.gallery")}
+          title={t("studio.camera.gallery")}
           data-testid="studio-camera-gallery"
         >
-          <Icon name="image" size={20} />
-          <span className={styles.roundLabel}>
-            {t("studio.camera.gallery")}
-          </span>
+          <Icon name="image" size={22} />
         </button>
 
         {!errorMessage && (
@@ -174,12 +172,10 @@ export function StudioCamera({
             onClick={() => void camera.flip()}
             className={styles.roundButton}
             aria-label={t("studio.camera.flip")}
+            title={t("studio.camera.flip")}
             data-testid="studio-camera-flip"
           >
-            <Icon name="refresh" size={20} />
-            <span className={styles.roundLabel}>
-              {t("studio.camera.flip")}
-            </span>
+            <Icon name="refresh" size={22} />
           </button>
         ) : (
           // Keep the layout symmetric when flip isn't available.

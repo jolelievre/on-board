@@ -102,7 +102,7 @@ export function MatchCompleteScreen({
               data-testid={`sk-final-rank-${i}`}
             >
               <span className={styles.rank}>{medal}</span>
-              <Avatar profile={p.profile} size="sm" />
+              <Avatar profile={p.profile} size="md" />
               <span className={`${styles.name} ${isWinner ? styles.winner : ""}`}>
                 {displayPlayerName(p, ownedIndex)}
               </span>

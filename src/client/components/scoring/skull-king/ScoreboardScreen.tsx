@@ -134,8 +134,8 @@ export function ScoreboardScreen({ players, entries, currentRound }: Props) {
                     <th key={p.id} className={styles.th}>
                       <span className={styles.thHeader}>
                         <span className={styles.thAvatarWrap}>
-                          <Avatar profile={p.profile} size="sm" />
-                          {isLeader && <WinnerBadge overlay size={14} />}
+                          <Avatar profile={p.profile} size="md" />
+                          {isLeader && <WinnerBadge overlay size={18} />}
                         </span>
                         <span className={styles.thName}>
                           {displayPlayerName(p, ownedIndex)}

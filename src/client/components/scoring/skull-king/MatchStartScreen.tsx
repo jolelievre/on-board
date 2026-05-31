@@ -254,7 +254,7 @@ export function MatchStartScreen({
                 >
                   {i + 1}
                 </span>
-                <Avatar profile={p.profile} size="sm" />
+                <Avatar profile={p.profile} size="md" />
                 <span className={styles.seatName}>
                   {displayPlayerName(p, ownedIndex)}
                 </span>

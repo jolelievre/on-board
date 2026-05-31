@@ -212,7 +212,6 @@ export function AvatarUploader({
           onFromGallery={handleOpenGallery}
           onStyleStamp={handleOpenStyle}
           onClearPhoto={() => void handleClearPhoto()}
-          onDone={onDone}
           // Pending style state is mirrored into the hub's stamp
           // preview so a user who saved a new ring earlier still sees
           // it on re-enter even before the next pull-sync round-trip.

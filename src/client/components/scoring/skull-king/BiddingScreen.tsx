@@ -94,7 +94,7 @@ export function BiddingScreen({
             >
               <span className={styles.rowLeft}>
                 <span className={styles.posBadge}>{i + 1}</span>
-                <Avatar profile={p.profile} size="sm" />
+                <Avatar profile={p.profile} size="md" />
                 <span className={styles.rowName}>{displayPlayerName(p, ownedIndex)}</span>
               </span>
               {v != null ? (

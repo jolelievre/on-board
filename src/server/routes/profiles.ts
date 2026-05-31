@@ -245,6 +245,16 @@ export const profilesRoutes = new Hono<AuthEnv>()
     const trimmedAlias = alias !== undefined ? alias.trim() : undefined;
     const aliasChanged =
       trimmedAlias !== undefined && trimmedAlias !== existing.alias;
+    // Every field that's projected onto `Player.profile` needs a Match
+    // bump on change — otherwise friends' devices won't pick the new
+    // snapshot up via `?since=` pull-sync. `useLinkedAvatar`,
+    // `avatarFrame`, `avatarRing` were added in Phase 7; `alias` was
+    // already wired before.
+    const projectedFieldsChanged =
+      aliasChanged ||
+      useLinkedAvatar !== undefined ||
+      avatarFrame !== undefined ||
+      avatarRing !== undefined;
 
     const profile = await prisma.profile.update({
       where: { id },
@@ -257,15 +267,7 @@ export const profilesRoutes = new Hono<AuthEnv>()
       select: profileSelect,
     });
 
-    // When the alias actually changed, bump Match.updatedAt on every
-    // Match where this profile is a player. That refreshes the
-    // embedded `Player.profile.alias` snapshot on any other device
-    // that sees those matches but doesn't own a Profile for this
-    // person — the only path that reads the snapshot. Pull-sync
-    // filters by Match.updatedAt and a profile patch doesn't touch
-    // any Match by itself, so without the bump the friend's `?since=`
-    // delta would skip those matches indefinitely.
-    if (aliasChanged) {
+    if (projectedFieldsChanged) {
       await bumpMatchesForProfile(id);
     }
 
@@ -328,6 +330,11 @@ export const profilesRoutes = new Hono<AuthEnv>()
       select: profileSelect,
     });
 
+    // Refresh the embedded `Player.profile` projection on every Match
+    // where this profile played, so friends viewing those matches
+    // see the new photo on their next pull-sync.
+    await bumpMatchesForProfile(id);
+
     return c.json(profile);
   })
   .delete("/:id/avatar", async (c) => {
@@ -360,6 +367,11 @@ export const profilesRoutes = new Hono<AuthEnv>()
       },
       select: profileSelect,
     });
+
+    // Refresh the embedded `Player.profile` projection so friends pick
+    // up the cleared photo / re-enabled linked-avatar on their next
+    // pull-sync (same rationale as the upload path).
+    await bumpMatchesForProfile(id);
 
     return c.json(profile);
   })

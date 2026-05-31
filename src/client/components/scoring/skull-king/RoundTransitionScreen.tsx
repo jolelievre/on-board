@@ -124,8 +124,8 @@ export function RoundTransitionScreen({
             >
               <span className={styles.standingsRank}>#{i + 1}</span>
               <span className={styles.standingsAvatarWrap}>
-                <Avatar profile={row.player.profile} size="sm" />
-                {isLeader && <WinnerBadge overlay size={16} />}
+                <Avatar profile={row.player.profile} size="md" />
+                {isLeader && <WinnerBadge overlay size={20} />}
               </span>
               <span className={styles.standingsName}>
                 {displayPlayerName(row.player, ownedIndex)}

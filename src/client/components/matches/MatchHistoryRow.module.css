@@ -5,18 +5,16 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
-  padding: 0.625rem 0.875rem 0.625rem 1rem;
+  /* Extra left padding so the floating glyph + edge tab don't collide
+   * with content. */
+  padding: 0.75rem 0.875rem 0.75rem 1.15rem;
   text-decoration: none;
   color: inherit;
-  /* Both layouts use a fixed minimum height so a list of mixed 2-player
-   * and 3+-player rows scans as a column of cards rather than a jagged
-   * stack. ~58px lands the row on a comfortable touch target without
-   * looking cramped. */
-  min-height: 58px;
+  min-height: 64px;
 }
 
-/* Teal edge tab on the left — drawn as a `:before` so it doesn't take
- * layout space. Only rendered when the row represents the viewer. */
+/* Teal edge tab — drawn as a `:before` so it doesn't take layout
+ * space. Rendered for any row where the viewer is a participant. */
 .matchCardMe::before {
   content: "";
   position: absolute;
@@ -28,21 +26,33 @@
   background: var(--color-accent);
 }
 
+/* Floating game-glyph badge in the top-left corner. Takes no layout
+ * space inside the row body. The translucent backdrop keeps the glyph
+ * legible whether the row sits on the paper background or a coloured
+ * highlighter behind a name. */
+.gameGlyph {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface-alt) 92%, transparent);
+  color: var(--color-ink-soft);
+  pointer-events: none;
+}
+
 /* ──────────── 2-player ──────────── */
 
 .twoPlayerRoot {
   display: grid;
-  grid-template-columns: auto 1fr auto 1fr;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
-}
-
-.gameGlyph {
-  color: var(--color-ink-soft);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .side {
@@ -52,8 +62,6 @@
   min-width: 0;
 }
 
-/* Mirror the layout for the right side: avatar sits on the right of
- * the name so both faces flank the VS mark. */
 .sideRight {
   flex-direction: row-reverse;
 }
@@ -69,6 +77,7 @@
   flex-direction: column;
   gap: 1px;
   min-width: 0;
+  flex: 1 1 0;
 }
 
 .sideRight .sideMeta {
@@ -81,6 +90,7 @@
   display: inline-flex;
   align-items: baseline;
   min-width: 0;
+  max-width: 100%;
 }
 
 .nameWrapDim {
@@ -96,8 +106,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* Compensate Caveat's italic lean so the last glyph isn't clipped. */
   padding-inline-end: 0.25em;
+  max-width: 100%;
 }
 
 .score {
@@ -134,50 +144,68 @@
 
 .multiRoot {
   display: grid;
-  grid-template-columns: auto auto auto 1fr auto;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.625rem;
   min-width: 0;
+  /* Leave a little extra room on the right so the floating game glyph
+   * in the top-left doesn't visually pile up with the leader avatar. */
+  padding-left: 0.25rem;
 }
 
-.multiLeader {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-.beat {
-  font-family: var(--font-body);
-  font-size: 0.85rem;
-  color: var(--color-ink-soft);
+.multiAvatarWrap {
+  position: relative;
+  display: inline-flex;
   flex-shrink: 0;
 }
 
-.stack {
-  display: inline-flex;
-  align-items: center;
-  /* Negative gap so avatars overlap by ~⅓ of their width. */
-  gap: -8px;
+.multiCentre {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
 }
 
-.stackItem {
+.multiName {
+  position: relative;
   display: inline-flex;
-  /* Each item pulls left over its predecessor so the chain reads
-   * left-to-right with the leader's neighbour on top of the next, etc. */
+  align-items: baseline;
+  min-width: 0;
+}
+
+.multiNameText {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.25rem;
+  line-height: 1.05;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-inline-end: 0.25em;
+  max-width: 100%;
+}
+
+.othersStack {
+  display: inline-flex;
+  align-items: center;
+}
+
+.othersItem {
+  display: inline-flex;
   margin-left: -8px;
-  /* Surface-coloured ring around the small avatar for legibility — keeps
-   * adjacent faces visually distinct without an explicit border. */
   border-radius: 50%;
+  /* Surface ring so adjacent faces don't merge visually. */
   box-shadow: 0 0 0 1.5px var(--color-surface);
 }
 
-.stackItem:first-child {
+.othersItem:first-child {
   margin-left: 0;
 }
 
-.stackOverflow {
+.othersOverflow {
   margin-left: 4px;
   font-family: var(--font-mono);
   font-size: 0.7rem;
@@ -194,7 +222,7 @@
 
 .multiScore {
   font-family: var(--font-body);
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--color-accent);
@@ -208,13 +236,7 @@
   white-space: nowrap;
 }
 
-/* ──────────── Me-ring on avatars ──────────── *
- *
- * Forces the Avatar's `--ring-width` and `--ring-color` CSS variables
- * to the accent (teal) ring used everywhere "this is me" needs a
- * visual signal. Avatar's stamp ring (`avatarRing`) is suppressed by
- * passing `ring={null}` so this is the only ring drawn.
- */
+/* ──────────── Me-ring on avatars ──────────── */
 .meRing {
   --ring-width: max(2px, calc(var(--avatar-size) * 0.07));
   --ring-color: var(--color-accent);

@@ -208,7 +208,7 @@ export function RoundResultScreen({
       <div className={styles.scroll}>
         <div className={styles.headerStrip}>
           <span className={styles.playerHeader}>
-            <Avatar profile={active.profile} size="md" />
+            <Avatar profile={active.profile} size="lg" />
             <span className={styles.playerName}>
               {displayPlayerName(active, ownedIndex)}
             </span>

@@ -72,7 +72,7 @@ export function BidRecapScreen({
               >
                 <span className={styles.entryLeft}>
                   <span className={styles.seatBadge}>{i + 1}</span>
-                  <Avatar profile={p.profile} size="sm" />
+                  <Avatar profile={p.profile} size="md" />
                   <span className={styles.entryName}>
                     {displayPlayerName(p, ownedIndex)}
                   </span>

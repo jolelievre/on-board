@@ -20,16 +20,27 @@ type Props = {
   onFromGallery: () => void;
   onStyleStamp: () => void;
   onClearPhoto: () => void;
-  onDone?: () => void;
 };
 
 /**
- * Phase 7 — Capture Studio Hub. Three action rows lead into the
- * sub-flows; a dashed monogram row clears the photo back to the
- * initial-letter fallback. The "Style stamp" row is highlighted with
- * an accent border and disabled when no photo exists (the design
- * handoff's critical UX fix: styling must be reachable without
- * retaking the photo).
+ * Phase 7 (revised) — Capture Studio Hub. Compact layout: large stamp
+ * preview at the top with a pencil overlay that opens the Style screen,
+ * plus a 2-column grid of icon buttons for source actions.
+ *
+ * Buttons rendered (in order):
+ *   1. **Camera** — always available
+ *   2. **Gallery** — always available
+ *   3. **Online account photo** — when the profile is linked (uses the
+ *      generic `globe` icon so the affordance generalizes to other
+ *      providers in the future). Switches `useLinkedAvatar = true`.
+ *   4. **Monogram letter** — when a custom photo exists (renders the
+ *      alias's first letter inside the button so the result is obvious
+ *      at a glance). Clears the photo + sets `useLinkedAvatar = false`
+ *      so the Avatar falls back to the initial-letter chip.
+ *
+ * The earlier stacked action rows + "Use friend's photo" toggle row are
+ * gone — the online-account button is the new affordance for the same
+ * state change, and the layout footprint shrinks accordingly.
  */
 export function StudioHub({
   profile,
@@ -44,22 +55,24 @@ export function StudioHub({
 }: Props) {
   const { t } = useTranslation();
 
-  const hasPhoto = Boolean(profile.customAvatarUrl);
-  const hasLinkedPhoto =
-    profile.useLinkedAvatar &&
-    profile.linkedUserId !== null &&
-    profile.linkedUser?.avatarUrl != null;
-  const styleEnabled = hasPhoto || hasLinkedPhoto;
+  const hasCustomPhoto = Boolean(profile.customAvatarUrl);
+  const hasLinkedAccount =
+    profile.linkedUserId !== null && profile.linkedUser !== null;
+  // The monogram fallback is the initial-letter chip — show only when
+  // a custom photo exists (the user has something to clear).
+  const showMonogramButton = hasCustomPhoto;
+  // The "use account photo" affordance only makes sense when the
+  // profile is linked (and not already preferring the linked photo).
+  const showAccountButton = hasLinkedAccount && !profile.useLinkedAvatar;
 
-  // Monogram initial — first character of the alias, mirrors the
-  // initial-letter fallback drawn by `<Avatar>` when no photo resolves.
+  // Monogram preview char — mirrors the initial-letter fallback drawn
+  // by `<Avatar>` so the button literally shows what choosing it will
+  // produce. Defensive fallback for an empty alias keeps render safe.
   const initial = (profile.alias.trim()[0] ?? "?").toUpperCase();
 
-  const showLinkedToggle = profile.linkedUserId !== null;
-  const isSelf =
-    profile.linkedUserId !== null &&
-    profile.linkedUserId === viewerId &&
-    profile.ownerId === viewerId;
+  const handleUseLinkedAvatar = () => {
+    void patchProfile({ profileId: profile.id, useLinkedAvatar: true });
+  };
 
   return (
     <div className={styles.root}>
@@ -68,122 +81,105 @@ export function StudioHub({
       </header>
 
       <div className={styles.previewBlock}>
-        <Avatar
-          profile={profile}
-          viewerId={viewerId}
-          size="lg"
-          frame={previewFrame}
-          ring={previewRing}
-          className={styles.preview}
-        />
-        <div className={styles.previewMeta}>
-          <span className={styles.alias}>{profile.alias}</span>
-          <span className={shared.caption}>
-            {hasPhoto || hasLinkedPhoto
-              ? t("studio.currentStamp")
-              : t("studio.noPhotoYet")}
-          </span>
-        </div>
-      </div>
-
-      <div className={styles.actionList}>
-        <button
-          type="button"
-          className={styles.actionRow}
-          onClick={onNewPhoto}
-          disabled={isSubmitting}
-          data-testid="studio-new-photo"
-        >
-          <Icon name="camera" size={20} className={styles.actionIcon} />
-          <span className={styles.actionText}>
-            <span className={styles.actionTitle}>
-              {t("studio.newPhoto.title")}
-            </span>
-            <span className={styles.actionSubtitle}>
-              {t("studio.newPhoto.subtitle")}
-            </span>
-          </span>
-          <Icon name="arrow-left" size={16} className={styles.chevron} />
-        </button>
-
-        <button
-          type="button"
-          className={styles.actionRow}
-          onClick={onFromGallery}
-          disabled={isSubmitting}
-          data-testid="studio-from-gallery"
-        >
-          <Icon name="image" size={20} className={styles.actionIcon} />
-          <span className={styles.actionText}>
-            <span className={styles.actionTitle}>
-              {t("studio.fromGallery.title")}
-            </span>
-            <span className={styles.actionSubtitle}>
-              {t("studio.fromGallery.subtitle")}
-            </span>
-          </span>
-          <Icon name="arrow-left" size={16} className={styles.chevron} />
-        </button>
-
-        <button
-          type="button"
-          className={`${styles.actionRow} ${styles.actionRowAccent}`}
-          onClick={onStyleStamp}
-          disabled={isSubmitting || !styleEnabled}
-          data-testid="studio-style-stamp"
-        >
-          <Icon name="sparkle" size={20} className={styles.actionIcon} />
-          <span className={styles.actionText}>
-            <span className={styles.actionTitle}>
-              {t("studio.styleStamp.title")}
-            </span>
-            <span className={styles.actionSubtitle}>
-              {t("studio.styleStamp.subtitle")}
-            </span>
-          </span>
-          <Icon name="arrow-left" size={16} className={styles.chevron} />
-        </button>
-
-        {hasPhoto && (
+        <span className={styles.previewWrap}>
+          <Avatar
+            profile={profile}
+            viewerId={viewerId}
+            size="lg"
+            frame={previewFrame}
+            ring={previewRing}
+            className={styles.preview}
+          />
+          {/* Pencil edit overlay — opens the Style screen. Always
+              available; the Style screen also lets the user adjust the
+              frame/ring of the initial-letter fallback. */}
           <button
             type="button"
-            className={styles.monogramRow}
-            onClick={onClearPhoto}
+            className={styles.styleEdit}
+            onClick={onStyleStamp}
             disabled={isSubmitting}
-            data-testid="studio-clear-photo"
+            aria-label={t("studio.styleStamp.title")}
+            data-testid="studio-style-stamp"
           >
-            {t("studio.monogramFallback", { initial })}
+            <Icon name="pencil" size={14} />
           </button>
-        )}
+        </span>
+        <span className={styles.alias}>{profile.alias}</span>
       </div>
 
-      {showLinkedToggle && (
-        <div className={styles.toggleRow}>
-          <label className={styles.toggleLabel}>
-            <input
-              type="checkbox"
-              checked={profile.useLinkedAvatar}
-              onChange={(e) =>
-                void patchProfile({
-                  profileId: profile.id,
-                  useLinkedAvatar: e.target.checked,
-                })
-              }
-              data-testid="profile-use-linked-avatar"
-            />
-            <span>
-              {isSelf
-                ? t("avatar.useLinkedAvatarSelf")
-                : t("avatar.useLinkedAvatar")}
+      <div className={styles.actionGrid}>
+        <ActionButton
+          onClick={onNewPhoto}
+          disabled={isSubmitting}
+          label={t("studio.newPhoto.title")}
+          testid="studio-new-photo"
+        >
+          <Icon name="camera" size={22} />
+        </ActionButton>
+
+        <ActionButton
+          onClick={onFromGallery}
+          disabled={isSubmitting}
+          label={t("studio.fromGallery.title")}
+          testid="studio-from-gallery"
+        >
+          <Icon name="image" size={22} />
+        </ActionButton>
+
+        {showAccountButton && (
+          <ActionButton
+            onClick={handleUseLinkedAvatar}
+            disabled={isSubmitting}
+            label={t("studio.useAccount.title")}
+            testid="studio-use-account"
+          >
+            <Icon name="globe" size={22} />
+          </ActionButton>
+        )}
+
+        {showMonogramButton && (
+          <ActionButton
+            onClick={onClearPhoto}
+            disabled={isSubmitting}
+            label={t("studio.useMonogram.title")}
+            testid="studio-clear-photo"
+          >
+            <span className={styles.monogramGlyph} aria-hidden="true">
+              {initial}
             </span>
-          </label>
-          <p className={styles.toggleHint}>
-            {isSelf
-              ? t("avatar.useLinkedAvatarSelfHint")
-              : t("avatar.useLinkedAvatarHint")}
-          </p>
-        </div>
-      )}
+          </ActionButton>
+        )}
+      </div>
     </div>
+  );
+}
+
+/** Compact icon button used in the Hub grid. The accessible label
+ * doubles as the tooltip; the visual is icon-only. */
+function ActionButton({
+  onClick,
+  disabled,
+  label,
+  testid,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  label: string;
+  testid: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.actionButton}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      data-testid={testid}
+    >
+      {children}
+    </button>
   );
 }

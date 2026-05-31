@@ -2,12 +2,11 @@ import { test, expect, type Page } from "@playwright/test";
 import { login } from "./helpers/auth";
 
 /**
- * Phase 7 — "this is me" highlight on the unified MatchHistoryRow.
- *
- * Rule from the design handoff: the teal edge tab + Highlighter swipe +
- * teal avatar ring only appear in match-history lists, NOT on a
- * profile-detail page (where every row is already that person, so
- * highlighting is noise).
+ * Phase 7 (revised) — "this is me" highlight on the unified
+ * MatchHistoryRow. The feedback-round decision was to render the
+ * teal edge tab + Highlighter swipe + teal avatar ring on BOTH
+ * surfaces (game-history list AND profile-detail) wherever the
+ * signed-in user is a participant, so the visual stays consistent.
  *
  * We exercise both surfaces against the same signed-in user with one
  * match seeded against their self-Profile so the row's `linkedUserId`
@@ -48,7 +47,7 @@ test.describe("MatchHistoryRow — me-highlight", () => {
     await page.waitForURL(/\/matches\/[a-z0-9-]+/i);
   }
 
-  test("highlighted in /games/:slug history, not on /players/:profileId", async ({
+  test("highlighted on both /games/:slug history and /players/:profileId", async ({
     page,
   }) => {
     await signUpAndSeedMatch(page);
@@ -62,14 +61,10 @@ test.describe("MatchHistoryRow — me-highlight", () => {
     await expect(historyRow).toBeVisible();
     await expect(historyRow).toHaveAttribute("data-me", "true");
 
-    // Profile detail page: the same match's row must NOT carry data-me.
-    // We walk through the Players tab so the route is bound to the
-    // self-Profile (or any owned profile). Self-Profile is excluded
-    // from the Players listing, so we use the friend profile instead —
-    // viewing the friend's matches via their profile, where the friend
-    // is the row's subject, the viewer is still in the players list
-    // (it's a friend-vs-me match), and the design rule says no row is
-    // highlighted on a profile-detail surface.
+    // Profile detail page: same match's row also carries data-me
+    // (the suppression rule from the original handoff was relaxed
+    // in the feedback round — the highlight is now consistent
+    // across surfaces wherever the viewer is a participant).
     await page.goto("/players");
     await page.waitForLoadState("domcontentloaded");
     await page
@@ -82,6 +77,6 @@ test.describe("MatchHistoryRow — me-highlight", () => {
       .locator("[data-testid^='match-history-row-']")
       .first();
     await expect(profileRow).toBeVisible();
-    await expect(profileRow).not.toHaveAttribute("data-me", "true");
+    await expect(profileRow).toHaveAttribute("data-me", "true");
   });
 });

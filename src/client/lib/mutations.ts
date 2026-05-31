@@ -429,6 +429,7 @@ export async function uploadAvatar(input: {
   }
   const updated = (await res.json()) as LocalProfile;
   await db.profiles.put(updated);
+  await refreshLocalPlayerProjections(updated);
 }
 
 /**
@@ -453,6 +454,50 @@ export async function clearCustomAvatar(input: {
   }
   const updated = (await res.json()) as LocalProfile;
   await db.profiles.put(updated);
+  await refreshLocalPlayerProjections(updated);
+}
+
+/**
+ * Rewrite every local Player row's embedded `profile` snapshot for the
+ * supplied profile so the UI reflects custom-avatar / frame / ring /
+ * alias changes immediately, before the next pull-sync delta arrives.
+ *
+ * Without this, the writer device sees stale data on every screen that
+ * reads through `Player.profile` (match history, scorers, banners),
+ * because the canonical projection lives on Match rows that pull-sync
+ * only refreshes when their `updatedAt` bumps server-side.
+ */
+async function refreshLocalPlayerProjections(
+  profile: LocalProfile,
+): Promise<void> {
+  const players = await db.players
+    .where("profileId")
+    .equals(profile.id)
+    .toArray();
+  if (players.length === 0) return;
+  const projection = {
+    id: profile.id,
+    ownerId: profile.ownerId,
+    linkedUserId: profile.linkedUserId,
+    alias: profile.alias,
+    customAvatarUrl: profile.customAvatarUrl,
+    useLinkedAvatar: profile.useLinkedAvatar,
+    avatarFrame: profile.avatarFrame,
+    avatarRing: profile.avatarRing,
+    linkedUser: profile.linkedUser
+      ? {
+          id: profile.linkedUser.id,
+          name: profile.linkedUser.name,
+          alias: profile.linkedUser.alias,
+          avatarUrl: profile.linkedUser.avatarUrl,
+        }
+      : null,
+  };
+  for (const p of players) {
+    p.profile = projection;
+    p.profileLinkedUserId = profile.linkedUserId;
+  }
+  await db.players.bulkPut(players);
 }
 
 /**
@@ -729,40 +774,54 @@ export async function patchProfile(input: PatchProfileInput): Promise<void> {
 
   if (Object.keys(body).length === 0) return;
 
-  await db.transaction("rw", [db.profiles, db.syncQueue], async () => {
-    const profile = await db.profiles.get(input.profileId);
-    if (profile) {
-      const next: LocalProfile = {
-        ...profile,
-        ...(body.alias !== undefined ? { alias: body.alias } : {}),
-        ...(body.useLinkedAvatar !== undefined
-          ? { useLinkedAvatar: body.useLinkedAvatar }
-          : {}),
-        ...(body.avatarFrame !== undefined
-          ? { avatarFrame: body.avatarFrame }
-          : {}),
-        ...(Object.prototype.hasOwnProperty.call(body, "avatarRing")
-          ? { avatarRing: body.avatarRing ?? null }
-          : {}),
-        updatedAt: ts,
-      };
-      await db.profiles.put(next);
-    } else {
-      console.warn(
-        `[mutations.patchProfile] profile ${input.profileId} not found in Dexie; ` +
-          `queueing server request without local mirror update.`,
-      );
-    }
+  let refreshedProfile: LocalProfile | null = null;
+  await db.transaction(
+    "rw",
+    [db.profiles, db.players, db.syncQueue],
+    async () => {
+      const profile = await db.profiles.get(input.profileId);
+      if (profile) {
+        const next: LocalProfile = {
+          ...profile,
+          ...(body.alias !== undefined ? { alias: body.alias } : {}),
+          ...(body.useLinkedAvatar !== undefined
+            ? { useLinkedAvatar: body.useLinkedAvatar }
+            : {}),
+          ...(body.avatarFrame !== undefined
+            ? { avatarFrame: body.avatarFrame }
+            : {}),
+          ...(Object.prototype.hasOwnProperty.call(body, "avatarRing")
+            ? { avatarRing: body.avatarRing ?? null }
+            : {}),
+          updatedAt: ts,
+        };
+        await db.profiles.put(next);
+        refreshedProfile = next;
+      } else {
+        console.warn(
+          `[mutations.patchProfile] profile ${input.profileId} not found in Dexie; ` +
+            `queueing server request without local mirror update.`,
+        );
+      }
 
-    await db.syncQueue.add({
-      method: "PATCH",
-      url: `/api/profiles/${input.profileId}`,
-      body: JSON.stringify(body),
-      createdAt: ts,
-      retries: 0,
-      status: "pending",
-    });
-  });
+      await db.syncQueue.add({
+        method: "PATCH",
+        url: `/api/profiles/${input.profileId}`,
+        body: JSON.stringify(body),
+        createdAt: ts,
+        retries: 0,
+        status: "pending",
+      });
+    },
+  );
+
+  // Refresh embedded Player.profile snapshots so the writer device
+  // sees the new alias / frame / ring / useLinkedAvatar immediately on
+  // every match-history and scoring surface, instead of waiting for
+  // the next pull-sync delta to arrive.
+  if (refreshedProfile) {
+    await refreshLocalPlayerProjections(refreshedProfile);
+  }
 
   scheduleFlush();
 }

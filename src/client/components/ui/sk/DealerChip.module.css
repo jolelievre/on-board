@@ -1,8 +1,8 @@
 .root {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  padding: 6px 14px 6px 7px;
+  gap: 12px;
+  padding: 8px 18px 8px 10px;
   background: var(--color-surface);
   border: 1.5px solid var(--color-border-strong);
   border-radius: 999px;
@@ -10,35 +10,10 @@
   white-space: nowrap;
 }
 
-.avatarWrap {
-  position: relative;
-  display: inline-flex;
-}
-
-/* Tiny cards-glyph anchored to the bottom-right of the avatar so the
- * dealer chip reads "this person is dealing" at a glance even when the
- * label is clipped or translated to a longer string. */
-.cardsBadge {
-  position: absolute;
-  bottom: -3px;
-  right: -4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--color-surface);
-  border: 1.5px solid var(--color-border-strong);
-  color: var(--color-ink);
-  /* Pull the glyph slightly so it visually centres in the small disc. */
-  line-height: 0;
-}
-
 .label {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   color: var(--color-ink);
   white-space: nowrap;
 }

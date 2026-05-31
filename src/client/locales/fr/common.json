@@ -311,16 +311,19 @@
     "currentStamp": "VOTRE TIMBRE ACTUEL",
     "noPhotoYet": "PAS ENCORE DE PHOTO",
     "newPhoto": {
-      "title": "Nouvelle photo",
-      "subtitle": "ouvre l'appareil photo"
+      "title": "Nouvelle photo"
     },
     "fromGallery": {
-      "title": "Depuis la galerie",
-      "subtitle": "choisir un fichier existant"
+      "title": "Depuis la galerie"
     },
     "styleStamp": {
-      "title": "Styliser le timbre",
-      "subtitle": "garder la photo · changer cadre & contour"
+      "title": "Styliser le timbre"
+    },
+    "useAccount": {
+      "title": "Utiliser la photo du compte"
+    },
+    "useMonogram": {
+      "title": "Utiliser mon initiale"
     },
     "monogramFallback": "Utiliser mon monogramme « {{initial}} »",
     "camera": {

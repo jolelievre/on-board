@@ -311,16 +311,19 @@
     "currentStamp": "YOUR CURRENT STAMP",
     "noPhotoYet": "NO PHOTO YET",
     "newPhoto": {
-      "title": "New photo",
-      "subtitle": "opens the camera"
+      "title": "New photo"
     },
     "fromGallery": {
-      "title": "From gallery",
-      "subtitle": "pick an existing file"
+      "title": "From gallery"
     },
     "styleStamp": {
-      "title": "Style stamp",
-      "subtitle": "keep photo · change frame & ring"
+      "title": "Style stamp"
+    },
+    "useAccount": {
+      "title": "Use account photo"
+    },
+    "useMonogram": {
+      "title": "Use my initial"
     },
     "monogramFallback": "Use my \"{{initial}}\" monogram",
     "camera": {

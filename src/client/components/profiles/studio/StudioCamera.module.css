@@ -30,6 +30,12 @@
 .stage {
   position: relative;
   width: 100%;
+  /* Cap the camera on wide viewports so the desktop layout doesn't
+   * blow the square stage off-screen and push the shutter row below
+   * the fold (which on localhost was making the shutter look like it
+   * "disappeared" once the stream attached). */
+  max-width: 360px;
+  margin: 0 auto;
   /* Square stage so the circular cut-out is round even on landscape
    * cameras. */
   aspect-ratio: 1 / 1;
@@ -52,26 +58,27 @@
   transform: scaleX(-1);
 }
 
-/* Warm-ink scrim with a circular cut-out. The two radial gradients
- * draw the dark overlay everywhere except the centre circle (≈ 70%
- * of the stage's short side). */
+/* Warm-ink scrim with a circular cut-out. The cut-out radius matches
+ * the dashed `.framingRing` exactly (38% of the stage's short side) so
+ * the two read as a single framing window — the user sees what the
+ * final circular crop will contain. */
 .scrim {
   position: absolute;
   inset: 0;
   background: var(--color-studio-scrim);
-  /* Two stops: transparent inside the circle, opaque outside. Using
-   * `radial-gradient` on `mask` keeps the cut-out perfectly circular. */
+  /* Hard 1px transition so the cut-out edge stays crisp and lines up
+   * with the dashed ring drawn on top. */
   -webkit-mask: radial-gradient(
     circle at 50% 50%,
     transparent 0,
-    transparent 34%,
-    #000 35%
+    transparent 38%,
+    #000 38.5%
   );
   mask: radial-gradient(
     circle at 50% 50%,
     transparent 0,
-    transparent 34%,
-    #000 35%
+    transparent 38%,
+    #000 38.5%
   );
   opacity: 0.78;
   pointer-events: none;
@@ -81,9 +88,10 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 68%;
-  height: 68%;
-  transform: translate(-50%, -50%) rotate(-3deg);
+  /* 76% width = 38% radius — matches the scrim cut-out. */
+  width: 76%;
+  height: 76%;
+  transform: translate(-50%, -50%);
   border-radius: 50%;
   border: 2px dashed rgba(255, 240, 200, 0.9);
   pointer-events: none;
@@ -129,12 +137,10 @@
 
 .roundButton {
   display: inline-flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  width: 56px;
-  height: 56px;
-  padding: 6px 0;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
   border-radius: 999px;
   background: var(--color-surface);
   border: 1.5px solid var(--color-border-strong);
@@ -142,13 +148,9 @@
   cursor: pointer;
 }
 
-.roundLabel {
-  font-family: var(--font-mono);
-  font-size: 0.55rem;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--color-ink-soft);
-  line-height: 1;
+.roundButton:hover,
+.roundButton:focus-visible {
+  background: var(--color-surface-alt);
 }
 
 .shutter {
@@ -177,7 +179,7 @@
 }
 
 .controlSpacer {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   display: inline-block;
 }

@@ -256,10 +256,13 @@ function ProfileDetailBody({
                     gameSlug={r.gameSlug}
                     gameName={r.gameName}
                     locale={i18n.language}
-                    // Phase 7: on a profile detail page every row is
-                    // already this person, so the me-highlight would be
-                    // visual noise. Suppress by passing null.
-                    viewerId={null}
+                    // Phase 7 (revised): the me-highlight (teal edge
+                    // tab + Highlighter swipe + accent avatar ring)
+                    // ships in both surfaces — the design rule that
+                    // suppressed it on profile detail was overruled
+                    // during the feedback round in favour of a
+                    // consistent visual language across surfaces.
+                    viewerId={viewerId}
                   />
                 </div>
               ))}
