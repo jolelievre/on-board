@@ -26,7 +26,8 @@ export type IconName =
   | "refresh"
   | "merge"
   | "crown"
-  | "skull-king";
+  | "skull-king"
+  | "info";
 
 type Props = {
   name: IconName;
@@ -279,6 +280,18 @@ export function Icon({ name, size = 20, stroke = 1.6, className, title }: Props)
           <circle cx="2.5" cy="7.5" r="1.7" />
           <circle cx="21.5" cy="7.5" r="1.7" />
           <circle cx="12" cy="4" r="1.9" />
+        </svg>
+      );
+    case "info":
+      // Lower-case "i" in a circle — used as the universal info /
+      // disclosure affordance. Stroke-based to match the rest of the
+      // set; the dot is a filled circle for crispness at small sizes.
+      return (
+        <svg {...props}>
+          {titleEl}
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="8" r="1.1" fill="currentColor" stroke="none" />
+          <path d="M12 11.5v5" />
         </svg>
       );
     case "skull-king":

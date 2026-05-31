@@ -61,7 +61,8 @@ export function RoundResultScreen({
 }: Props) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const viewerId = session?.user.id ?? null;
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   const active = players[activeIndex] as Player | undefined;
 
   // Budget rule: the active seat's tricks must fit between the remaining
@@ -208,7 +209,11 @@ export function RoundResultScreen({
       <div className={styles.scroll}>
         <div className={styles.headerStrip}>
           <span className={styles.playerHeader}>
-            <Avatar profile={active.profile} size="lg" />
+            <Avatar
+              profile={active.profile}
+              viewerId={viewerId}
+              size="lg"
+            />
             <span className={styles.playerName}>
               {displayPlayerName(active, ownedIndex)}
             </span>

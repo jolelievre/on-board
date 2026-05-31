@@ -311,19 +311,19 @@
     "currentStamp": "YOUR CURRENT STAMP",
     "noPhotoYet": "NO PHOTO YET",
     "newPhoto": {
-      "title": "New photo"
+      "title": "Photo"
     },
     "fromGallery": {
-      "title": "From gallery"
+      "title": "Gallery"
     },
     "styleStamp": {
-      "title": "Style stamp"
+      "title": "Style"
     },
     "useAccount": {
-      "title": "Use account photo"
+      "title": "Account"
     },
     "useMonogram": {
-      "title": "Use my initial"
+      "title": "Initial"
     },
     "monogramFallback": "Use my \"{{initial}}\" monogram",
     "camera": {

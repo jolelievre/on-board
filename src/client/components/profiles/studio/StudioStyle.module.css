@@ -95,6 +95,9 @@
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+  /* Breathing room above the swatches so they don't stick to the
+   * "Colour ring" section label. */
+  margin-top: 6px;
 }
 
 .ringSwatch {

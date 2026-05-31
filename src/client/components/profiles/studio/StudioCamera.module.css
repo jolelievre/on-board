@@ -59,26 +59,32 @@
 }
 
 /* Warm-ink scrim with a circular cut-out. The cut-out radius matches
- * the dashed `.framingRing` exactly (38% of the stage's short side) so
- * the two read as a single framing window — the user sees what the
- * final circular crop will contain. */
+ * the dashed `.framingRing` exactly so the two read as a single
+ * framing window — the user sees what the final circular crop will
+ * contain.
+ *
+ * `circle closest-side` measures the gradient's 100% from the centre
+ * to the nearest edge of the stage (= half the stage width on a
+ * square). That lines up with the ring's `width: 76% / 2 = 38%
+ * radius` measured against the same reference. The default
+ * `farthest-corner` would measure to the diagonal corner (≈ √2 ×
+ * half-width) and produce a SMALLER circle than the dashed ring,
+ * which was the misalignment reported in the feedback. */
 .scrim {
   position: absolute;
   inset: 0;
   background: var(--color-studio-scrim);
-  /* Hard 1px transition so the cut-out edge stays crisp and lines up
-   * with the dashed ring drawn on top. */
   -webkit-mask: radial-gradient(
-    circle at 50% 50%,
+    circle closest-side at 50% 50%,
     transparent 0,
-    transparent 38%,
-    #000 38.5%
+    transparent 76%,
+    #000 77%
   );
   mask: radial-gradient(
-    circle at 50% 50%,
+    circle closest-side at 50% 50%,
     transparent 0,
-    transparent 38%,
-    #000 38.5%
+    transparent 76%,
+    #000 77%
   );
   opacity: 0.78;
   pointer-events: none;
@@ -88,7 +94,8 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  /* 76% width = 38% radius — matches the scrim cut-out. */
+  /* Width 76% of stage = 38% radius, matching the closest-side
+   * gradient's 76% stop above (76% × half-width). */
   width: 76%;
   height: 76%;
   transform: translate(-50%, -50%);

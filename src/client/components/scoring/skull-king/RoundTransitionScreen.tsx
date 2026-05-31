@@ -4,7 +4,6 @@ import styles from "./RoundTransitionScreen.module.css";
 import { Avatar } from "../../ui/Avatar";
 import { DealerChip } from "../../ui/sk/DealerChip";
 import { SkullGlyph } from "../../ui/sk/SkGlyphs";
-import { WinnerBadge } from "../../ui/WinnerBadge";
 import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
@@ -42,7 +41,8 @@ export function RoundTransitionScreen({
 }: Props) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const viewerId = session?.user.id ?? null;
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   // One card per round number, no cap — round 10 deals 10 cards. The stack
   // is centred horizontally regardless of count.
   const cardCount = nextRound;
@@ -73,6 +73,7 @@ export function RoundTransitionScreen({
       <div className={styles.dealerChipRow}>
         <DealerChip
           profile={nextDealer.profile}
+          viewerId={viewerId}
           label={t("scoring.skullKing.transition.dealerChip", {
             name: displayPlayerName(nextDealer, ownedIndex),
           })}
@@ -123,10 +124,12 @@ export function RoundTransitionScreen({
               data-testid={`sk-transition-standing-${i}`}
             >
               <span className={styles.standingsRank}>#{i + 1}</span>
-              <span className={styles.standingsAvatarWrap}>
-                <Avatar profile={row.player.profile} size="md" />
-                {isLeader && <WinnerBadge overlay size={20} />}
-              </span>
+              <Avatar
+                profile={row.player.profile}
+                viewerId={viewerId}
+                size="md"
+                winner={isLeader}
+              />
               <span className={styles.standingsName}>
                 {displayPlayerName(row.player, ownedIndex)}
               </span>

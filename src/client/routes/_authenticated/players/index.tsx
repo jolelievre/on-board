@@ -165,7 +165,7 @@ function ProfileRow({
   // `useProfileList`. Every row here is a friend the viewer owns —
   // either unclaimed (no link yet) or claimed (linked to a real user).
   const isLinked = profile.linkedUserId !== null;
-  const ownedIndex = useOwnedProfileIndex(viewerId ?? undefined);
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   const name = displayProfileName(profile, ownedIndex);
 
   return (

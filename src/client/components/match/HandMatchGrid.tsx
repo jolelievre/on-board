@@ -6,7 +6,6 @@ import { SketchRect } from "../ui/SketchRect";
 import { SketchUnderline } from "../ui/SketchUnderline";
 import { SketchCheckbox } from "../ui/SketchCheckbox";
 import { CatGlyph } from "../ui/CatGlyph";
-import { WinnerBadge } from "../ui/WinnerBadge";
 import { jp } from "../ui/sketch";
 import {
   categoryColor,
@@ -56,6 +55,12 @@ type Props = {
   disabled?: boolean;
   /** ID of the winning player (if completed). Highlights total cell. */
   winnerId?: string | null;
+  /** Signed-in user id — threaded into each `<Avatar>` so the
+   * viewer-aware resolver in `displayProfileAvatar` picks up the
+   * viewer's own profile when their `linkedUserId` matches a header
+   * row (otherwise a friend-created match would render the friend's
+   * snapshot of the viewer instead of the viewer's chosen stamp). */
+  viewerId?: string | null;
 };
 
 function rowTemplate(playerCount: number) {
@@ -76,6 +81,7 @@ export function HandMatchGrid({
   onSupremacyChange,
   disabled,
   winnerId,
+  viewerId,
 }: Props) {
   const { t } = useTranslation();
   const template = rowTemplate(players.length);
@@ -119,6 +125,7 @@ export function HandMatchGrid({
               total={total}
               tilt={i === 0 ? -0.4 : 0.3}
               showCrown={showCrown}
+              viewerId={viewerId ?? null}
             />
           );
         })}
@@ -222,11 +229,13 @@ function PlayerNameCell({
   total,
   tilt,
   showCrown,
+  viewerId,
 }: {
   player: ScoreGridPlayer;
   total: number;
   tilt: number;
   showCrown: boolean;
+  viewerId: string | null;
 }) {
   const seed = 10 + (player.id.charCodeAt(0) % 100);
   const cellRef = useRef<HTMLDivElement>(null);
@@ -250,8 +259,12 @@ function PlayerNameCell({
       <div className={styles.playerNameInner}>
         {player.profile && (
           <span className={styles.playerAvatarWrap}>
-            <Avatar profile={player.profile} size="sm" />
-            {showCrown && <WinnerBadge overlay size={16} />}
+            <Avatar
+              profile={player.profile}
+              viewerId={viewerId}
+              size="sm"
+              winner={showCrown}
+            />
           </span>
         )}
         <div

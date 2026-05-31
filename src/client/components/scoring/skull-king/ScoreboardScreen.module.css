@@ -58,11 +58,6 @@
   gap: 4px;
 }
 
-.thAvatarWrap {
-  position: relative;
-  display: inline-flex;
-}
-
 .thName {
   display: block;
   line-height: 1.05;

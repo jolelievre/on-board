@@ -311,19 +311,19 @@
     "currentStamp": "VOTRE TIMBRE ACTUEL",
     "noPhotoYet": "PAS ENCORE DE PHOTO",
     "newPhoto": {
-      "title": "Nouvelle photo"
+      "title": "Photo"
     },
     "fromGallery": {
-      "title": "Depuis la galerie"
+      "title": "Galerie"
     },
     "styleStamp": {
-      "title": "Styliser le timbre"
+      "title": "Style"
     },
     "useAccount": {
-      "title": "Utiliser la photo du compte"
+      "title": "Compte"
     },
     "useMonogram": {
-      "title": "Utiliser mon initiale"
+      "title": "Initiale"
     },
     "monogramFallback": "Utiliser mon monogramme « {{initial}} »",
     "camera": {

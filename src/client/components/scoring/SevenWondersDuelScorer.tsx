@@ -50,7 +50,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
   const viewerId = session?.user.id ?? null;
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   const matchId = match.id;
 
   const [values, setValues] = useState<ScoreGridValues>(() =>
@@ -248,6 +248,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
           onSupremacyChange={setSupremacy}
           disabled={isCompleted}
           winnerId={match.winnerId}
+          viewerId={viewerId}
         />
       </div>
 

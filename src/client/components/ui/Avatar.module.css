@@ -1,26 +1,22 @@
+/* Outer wrapper — layout, positioning context for the optional
+ * WinnerBadge overlay, and the `--avatar-size` token consumers
+ * override (`vsAvatar`, `multiLeaderAvatar`, `meRing`, etc.). No
+ * clipping here so the badge overlay can stick out past the avatar's
+ * circular edge without being cropped. */
 .root {
   --avatar-size: 40px;
-  /* Phase 7: ring is rendered via box-shadow so it doesn't take layout
-   * space and follows the active border-radius automatically. Defaults
-   * are inert (zero width, transparent); `.hasRing` activates the
-   * visible ring at ≈6% of the avatar size. */
   --ring-width: 0px;
   --ring-color: transparent;
+  position: relative;
   width: var(--avatar-size);
   height: var(--avatar-size);
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  font-family: var(--font-display);
-  font-weight: 600;
   flex-shrink: 0;
-  user-select: none;
-  text-transform: uppercase;
-  letter-spacing: 0;
-  box-shadow: 0 0 0 var(--ring-width) var(--ring-color);
 }
 
+/* Size variants cascade `--avatar-size` (consumed by `.photoFrame`'s
+ * width/height) and the font-size used for the initial-letter
+ * fallback. */
 .sm {
   --avatar-size: 24px;
   font-size: 0.7rem;
@@ -41,6 +37,24 @@
   font-size: 2.6rem;
 }
 
+/* Inner element — handles clipping, frame radius, colour ring, and
+ * the bucket bg behind the initial-letter fallback. Sized to fill
+ * `.root` so size overrides on the outer span flow through. */
+.photoFrame {
+  width: 100%;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: 600;
+  user-select: none;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  box-shadow: 0 0 0 var(--ring-width) var(--ring-color);
+}
+
 .img {
   width: 100%;
   height: 100%;
@@ -49,8 +63,8 @@
 }
 
 /* Phase 7: stamp frame variants. Percentages scale with `--avatar-size`
- * so a single class works for every size. `overflow: hidden` on `.root`
- * clips the photo to the frame shape automatically. */
+ * so a single class works for every size. `overflow: hidden` on
+ * `.photoFrame` clips the photo to the frame shape automatically. */
 .frameCircle {
   border-radius: 50%;
 }

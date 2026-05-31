@@ -776,7 +776,7 @@ test.describe("Skull King — Classic flow", () => {
     ).toBeDisabled();
   });
 
-  test("match history: 3-player match renders one row per player with rank, sorted by score", async ({
+  test("match history: 3-player match renders leader + stack, all names accessible", async ({
     page,
   }) => {
     const names = uniqueNames(3);
@@ -789,7 +789,8 @@ test.describe("Skull King — Classic flow", () => {
     expect(matchId).toBeTruthy();
 
     // Round 1 has exactly 1 trick. P1 bids 1 takes 1 (+20), P2 bids 0
-    // takes 0 (+10), P3 bids 1 takes 0 (-10). Distinct ranks 1/2/3.
+    // takes 0 (+10), P3 bids 1 takes 0 (-10). Distinct totals so the
+    // leader is unambiguous.
     await enterBids(page, [1, 0, 1]);
     await enterResults(page, [1, 0, 0]);
     await expect(page.locator("[data-testid='sk-transition']")).toBeVisible();
@@ -803,21 +804,19 @@ test.describe("Skull King — Classic flow", () => {
       `[data-testid='match-history-row-${matchId}']`,
     );
     await expect(row).toBeVisible();
-    // The "vs" separator only renders for 2-player matches and must not
-    // appear here.
-    await expect(row.locator("text=/^vs$/")).toHaveCount(0);
-    // Compact podium: the new card uses the data-testid='match-history-podium'
-    // container with top-3 in a single line.
-    await expect(
-      row.locator("[data-testid='match-history-podium']"),
-    ).toBeVisible();
+    // The "vs" mark only renders for 2-player matches; must not appear
+    // here.
+    await expect(row.locator("text=/^vs$/i")).toHaveCount(0);
+    // Phase 7 layout: leader name on top, others' avatar stack
+    // underneath. The non-winner names live in visually-hidden
+    // spans inside each stack item so the accessibility tree still
+    // carries them — every name is reachable via toContainText even
+    // though only the leader is rendered visibly.
     for (const n of names) {
       await expect(row).toContainText(n);
     }
-    await expect(row).toContainText("#1");
-    await expect(row).toContainText("#2");
-    await expect(row).toContainText("#3");
-    // With exactly 3 players there's no "+N more" overflow indicator.
+    // With exactly 3 players there's no "+N" overflow indicator (cap
+    // is 4 visible faces).
     await expect(row.locator("text=/^\\+\\d+$/")).toHaveCount(0);
   });
 

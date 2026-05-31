@@ -84,14 +84,17 @@ export function displayProfileName(
 }
 
 /**
- * Resolve the avatar URL for a Profile. The avatar choice is anchored
- * in the row itself (the owner's `useLinkedAvatar` toggle plus their
- * custom upload), so the renderer keeps reading the snapshot. The
- * only viewer-specific case is "this is *my* row" — there the
- * linked-user's auth avatar wins, because that's the canonical
- * picture of me regardless of any nickname the owner chose. We
- * detect "this is my row" by checking the owned index, mirroring
- * `displayProfileName`'s lookup.
+ * Resolve the avatar URL for a Profile. Mirrors `displayProfileName`
+ * by routing through the viewer's owned-profile index whenever the
+ * row represents someone they have a stake in — i.e. it's their own
+ * self-Profile, their own owned friend-profile, OR an embedded
+ * projection (in a friend-created match) that points at the viewer
+ * via `linkedUserId`. In all three cases, the viewer's OWN profile
+ * row is the source of truth — its `customAvatarUrl` /
+ * `useLinkedAvatar` toggle drive the resolution.
+ *
+ * Falls back to the embedded snapshot only for the "friend-of-friend"
+ * case (no owned profile matches the row).
  *
  * Returns `null` when no avatar can be resolved — callers fall back
  * to an initials-based monogram.
@@ -100,20 +103,38 @@ export function displayProfileAvatar(
   profile: ProfileDisplayInput,
   ownedIndex: OwnedProfileIndex,
 ): string | null {
-  // "This row is mine" iff the index has the id (i.e. I own the
-  // profile this match player references — my own self-Profile, or
-  // an owned friend-profile I've linked).
-  const mine = ownedIndex.byId.get(profile.id);
-  if (mine) {
-    const linkedAvatar = mine.linkedUser?.avatarUrl?.trim();
-    if (linkedAvatar) return linkedAvatar;
-    return mine.customAvatarUrl?.trim() || null;
+  // "This row is mine" iff:
+  //   - I own the profile by id (my self-Profile, or an owned
+  //     friend-profile I've linked), OR
+  //   - The row carries a `linkedUserId` matching one of my own
+  //     profiles (a friend's projection of me — I should still see
+  //     my own avatar choice, not the friend's nickname-photo of me).
+  let mine = ownedIndex.byId.get(profile.id);
+  if (!mine && profile.linkedUserId) {
+    mine = ownedIndex.byLinkedUserId.get(profile.linkedUserId);
   }
+  if (mine) {
+    return resolveAvatarFromEntry(mine);
+  }
+  // Friend-of-friend / un-owned row: read from the embedded snapshot
+  // honouring the original owner's `useLinkedAvatar` choice.
   if (profile.useLinkedAvatar !== false) {
     const linked = profile.linkedUser?.avatarUrl?.trim();
     if (linked) return linked;
   }
   return profile.customAvatarUrl?.trim() || null;
+}
+
+/** Apply the viewer's own resolution rules to one of their owned
+ * profiles. Honours `useLinkedAvatar` so a self-Profile with a custom
+ * upload + `useLinkedAvatar=false` returns the upload, not the
+ * Google avatar. */
+function resolveAvatarFromEntry(entry: OwnedProfileEntry): string | null {
+  if (entry.useLinkedAvatar !== false) {
+    const linked = entry.linkedUser?.avatarUrl?.trim();
+    if (linked) return linked;
+  }
+  return entry.customAvatarUrl?.trim() || null;
 }
 
 export function displayPlayerName(

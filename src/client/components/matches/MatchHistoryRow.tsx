@@ -10,9 +10,7 @@ import { Avatar } from "../ui/Avatar";
 import { CatGlyph } from "../ui/CatGlyph";
 import { Highlighter } from "../ui/Highlighter";
 import { Icon } from "../ui/Icon";
-import { Pill } from "../ui/Pill";
 import { VsMark } from "../ui/VsMark";
-import { WinnerBadge } from "../ui/WinnerBadge";
 import styles from "./MatchHistoryRow.module.css";
 
 type ScoreRow = { playerId: string; category: string; value: number };
@@ -60,18 +58,22 @@ function computeMatchTotalsBySlug(
 export function MatchHistoryRow({
   match,
   gameSlug,
-  gameName,
   locale,
   viewerId,
+  showGameGlyph = true,
 }: {
   match: MatchListItem;
   gameSlug: string;
-  gameName?: string;
   locale: string;
+  /** When true (the default), the floating game-glyph sticker
+   * appears in the top-left corner. Pass `false` on the per-game
+   * history page where the surrounding context already tells the
+   * viewer which game these matches belong to. */
+  showGameGlyph?: boolean;
   viewerId: string | null;
 }) {
   const { t } = useTranslation();
-  const ownedIndex = useOwnedProfileIndex(viewerId ?? undefined);
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   const totals = computeMatchTotalsBySlug(gameSlug, match.scores);
   const winner = match.winnerId
     ? match.players.find((p) => p.id === match.winnerId)
@@ -95,7 +97,7 @@ export function MatchHistoryRow({
       );
 
   const rowHasMe = match.players.some(isMe);
-  const gameGlyph = renderGameGlyph(gameSlug);
+  const gameGlyph = showGameGlyph ? renderGameGlyph(gameSlug) : null;
 
   return (
     <Link
@@ -107,10 +109,23 @@ export function MatchHistoryRow({
     >
       {/* Floating game glyph — top-left corner of the card. Takes no
           layout space inside the row so the name blocks below get the
-          full width. */}
-      <span className={styles.gameGlyph} aria-hidden="true">
-        {gameGlyph}
-      </span>
+          full width. Suppressed via `showGameGlyph={false}` on the
+          per-game history page (the page header already names the
+          game). */}
+      {gameGlyph && (
+        <span className={styles.gameGlyph} aria-hidden="true">
+          {gameGlyph}
+        </span>
+      )}
+
+      {/* Floating "in progress" badge — top-right corner. Smaller
+          than a full Pill so the VS / multi layouts get back the
+          horizontal space the wide pill used to consume. */}
+      {!isCompleted && (
+        <span className={styles.inProgressBadge}>
+          {t("matches.history.inProgress")}
+        </span>
+      )}
 
       {compact ? (
         <TwoPlayerLayout
@@ -121,9 +136,7 @@ export function MatchHistoryRow({
           isMe={isMe}
           ownedIndex={ownedIndex}
           dateText={dateText}
-          inProgressLabel={
-            !isCompleted ? t("matches.history.inProgress") : null
-          }
+          viewerId={viewerId}
         />
       ) : (
         <MultiPlayerLayout
@@ -134,12 +147,9 @@ export function MatchHistoryRow({
           isMe={isMe}
           ownedIndex={ownedIndex}
           dateText={dateText}
-          gameName={gameName}
+          viewerId={viewerId}
           moreCountLabel={(extra: number) =>
             t("matches.history.moreCount", { count: extra })
-          }
-          inProgressLabel={
-            !isCompleted ? t("matches.history.inProgress") : null
           }
         />
       )}
@@ -149,12 +159,12 @@ export function MatchHistoryRow({
 
 function renderGameGlyph(slug: string) {
   if (slug === "7-wonders-duel") {
-    return <CatGlyph id="wonders" size={16} />;
+    return <CatGlyph id="wonders" size={20} />;
   }
   if (slug === "skull-king") {
-    return <Icon name="skull-king" size={18} />;
+    return <Icon name="skull-king" size={22} />;
   }
-  return <Icon name="dice" size={16} />;
+  return <Icon name="dice" size={20} />;
 }
 
 type LayoutCommon = {
@@ -165,7 +175,10 @@ type LayoutCommon = {
   isMe: (player: Player) => boolean;
   ownedIndex: ReturnType<typeof useOwnedProfileIndex>;
   dateText: string;
-  inProgressLabel: string | null;
+  /** Threaded into every `<Avatar>` so `displayProfileAvatar` can
+   * route through the viewer's own profile when the row points at
+   * them. */
+  viewerId: string | null;
 };
 
 function TwoPlayerLayout({
@@ -176,7 +189,7 @@ function TwoPlayerLayout({
   isMe,
   ownedIndex,
   dateText,
-  inProgressLabel,
+  viewerId,
 }: LayoutCommon) {
   const [left, right] = players;
   if (!left || !right) return null;
@@ -189,14 +202,9 @@ function TwoPlayerLayout({
         isDim={isCompleted && winnerId !== null && winnerId !== left.id}
         isMe={isMe(left)}
         ownedIndex={ownedIndex}
+        viewerId={viewerId}
       />
-      <div className={styles.vsBlock}>
-        <VsMark size={30} />
-        <span className={styles.vsDate}>{dateText}</span>
-        {inProgressLabel && (
-          <Pill tone="warning">{inProgressLabel}</Pill>
-        )}
-      </div>
+      <VsMark size={32} className={styles.vsMark} />
       <TwoPlayerSide
         player={right}
         score={totals[right.id] ?? 0}
@@ -204,8 +212,13 @@ function TwoPlayerLayout({
         isDim={isCompleted && winnerId !== null && winnerId !== right.id}
         isMe={isMe(right)}
         ownedIndex={ownedIndex}
+        viewerId={viewerId}
         align="right"
       />
+      {/* Date is absolutely positioned (relative to `.matchCard`) so
+          it doesn't add to the row's height — the VS mark stays
+          exactly on the avatar centre line. */}
+      <span className={styles.vsDate}>{dateText}</span>
     </div>
   );
 }
@@ -217,6 +230,7 @@ type SideProps = {
   isDim: boolean;
   isMe: boolean;
   ownedIndex: ReturnType<typeof useOwnedProfileIndex>;
+  viewerId: string | null;
   align?: "left" | "right";
 };
 
@@ -227,6 +241,7 @@ function TwoPlayerSide({
   isDim,
   isMe,
   ownedIndex,
+  viewerId,
   align = "left",
 }: SideProps) {
   const name = displayPlayerName(player, ownedIndex);
@@ -235,15 +250,19 @@ function TwoPlayerSide({
       className={`${styles.side} ${align === "right" ? styles.sideRight : ""}`}
       data-self={isMe || undefined}
     >
-      <span className={styles.avatarWrap}>
-        <Avatar
-          profile={player.profile}
-          size="md"
-          ring={isMe ? null : undefined}
-          className={isMe ? styles.meRing : undefined}
-        />
-        {isWinner && <WinnerBadge overlay size={20} />}
-      </span>
+      <Avatar
+        profile={player.profile}
+        viewerId={viewerId}
+        size="md"
+        ring={isMe ? null : undefined}
+        winner={isWinner}
+        // `.vsAvatar` bumps the avatar to 48px — same as the
+        // multi-player leader — so both row variants share a
+        // visual scale. The `me`-ring class still composes on top.
+        className={[styles.vsAvatar, isMe && styles.meRing]
+          .filter(Boolean)
+          .join(" ")}
+      />
       <span className={styles.sideMeta}>
         <span
           className={`${styles.nameWrap} ${isDim ? styles.nameWrapDim : ""}`}
@@ -267,7 +286,6 @@ function TwoPlayerSide({
 }
 
 type MultiProps = LayoutCommon & {
-  gameName?: string;
   moreCountLabel: (extra: number) => string;
 };
 
@@ -279,9 +297,8 @@ function MultiPlayerLayout({
   isMe,
   ownedIndex,
   dateText,
-  gameName,
   moreCountLabel,
-  inProgressLabel,
+  viewerId,
 }: MultiProps) {
   const [leader, ...others] = players;
   if (!leader) return null;
@@ -292,18 +309,19 @@ function MultiPlayerLayout({
 
   return (
     <div className={styles.multiRoot}>
-      {/* Left column: big winner avatar (lg-ish). The crown overlays
-          its top-right when a winner has been declared (or it's a
-          live leader). */}
-      <span className={styles.multiAvatarWrap}>
-        <Avatar
-          profile={leader.profile}
-          size="lg"
-          ring={isMe(leader) ? null : undefined}
-          className={isMe(leader) ? styles.meRing : undefined}
-        />
-        {isWinner && <WinnerBadge overlay size={24} />}
-      </span>
+      {/* Left column: winner avatar. `md` matches the VS layout so
+          both surface types share one face size; the crown badge +
+          name position establish "winner" instead of bigger photo. */}
+      <Avatar
+        profile={leader.profile}
+        viewerId={viewerId}
+        size="md"
+        ring={isMe(leader) ? null : undefined}
+        winner={isWinner}
+        className={[styles.multiLeaderAvatar, isMe(leader) && styles.meRing]
+          .filter(Boolean)
+          .join(" ")}
+      />
 
       {/* Centre column: leader name (top), stack of other players
           (under the name). The stack avatars stay small (sm) so the
@@ -329,10 +347,27 @@ function MultiPlayerLayout({
             >
               <Avatar
                 profile={p.profile}
-                size="sm"
+                viewerId={viewerId}
+                // Stack avatars sized smaller than the leader so the
+                // "winner + supporting cast" hierarchy reads at a
+                // glance. `size="md"` + a CSS class that nudges the
+                // avatar-size variable keeps the stack visibly under
+                // the leader's 48px while staying above the previous
+                // too-tiny sm (24).
+                size="md"
                 ring={isMe(p) ? null : undefined}
-                className={isMe(p) ? styles.meRing : undefined}
+                className={[styles.multiStackAvatar, isMe(p) && styles.meRing]
+                  .filter(Boolean)
+                  .join(" ")}
               />
+              {/* Visually hidden alias — keeps the name in the row's
+                  accessibility tree (each face is otherwise just an
+                  unlabelled icon), in the DOM `textContent` for
+                  Playwright `toContainText` assertions, and in the
+                  screen-reader pass for the multi-player row. */}
+              <span className={styles.srOnly}>
+                {displayPlayerName(p, ownedIndex)}
+              </span>
             </span>
           ))}
           {extraCount > 0 && (
@@ -343,17 +378,17 @@ function MultiPlayerLayout({
         </span>
       </span>
 
-      {/* Right column: score (when completed) + date stacked. */}
+      {/* Right column: leader's score (only when completed). The
+          "in progress" badge floats from the matchCard's top-right
+          corner; the date is positioned absolutely at the
+          bottom-right of the card (see `.multiDate`) so it doesn't
+          stretch the score column. */}
       <span className={styles.multiMeta}>
-        {inProgressLabel ? (
-          <Pill tone="warning">{inProgressLabel}</Pill>
-        ) : isCompleted ? (
+        {isCompleted && (
           <span className={styles.multiScore}>{totals[leader.id] ?? 0}</span>
-        ) : null}
-        <span className={styles.multiDate}>
-          {gameName ? `${gameName} · ${dateText}` : dateText}
-        </span>
+        )}
       </span>
+      <span className={styles.multiDate}>{dateText}</span>
     </div>
   );
 }

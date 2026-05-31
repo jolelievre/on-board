@@ -33,13 +33,6 @@
   padding: 6px 0;
 }
 
-/* Phase 7: winner avatar in the trophy slot. Wraps for the WinnerBadge
- * overlay anchor. */
-.winnerAvatarWrap {
-  position: relative;
-  display: inline-flex;
-}
-
 .standings {
   background: var(--color-surface);
   border: 1.5px solid var(--color-border-strong);

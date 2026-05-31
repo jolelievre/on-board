@@ -90,9 +90,11 @@ export function StudioHub({
             ring={previewRing}
             className={styles.preview}
           />
-          {/* Pencil edit overlay — opens the Style screen. Always
-              available; the Style screen also lets the user adjust the
-              frame/ring of the initial-letter fallback. */}
+          {/* Sparkle overlay — opens the Style screen. Sparkle (not
+              pencil) per the design handoff; pencil is reserved for
+              the EditableAvatar "enter edit mode" affordance one
+              level up. The Style screen lets the user adjust the
+              frame/ring of the initial-letter fallback too. */}
           <button
             type="button"
             className={styles.styleEdit}
@@ -101,7 +103,7 @@ export function StudioHub({
             aria-label={t("studio.styleStamp.title")}
             data-testid="studio-style-stamp"
           >
-            <Icon name="pencil" size={14} />
+            <Icon name="sparkle" size={16} />
           </button>
         </span>
         <span className={styles.alias}>{profile.alias}</span>
@@ -114,7 +116,7 @@ export function StudioHub({
           label={t("studio.newPhoto.title")}
           testid="studio-new-photo"
         >
-          <Icon name="camera" size={22} />
+          <Icon name="camera" size={30} />
         </ActionButton>
 
         <ActionButton
@@ -123,7 +125,7 @@ export function StudioHub({
           label={t("studio.fromGallery.title")}
           testid="studio-from-gallery"
         >
-          <Icon name="image" size={22} />
+          <Icon name="image" size={30} />
         </ActionButton>
 
         {showAccountButton && (
@@ -133,7 +135,7 @@ export function StudioHub({
             label={t("studio.useAccount.title")}
             testid="studio-use-account"
           >
-            <Icon name="globe" size={22} />
+            <Icon name="globe" size={30} />
           </ActionButton>
         )}
 
@@ -154,8 +156,9 @@ export function StudioHub({
   );
 }
 
-/** Compact icon button used in the Hub grid. The accessible label
- * doubles as the tooltip; the visual is icon-only. */
+/** Hub action button — stacks the icon over a short caption so the
+ * affordance reads in one glance. The accessible label and tooltip
+ * mirror the visible caption. */
 function ActionButton({
   onClick,
   disabled,
@@ -179,7 +182,8 @@ function ActionButton({
       title={label}
       data-testid={testid}
     >
-      {children}
+      <span className={styles.actionIcon}>{children}</span>
+      <span className={styles.actionLabel}>{label}</span>
     </button>
   );
 }

@@ -81,16 +81,16 @@ export function WinnerBanner({
       />
       <div className={styles.body}>
         {winnerProfile ? (
-          <span className={styles.avatarWrap}>
-            <Avatar profile={winnerProfile} viewerId={viewerId} size="md" />
-            <WinnerBadge overlay size={20} title={t("matches.winnerLabel")} />
-          </span>
+          <Avatar
+            profile={winnerProfile}
+            viewerId={viewerId}
+            size="md"
+            winner
+          />
         ) : (
           // Fallback for callers without a winner profile available —
           // keep the badge so the banner still reads "winner".
-          <span className={styles.avatarWrap}>
-            <WinnerBadge size={26} title={t("matches.winnerLabel")} />
-          </span>
+          <WinnerBadge size={26} title={t("matches.winnerLabel")} />
         )}
         <div className={styles.titleBlock}>
           <p className={styles.title}>

@@ -98,7 +98,7 @@ function ProfileDetailBody({
     profile.linkedUserId === viewerId && profile.ownerId === viewerId;
   const isLinked = profile.linkedUserId !== null;
   const isOwner = profile.ownerId === viewerId;
-  const ownedIndex = useOwnedProfileIndex(viewerId ?? undefined);
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   const name = displayProfileName(profile, ownedIndex);
   const [mergeOpen, setMergeOpen] = useState(false);
 
@@ -254,7 +254,6 @@ function ProfileDetailBody({
                   <MatchHistoryRow
                     match={r.match}
                     gameSlug={r.gameSlug}
-                    gameName={r.gameName}
                     locale={i18n.language}
                     // Phase 7 (revised): the me-highlight (teal edge
                     // tab + Highlighter swipe + accent avatar ring)
@@ -323,6 +322,10 @@ function LinkSection({
   const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [unlinkError, setUnlinkError] = useState<string | null>(null);
+  // Toggles the explainer paragraph open on click of the info icon.
+  // The HTML `title` tooltip alone only fires on hover (desktop) and
+  // does nothing on mobile tap, which is what the user hit.
+  const [explainerOpen, setExplainerOpen] = useState(false);
 
   // Self-profile carries no link UI under the new bilateral model —
   // the QR is anchored to a profile representing the *other* person.
@@ -451,10 +454,36 @@ function LinkSection({
     );
   }
 
-  // Unclaimed + owner: two-button row + explainer.
+  // Unclaimed + owner: two-button row. The previous long-form
+  // explainer paragraph was demoted to a collapsible disclosure
+  // beside the title — tapping the info icon toggles the full
+  // sentence in/out, so the row stays tight on first paint and the
+  // context is still one tap away on every device (desktop and
+  // mobile alike — a `title=` tooltip alone wouldn't fire on tap).
   return (
-    <Group title={t("link.unclaimedTitle")}>
-      <p className={styles.linkHint}>{t("link.unclaimedExplainer")}</p>
+    <Group
+      title={
+        <span className={styles.linkHeader}>
+          {t("link.unclaimedTitle")}
+          <button
+            type="button"
+            className={styles.linkInfoButton}
+            aria-label={t("link.unclaimedExplainer")}
+            aria-expanded={explainerOpen}
+            aria-controls="profile-link-explainer"
+            onClick={() => setExplainerOpen((open) => !open)}
+            data-testid="profile-link-info"
+          >
+            <Icon name="info" size={16} />
+          </button>
+        </span>
+      }
+    >
+      {explainerOpen && (
+        <p id="profile-link-explainer" className={styles.linkExplainer}>
+          {t("link.unclaimedExplainer")}
+        </p>
+      )}
       <div className={styles.linkButtonRow}>
         <Button
           type="button"

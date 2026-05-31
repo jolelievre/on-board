@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import type { AvatarFrame, AvatarRing, LocalProfile } from "../../lib/db";
-import { displayProfileName } from "../../../shared/players";
+import { displayProfileAvatar, displayProfileName } from "../../../shared/players";
 import { useOwnedProfileIndex } from "../../hooks/data/useOwnedProfileIndex";
+import { WinnerBadge } from "./WinnerBadge";
 import styles from "./Avatar.module.css";
 
 const BUCKETS = [
@@ -44,6 +46,17 @@ const RING_CLASS: Record<Exclude<AvatarRing, null>, string> = {
   military: styles.ringMilitary,
 };
 
+// Winner-badge size per avatar size variant. Roughly 40–45% of the
+// avatar diameter so the crown reads at a glance without dominating
+// the face. Custom CSS overrides of `--avatar-size` don't auto-scale
+// the badge — callers who do that get the variant's badge size.
+const BADGE_SIZE: Record<AvatarSize, number> = {
+  sm: 14,
+  md: 18,
+  lg: 28,
+  xl: 36,
+};
+
 export type AvatarSize = "sm" | "md" | "lg" | "xl";
 
 type CommonProps = {
@@ -57,6 +70,12 @@ type CommonProps = {
    * Pass null explicitly to suppress a ring even when the profile has one
    * (used by the studio's "off" swatch preview). */
   ring?: AvatarRing;
+  /** When true, overlays the gold `WinnerBadge` on the top-right of
+   * the avatar. Reusable everywhere a winner / live leader needs the
+   * crown — match history rows, scorer headers, winner banners,
+   * skull-king standings. Sized automatically from the `size`
+   * variant. */
+  winner?: boolean;
 };
 
 type ProfileSource = {
@@ -72,9 +91,11 @@ type ProfileSource = {
     | "avatarRing"
     | "linkedUser"
   >;
-  /** The viewer for resolution: a linked user looking at their own
-   * profile sees their own canonical avatar; an owner sees either the
-   * friend's photo or their custom upload depending on `useLinkedAvatar`. */
+  /** The viewer for resolution. The Avatar consults the
+   * `useOwnedProfileIndex` hook to identify rows that point at the
+   * viewer (via id or `linkedUserId`) and resolves through the
+   * viewer's own profile instead of the embedded snapshot — keeping
+   * the viewer's custom upload visible even on friend-created matches. */
   viewerId?: string | null;
 };
 
@@ -90,37 +111,30 @@ type FallbackSource = {
 type Props = CommonProps & (ProfileSource | FallbackSource);
 
 /**
- * Reusable avatar. Renders a profile photo (custom upload or linked Google
- * photo) or an initial-letter fallback in a deterministic colour bucket.
+ * Reusable avatar. Two-element structure: an outer `.root` (layout +
+ * positioning context, no clipping) and an inner `.photoFrame`
+ * (clipping, frame radius, colour ring, bucket bg). The outer keeps
+ * `overflow: visible` so the optional `WinnerBadge` overlay can stick
+ * out past the avatar's circular edge without being clipped.
  *
- * Phase 7 adds **stamp** styling on top: a `frame` (circle | rounded | tag)
- * and a `ring` (one of 8 7WD category colours, or null). Defaults read
- * from `profile.avatarFrame` / `profile.avatarRing` so every consumer
- * picks up the owner-chosen stamp without threading the props manually.
- *
- * Resolution order for an owner viewing a profile:
- *   1. `customAvatarUrl` is set AND `useLinkedAvatar` is false → use it
- *   2. profile is linked AND `useLinkedAvatar` is true →
- *      `linkedUser.avatarUrl`
- *   3. profile has a `customAvatarUrl` anyway → use it (fallback for
- *      unclaimed profiles)
- *   4. initial-letter chip in a deterministic colour
- *
- * When the viewer is the linked user themselves, always use the linked
- * user's own canonical avatar — owners can never override what someone
- * sees of themselves.
+ * Phase 7 + feedback rounds:
+ *   - `frame` / `ring` props drive stamp styling.
+ *   - `winner` prop overlays the gold crown badge in the top-right.
+ *   - `displayProfileAvatar` + `useOwnedProfileIndex` route every
+ *     URL resolution through the viewer's owned-profile index, so
+ *     the viewer always sees their own custom upload even on
+ *     friend-created matches.
+ *   - `<img onError>` falls back to the initial-letter chip when a
+ *     stale URL (e.g. file lost across preview deploys) 404s,
+ *     instead of showing the browser's broken-image icon.
  */
 export function Avatar(props: Props) {
   const size: AvatarSize = props.size ?? "md";
   const sizeClass = SIZE_CLASS[size];
 
-  // Frame: explicit prop wins; otherwise read from the profile when
-  // available; else circle. Cover legacy/undefined values defensively.
   const frame: AvatarFrame =
     props.frame ??
     ("profile" in props ? (props.profile.avatarFrame ?? "circle") : "circle");
-  // Ring: distinguish "no prop" from "explicit null" so a caller can
-  // suppress the profile's ring on a preview.
   const ring: AvatarRing =
     props.ring !== undefined
       ? props.ring
@@ -131,55 +145,68 @@ export function Avatar(props: Props) {
   const frameClass = FRAME_CLASS[frame];
   const ringClass = ring ? `${styles.hasRing} ${RING_CLASS[ring]}` : "";
 
-  const className = [
-    styles.root,
-    sizeClass,
-    frameClass,
-    ringClass,
-    props.className,
-  ]
+  // Hook is called unconditionally so the rules-of-hooks stay happy
+  // across both render branches. Pass null when this Avatar isn't a
+  // profile-source — the hook short-circuits to the empty index.
+  const viewerForIndex =
+    "profile" in props ? (props.viewerId ?? null) : null;
+  const ownedIndex = useOwnedProfileIndex(viewerForIndex);
+
+  // Resolved URL changes when props change OR when the viewer's owned
+  // profiles refresh (e.g. they upload a new photo). The onError
+  // fallback below also feeds back into this state by clearing the URL.
+  const resolvedUrl =
+    "profile" in props ? displayProfileAvatar(props.profile, ownedIndex) : null;
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  // When the resolved URL changes, clear any stale "this URL failed"
+  // memo so the new URL gets a fresh chance.
+  useEffect(() => {
+    if (resolvedUrl !== failedUrl) setFailedUrl(null);
+    // We deliberately track only `resolvedUrl` — `failedUrl` updates
+    // inside this effect would otherwise loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedUrl]);
+  const showImage = resolvedUrl !== null && resolvedUrl !== failedUrl;
+
+  // Outer root carries layout / size / custom CSS overrides
+  // (`--avatar-size`, `--ring-color`, `meRing` etc.). All decoration
+  // sits on the inner photoFrame so the WinnerBadge can overhang
+  // without being clipped.
+  const rootClass = [styles.root, sizeClass, props.className]
     .filter(Boolean)
     .join(" ");
 
-  // Hook is called unconditionally so the rules-of-hooks stay happy
-  // across both render branches. Pass undefined when this Avatar isn't
-  // a profile-source — the hook short-circuits to the empty index.
-  const viewerForIndex = "profile" in props ? props.viewerId : undefined;
-  const ownedIndex = useOwnedProfileIndex(viewerForIndex ?? undefined);
+  const renderBadge = props.winner ? (
+    <WinnerBadge overlay size={BADGE_SIZE[size]} />
+  ) : null;
 
   if ("profile" in props) {
-    const { profile, viewerId } = props;
-    const resolved = resolveAvatarUrl(profile, viewerId);
+    const { profile } = props;
     const name = displayProfileName(profile, ownedIndex);
     const initial = initialFromName(name);
     const bucket = BUCKETS[hashBucket(profile.id) % BUCKETS.length];
-
-    if (resolved) {
-      return (
-        <span
-          className={`${className} ${bucket}`}
-          role="img"
-          aria-label={name}
-        >
-          <img
-            className={styles.img}
-            src={resolved}
-            alt=""
-            // Referrer hides the user's auth host from external avatar
-            // providers; Google's hosted photos accept this fine.
-            referrerPolicy="no-referrer"
-          />
-        </span>
-      );
-    }
+    const frameInnerClass = [styles.photoFrame, bucket, frameClass, ringClass]
+      .filter(Boolean)
+      .join(" ");
 
     return (
-      <span
-        className={`${className} ${bucket}`}
-        role="img"
-        aria-label={name}
-      >
-        {initial}
+      <span className={rootClass} role="img" aria-label={name}>
+        <span className={frameInnerClass}>
+          {showImage && resolvedUrl ? (
+            <img
+              className={styles.img}
+              src={resolvedUrl}
+              alt=""
+              // Referrer hides the user's auth host from external avatar
+              // providers; Google's hosted photos accept this fine.
+              referrerPolicy="no-referrer"
+              onError={() => setFailedUrl(resolvedUrl)}
+            />
+          ) : (
+            initial
+          )}
+        </span>
+        {renderBadge}
       </span>
     );
   }
@@ -187,51 +214,15 @@ export function Avatar(props: Props) {
   const { alias, hashKey } = props;
   const initial = initialFromName(alias);
   const bucket = BUCKETS[hashBucket(hashKey ?? alias) % BUCKETS.length];
+  const frameInnerClass = [styles.photoFrame, bucket, frameClass, ringClass]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <span
-      className={`${className} ${bucket}`}
-      role="img"
-      aria-label={alias}
-    >
-      {initial}
+    <span className={rootClass} role="img" aria-label={alias}>
+      <span className={frameInnerClass}>{initial}</span>
+      {renderBadge}
     </span>
   );
-}
-
-function resolveAvatarUrl(
-  profile: ProfileSource["profile"],
-  viewerId: string | null | undefined,
-): string | null {
-  // Friend-linked protection: if I'm viewing a profile linked to ME
-  // but owned by *someone else* (e.g. a friend created a profile for
-  // me and linked it to my account), they don't get to customise what
-  // I see — always show my own canonical avatar to me.
-  //
-  // The self-profile case (`ownerId === linkedUserId === viewerId`)
-  // is *not* protected: I'm both the owner and the linked user, so
-  // toggling `useLinkedAvatar` off + uploading a custom photo must
-  // override the canonical Google one. Without the `ownerId !==
-  // viewerId` guard below, self-profile uploads would silently fall
-  // back to the Google photo on the owner's own device.
-  if (
-    profile.linkedUserId &&
-    viewerId &&
-    profile.linkedUserId === viewerId &&
-    profile.ownerId !== viewerId
-  ) {
-    return profile.linkedUser?.avatarUrl ?? null;
-  }
-  // Owner-side (incl. self-profile): explicit override wins when
-  // `useLinkedAvatar` is false.
-  if (!profile.useLinkedAvatar && profile.customAvatarUrl) {
-    return profile.customAvatarUrl;
-  }
-  // Linked + opt-in to the linked user's photo.
-  if (profile.linkedUserId && profile.useLinkedAvatar) {
-    return profile.linkedUser?.avatarUrl ?? profile.customAvatarUrl ?? null;
-  }
-  // Unclaimed with a custom upload.
-  return profile.customAvatarUrl ?? null;
 }
 
 function initialFromName(name: string): string {

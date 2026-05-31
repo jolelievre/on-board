@@ -11,6 +11,11 @@ import shared from "./Studio.module.css";
 import styles from "./StudioStyle.module.css";
 
 const FRAMES: AvatarFrame[] = ["circle", "rounded", "tag"];
+// `treasury` is omitted from the picker — its strong is nearly
+// indistinguishable from `commercial` in both themes, so showing it
+// makes the picker wrap onto a second row on narrow viewports for no
+// visual gain. The avatar component still accepts `treasury` if some
+// other surface ever wants to surface it programmatically.
 const RINGS: Exclude<AvatarRing, null>[] = [
   "civil",
   "scientific",
@@ -18,7 +23,6 @@ const RINGS: Exclude<AvatarRing, null>[] = [
   "guilds",
   "wonders",
   "progress",
-  "treasury",
   "military",
 ];
 

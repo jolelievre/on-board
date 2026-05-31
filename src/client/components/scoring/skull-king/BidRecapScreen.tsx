@@ -25,7 +25,8 @@ export function BidRecapScreen({
 }: Props) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const viewerId = session?.user.id ?? null;
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   const sum = players.reduce((s, p) => s + (bids[p.id] ?? 0), 0);
 
   let commentary = "";
@@ -72,7 +73,11 @@ export function BidRecapScreen({
               >
                 <span className={styles.entryLeft}>
                   <span className={styles.seatBadge}>{i + 1}</span>
-                  <Avatar profile={p.profile} size="md" />
+                  <Avatar
+                    profile={p.profile}
+                    viewerId={viewerId}
+                    size="md"
+                  />
                   <span className={styles.entryName}>
                     {displayPlayerName(p, ownedIndex)}
                   </span>

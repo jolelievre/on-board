@@ -77,10 +77,12 @@
 
 .actionButton {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 56px;
-  padding: 10px;
+  gap: 6px;
+  min-height: 84px;
+  padding: 12px 8px;
   background: var(--color-surface);
   border: 1.5px solid var(--color-border-strong);
   border-radius: 12px;
@@ -100,6 +102,23 @@
   cursor: not-allowed;
 }
 
+.actionIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-ink);
+  line-height: 0;
+}
+
+.actionLabel {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-ink);
+  line-height: 1;
+  text-align: center;
+}
+
 /* Monogram glyph rendered inside the action button — mirrors the
  * Avatar's initial-letter fallback so the affordance previews its own
  * outcome. */
@@ -107,14 +126,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--color-surface-alt);
   border: 1.5px solid var(--color-border-strong);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   color: var(--color-ink);
   text-transform: uppercase;
   line-height: 1;

@@ -5,44 +5,75 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
-  /* Extra left padding so the floating glyph + edge tab don't collide
-   * with content. */
-  padding: 0.75rem 0.875rem 0.75rem 1.15rem;
+  /* Symmetric horizontal padding so the content has equal breathing
+   * room on both sides; the floating game glyph + edge tab are
+   * absolutely positioned and don't take layout space, so they don't
+   * push the body inward anymore. */
+  padding: 0.45rem 0.875rem;
   text-decoration: none;
   color: inherit;
-  min-height: 64px;
 }
 
 /* Teal edge tab — drawn as a `:before` so it doesn't take layout
- * space. Rendered for any row where the viewer is a participant. */
+ * space. The top/bottom insets match `--radius-lg` so the tab stops
+ * exactly where the rounded corner begins, instead of clipping past
+ * it. Rendered for any row where the viewer is a participant. */
 .matchCardMe::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 8px;
-  bottom: 8px;
+  top: var(--radius-lg);
+  bottom: var(--radius-lg);
   width: 4px;
   border-radius: 0 2px 2px 0;
   background: var(--color-accent);
 }
 
-/* Floating game-glyph badge in the top-left corner. Takes no layout
- * space inside the row body. The translucent backdrop keeps the glyph
- * legible whether the row sits on the paper background or a coloured
- * highlighter behind a name. */
+/* Floating game-glyph badge — straddles the top-left corner so the
+ * glyph reads as a sticker stuck onto the card rather than a row
+ * element. Sized slightly larger than the previous in-row version
+ * (28px). The disc background keeps the glyph legible against any
+ * card colour underneath. */
 .gameGlyph {
   position: absolute;
-  top: 6px;
-  left: 8px;
+  top: -6px;
+  left: -6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-surface-alt) 92%, transparent);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
   color: var(--color-ink-soft);
+  box-shadow: var(--shadow-soft);
   pointer-events: none;
+  z-index: 1;
+}
+
+/* Floating "in progress" badge — straddles the top-right corner,
+ * mirror of the game glyph. Absolutely positioned so it never
+ * competes with the row body for horizontal space. */
+.inProgressBadge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 50%, transparent);
+  border-radius: 999px;
+  padding: 1px 7px;
+  line-height: 1.2;
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* ──────────── 2-player ──────────── */
@@ -53,6 +84,14 @@
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
+}
+
+.vsMark {
+  /* Width budget for the VS sketch ring + glyph. Bound it so the
+   * middle column doesn't expand and steal width from the two player
+   * blocks on either side. */
+  width: 36px;
+  height: 36px;
 }
 
 .side {
@@ -66,18 +105,16 @@
   flex-direction: row-reverse;
 }
 
-.avatarWrap {
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-}
-
 .sideMeta {
   display: flex;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
   flex: 1 1 0;
+  /* Hug-the-content alignment on the left side so the Highlighter
+   * swipe behind the name doesn't bleed across the whole column.
+   * Right side overrides below. */
+  align-items: flex-start;
 }
 
 .sideRight .sideMeta {
@@ -126,18 +163,21 @@
   color: var(--color-ink-faint);
 }
 
-.vsBlock {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
+/* Date is positioned absolutely relative to `.matchCard`, so it
+ * doesn't add to the row's height — the VS mark stays exactly on
+ * the avatar centre line. Sits at the card's bottom edge (inside
+ * the card's bottom padding) and centred horizontally. */
 .vsDate {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
   font-family: var(--font-mono);
   font-size: 0.625rem;
   letter-spacing: 0.04em;
   color: var(--color-ink-faint);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* ──────────── 3+ player ──────────── */
@@ -153,17 +193,14 @@
   padding-left: 0.25rem;
 }
 
-.multiAvatarWrap {
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-}
-
 .multiCentre {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  /* Children hug the start so the Highlighter swipe behind the
+   * leader name sizes to the text, not to the whole column. */
+  align-items: flex-start;
 }
 
 .multiName {
@@ -176,10 +213,12 @@
 .multiNameText {
   position: relative;
   z-index: 1;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.25rem;
-  line-height: 1.05;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  /* Matches the VS row name size so both layouts share one type
+   * scale. The freed vertical space lets the stack avatars grow
+   * (see `.multiStackAvatar`). */
+  line-height: 1.1;
   color: var(--color-ink);
   white-space: nowrap;
   overflow: hidden;
@@ -229,11 +268,59 @@
 }
 
 .multiDate {
+  /* Anchored to the matchCard's bottom-right corner so the date
+   * hugs the floor without making the row taller. Same treatment as
+   * `.vsDate`, just right-aligned instead of centred. */
+  position: absolute;
+  bottom: 2px;
+  right: 10px;
   font-family: var(--font-mono);
   font-size: 0.625rem;
   letter-spacing: 0.04em;
   color: var(--color-ink-faint);
   white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Visually-hidden but accessible — keeps stacked-avatar aliases in the
+ * DOM `textContent` (so search, copy-paste, and Playwright assertions
+ * find them) while removing them from visual flow. Standard sr-only
+ * recipe: 1px clipped box with no layout impact. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ──────────── Multi-row avatar sizing ──────────── *
+ *
+ * The leader sits ~20% bigger than the stack so the hierarchy reads
+ * at a glance. Both override the Avatar component's per-size token
+ * (`--avatar-size`) directly — the `size="md"` prop still seeds the
+ * default font-scale + media query, but the visual size is driven
+ * here. */
+.multiLeaderAvatar {
+  --avatar-size: 48px;
+}
+
+.multiStackAvatar {
+  /* Bumped from 32 — the smaller leader name (now 0.95rem instead
+   * of the display-display 1.25rem) frees vertical room for a
+   * slightly bigger stack while keeping the winner/leader visibly
+   * larger at 48px. */
+  --avatar-size: 36px;
+}
+
+/* 2-player avatars share the leader's 48px so both row variants
+ * read at the same visual scale. */
+.vsAvatar {
+  --avatar-size: 48px;
 }
 
 /* ──────────── Me-ring on avatars ──────────── */

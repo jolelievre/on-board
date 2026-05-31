@@ -79,14 +79,6 @@
   flex: 0 0 auto;
 }
 
-/* Phase 7: avatar wrapper inside a standings row. Holds the leader's
- * `<WinnerBadge>` overlay (only rendered on the first row). */
-.standingsAvatarWrap {
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-}
-
 .dealerChipRow {
   display: flex;
   justify-content: center;

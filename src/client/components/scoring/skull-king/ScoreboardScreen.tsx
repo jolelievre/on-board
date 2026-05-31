@@ -2,7 +2,6 @@ import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./ScoreboardScreen.module.css";
 import { Avatar } from "../../ui/Avatar";
-import { WinnerBadge } from "../../ui/WinnerBadge";
 import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
@@ -24,7 +23,8 @@ type Props = {
 export function ScoreboardScreen({ players, entries, currentRound }: Props) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const viewerId = session?.user.id ?? null;
+  const ownedIndex = useOwnedProfileIndex(viewerId);
 
   // Per-cell: bid/tricks/total/bonus computed once.
   const cells: Record<
@@ -133,10 +133,12 @@ export function ScoreboardScreen({ players, entries, currentRound }: Props) {
                   return (
                     <th key={p.id} className={styles.th}>
                       <span className={styles.thHeader}>
-                        <span className={styles.thAvatarWrap}>
-                          <Avatar profile={p.profile} size="md" />
-                          {isLeader && <WinnerBadge overlay size={18} />}
-                        </span>
+                        <Avatar
+                          profile={p.profile}
+                          viewerId={viewerId}
+                          size="md"
+                          winner={isLeader}
+                        />
                         <span className={styles.thName}>
                           {displayPlayerName(p, ownedIndex)}
                         </span>
@@ -275,7 +277,7 @@ function Sparkline({
   roundsPlayed: number;
 }) {
   const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const ownedIndex = useOwnedProfileIndex(session?.user.id ?? null);
   const W = 320;
   const H = 80;
 

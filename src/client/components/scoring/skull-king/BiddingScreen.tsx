@@ -36,7 +36,8 @@ export function BiddingScreen({
 }: Props) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const viewerId = session?.user.id ?? null;
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   const active = players[activeIndex];
   const bidCount = players.filter((p) => bids[p.id] != null).length;
   const allDone = bidCount === players.length;
@@ -94,7 +95,11 @@ export function BiddingScreen({
             >
               <span className={styles.rowLeft}>
                 <span className={styles.posBadge}>{i + 1}</span>
-                <Avatar profile={p.profile} size="md" />
+                <Avatar
+                  profile={p.profile}
+                  viewerId={viewerId}
+                  size="md"
+                />
                 <span className={styles.rowName}>{displayPlayerName(p, ownedIndex)}</span>
               </span>
               {v != null ? (
