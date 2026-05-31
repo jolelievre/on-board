@@ -2,6 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./MatchCompleteScreen.module.css";
+import { Avatar } from "../../ui/Avatar";
+import { WinnerBadge } from "../../ui/WinnerBadge";
 import { SkullGlyph } from "../../ui/sk/SkGlyphs";
 import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
@@ -76,7 +78,14 @@ export function MatchCompleteScreen({
       </div>
 
       <div className={styles.trophy}>
-        <SkullGlyph size={80} crownColor="var(--sk-gold)" />
+        {winner && !isDraw ? (
+          <span className={styles.winnerAvatarWrap}>
+            <Avatar profile={winner.profile} size="xl" />
+            <WinnerBadge overlay size={32} />
+          </span>
+        ) : (
+          <SkullGlyph size={80} crownColor="var(--sk-gold)" />
+        )}
       </div>
 
       <div className={styles.standings}>
@@ -93,6 +102,7 @@ export function MatchCompleteScreen({
               data-testid={`sk-final-rank-${i}`}
             >
               <span className={styles.rank}>{medal}</span>
+              <Avatar profile={p.profile} size="sm" />
               <span className={`${styles.name} ${isWinner ? styles.winner : ""}`}>
                 {displayPlayerName(p, ownedIndex)}
               </span>

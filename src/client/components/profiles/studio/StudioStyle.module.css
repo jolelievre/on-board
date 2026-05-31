@@ -1,0 +1,163 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.previewWrap {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0;
+}
+
+.preview {
+  --avatar-size: 150px;
+}
+
+.section {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionLabel {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.6875rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+  padding: 0;
+  margin: 0;
+}
+
+.frameRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.frameSwatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 12px;
+  cursor: pointer;
+  color: var(--color-ink);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.frameSwatch:hover {
+  background: var(--color-surface-alt);
+}
+
+.frameSwatchActive {
+  border-color: var(--color-primary);
+  background: var(--color-surface-alt);
+}
+
+.frameShape {
+  display: inline-block;
+  width: 36px;
+  height: 36px;
+  background: var(--color-cat-civil-bg);
+  border: 1.5px solid var(--color-cat-civil-strong);
+}
+
+.frameShape_circle {
+  border-radius: 50%;
+}
+
+.frameShape_rounded {
+  border-radius: 26%;
+}
+
+.frameShape_tag {
+  border-radius: 10% 34% 10% 34%;
+}
+
+.frameName {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-ink);
+}
+
+.ringRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.ringSwatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-cat-civil-strong);
+  cursor: pointer;
+  /* The ring "halo" effect — visible ring colour painted via
+   * box-shadow so the swatch itself stays a clean disc. */
+  box-shadow: 0 0 0 3px var(--ring-color, var(--color-cat-civil-strong));
+  transition: outline 0.12s ease;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.ringSwatchActive {
+  outline: 2px solid var(--color-ink);
+}
+
+.ringSwatchOff {
+  background: transparent;
+  border: 1.5px dashed var(--color-border-strong);
+  box-shadow: none;
+}
+
+.ring_civil {
+  --ring-color: var(--color-cat-civil-strong);
+  background: var(--color-cat-civil-strong);
+}
+.ring_scientific {
+  --ring-color: var(--color-cat-scientific-strong);
+  background: var(--color-cat-scientific-strong);
+}
+.ring_commercial {
+  --ring-color: var(--color-cat-commercial-strong);
+  background: var(--color-cat-commercial-strong);
+}
+.ring_guilds {
+  --ring-color: var(--color-cat-guilds-strong);
+  background: var(--color-cat-guilds-strong);
+}
+.ring_wonders {
+  --ring-color: var(--color-cat-wonders-strong);
+  background: var(--color-cat-wonders-strong);
+}
+.ring_progress {
+  --ring-color: var(--color-cat-progress-strong);
+  background: var(--color-cat-progress-strong);
+}
+.ring_treasury {
+  --ring-color: var(--color-cat-treasury-strong);
+  background: var(--color-cat-treasury-strong);
+}
+.ring_military {
+  --ring-color: var(--color-cat-military-strong);
+  background: var(--color-cat-military-strong);
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}

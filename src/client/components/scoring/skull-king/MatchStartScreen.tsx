@@ -6,6 +6,7 @@ import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
+import { Avatar } from "../../ui/Avatar";
 
 type Props = {
   /** Player order to render. The component reorders an internal copy and
@@ -253,6 +254,7 @@ export function MatchStartScreen({
                 >
                   {i + 1}
                 </span>
+                <Avatar profile={p.profile} size="sm" />
                 <span className={styles.seatName}>
                   {displayPlayerName(p, ownedIndex)}
                 </span>

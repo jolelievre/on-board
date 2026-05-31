@@ -1,0 +1,25 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-crown-gold);
+  /* The crown glyph inside reads `currentColor`; this sets it. */
+  color: var(--color-crown-gold-ink);
+  /* Thin surface-coloured ring so the badge reads cleanly when it
+   * overlays a busy photo (avatar). */
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* When used as an avatar overlay: top-right anchor. Parent must have
+ * `position: relative`. The negative offset hangs the disc slightly
+ * outside the avatar's border, matching the mock. */
+.overlay {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  z-index: 1;
+}

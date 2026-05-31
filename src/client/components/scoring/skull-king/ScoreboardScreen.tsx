@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./ScoreboardScreen.module.css";
+import { Avatar } from "../../ui/Avatar";
+import { WinnerBadge } from "../../ui/WinnerBadge";
 import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
@@ -126,11 +128,22 @@ export function ScoreboardScreen({ players, entries, currentRound }: Props) {
                 <th className={`${styles.th} ${styles.thRound}`}>
                   <span>R</span>
                 </th>
-                {players.map((p) => (
-                  <th key={p.id} className={styles.th}>
-                    {displayPlayerName(p, ownedIndex)}
-                  </th>
-                ))}
+                {players.map((p) => {
+                  const isLeader = ranks[p.id] === 1 && (totals[p.id] ?? 0) > 0;
+                  return (
+                    <th key={p.id} className={styles.th}>
+                      <span className={styles.thHeader}>
+                        <span className={styles.thAvatarWrap}>
+                          <Avatar profile={p.profile} size="sm" />
+                          {isLeader && <WinnerBadge overlay size={14} />}
+                        </span>
+                        <span className={styles.thName}>
+                          {displayPlayerName(p, ownedIndex)}
+                        </span>
+                      </span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>

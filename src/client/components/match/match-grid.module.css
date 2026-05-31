@@ -173,6 +173,15 @@
   word-break: break-word;
 }
 
+/* Phase 7 — wraps the player's `<Avatar>` so the `<WinnerBadge>` can
+ * anchor to its top-right. Centred above the name; small enough not
+ * to dominate the cell. */
+.playerAvatarWrap {
+  position: relative;
+  display: inline-flex;
+  margin-bottom: 0.25rem;
+}
+
 .playerName {
   font-family: var(--font-display);
   font-weight: 700;

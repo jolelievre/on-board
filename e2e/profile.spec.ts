@@ -116,8 +116,9 @@ test.describe("Profile detail — avatar uploader", () => {
       page.locator("[data-testid='avatar-uploader']"),
     ).toBeVisible();
 
-    // Upload via the hidden file input — same code path the "Choose
-    // file" button triggers, just without the OS file picker.
+    // Upload via the hidden file input — same code path the Hub's
+    // "From gallery" action triggers (it's a programmatic click on this
+    // input). Studio jumps to the reposition screen on load.
     await page
       .locator("[data-testid='avatar-file-input']")
       .setInputFiles({
@@ -126,14 +127,34 @@ test.describe("Profile detail — avatar uploader", () => {
         buffer: TINY_PNG,
       });
 
-    await page.click("[data-testid='avatar-confirm']");
-    await expect(page.locator("[data-testid='avatar-clear']")).toBeVisible();
+    // Reposition → Use photo: bakes the square crop and advances to the
+    // Style screen.
+    await expect(
+      page.locator("[data-testid='studio-reposition']"),
+    ).toBeVisible();
+    await page.click("[data-testid='studio-reposition-confirm']");
 
-    // Clear it.
-    await page.click("[data-testid='avatar-clear']");
-    await expect(page.locator("[data-testid='avatar-clear']")).toHaveCount(0);
+    // Style → Save stamp: uploads the baked square + persists frame/ring.
+    await expect(page.locator("[data-testid='studio-style']")).toBeVisible();
+    await page.click("[data-testid='studio-style-save']");
 
-    // Close edit mode.
+    // Success state confirms the upload landed.
+    await expect(page.locator("[data-testid='studio-saved']")).toBeVisible();
+    await page.click("[data-testid='studio-saved-done']");
+
+    // Re-enter the studio to verify the dashed "Use my X monogram" row
+    // is now visible (only when the profile has a custom photo) and
+    // that clearing it puts us back in the no-photo state.
+    await page.click("[data-testid='profile-edit-avatar']");
+    await expect(
+      page.locator("[data-testid='studio-clear-photo']"),
+    ).toBeVisible();
+    await page.click("[data-testid='studio-clear-photo']");
+    await expect(
+      page.locator("[data-testid='studio-clear-photo']"),
+    ).toHaveCount(0);
+
+    // Close the studio via the hub's Cancel footer.
     await page.click("[data-testid='avatar-done']");
     await expect(
       page.locator("[data-testid='avatar-uploader']"),

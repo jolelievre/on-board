@@ -47,6 +47,25 @@
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+/* Phase 7: header cell now stacks avatar over name. The wrapper holds
+ * the optional `<WinnerBadge>` overlay anchored to the avatar. */
+.thHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.thAvatarWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.thName {
+  display: block;
+  line-height: 1.05;
   line-height: 1.05;
 }
 

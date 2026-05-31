@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./BiddingScreen.module.css";
+import { Avatar } from "../../ui/Avatar";
 import { DigitGrid } from "../../ui/sk/DigitGrid";
 import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
@@ -93,6 +94,7 @@ export function BiddingScreen({
             >
               <span className={styles.rowLeft}>
                 <span className={styles.posBadge}>{i + 1}</span>
+                <Avatar profile={p.profile} size="sm" />
                 <span className={styles.rowName}>{displayPlayerName(p, ownedIndex)}</span>
               </span>
               {v != null ? (

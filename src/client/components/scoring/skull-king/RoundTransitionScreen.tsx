@@ -1,7 +1,10 @@
 import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./RoundTransitionScreen.module.css";
+import { Avatar } from "../../ui/Avatar";
+import { DealerChip } from "../../ui/sk/DealerChip";
 import { SkullGlyph } from "../../ui/sk/SkGlyphs";
+import { WinnerBadge } from "../../ui/WinnerBadge";
 import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
@@ -67,6 +70,15 @@ export function RoundTransitionScreen({
         </p>
       </div>
 
+      <div className={styles.dealerChipRow}>
+        <DealerChip
+          profile={nextDealer.profile}
+          label={t("scoring.skullKing.transition.dealerChip", {
+            name: displayPlayerName(nextDealer, ownedIndex),
+          })}
+        />
+      </div>
+
       <div className={styles.cardStack} aria-hidden>
         {Array.from({ length: cardCount }).map((_, i) => {
           const isTop = i === cardCount - 1;
@@ -103,6 +115,7 @@ export function RoundTransitionScreen({
         {standings.map((row, i) => {
           const sign = row.lastDelta >= 0 ? "+" : "";
           const direction = row.lastDelta >= 0 ? styles.up : styles.down;
+          const isLeader = i === 0;
           return (
             <div
               key={row.player.id}
@@ -110,6 +123,10 @@ export function RoundTransitionScreen({
               data-testid={`sk-transition-standing-${i}`}
             >
               <span className={styles.standingsRank}>#{i + 1}</span>
+              <span className={styles.standingsAvatarWrap}>
+                <Avatar profile={row.player.profile} size="sm" />
+                {isLeader && <WinnerBadge overlay size={16} />}
+              </span>
               <span className={styles.standingsName}>
                 {displayPlayerName(row.player, ownedIndex)}
               </span>

@@ -34,6 +34,18 @@
   --color-warning: #b8731a;
   --color-danger: #9f2d1a;
 
+  /* Phase 7 — Winner crown badge (parchment).
+   * `crown-gold` is the disc fill; `crown-gold-ink` is the glyph drawn
+   * on top. The dark ink keeps the crown readable on the gold disc in
+   * both themes. */
+  --color-crown-gold: #c99a2e;
+  --color-crown-gold-ink: #241b0f;
+
+  /* Phase 7 — Avatar Capture Studio scrim (parchment).
+   * Warm-ink overlay behind the circular cut-out on the camera screen.
+   * Sits between the live video and the dashed framing ring. */
+  --color-studio-scrim: #241b0f;
+
   /* Categories — 7 Wonders Duel */
   --color-cat-civil-bg: #d6e4f0;
   --color-cat-civil-strong: #2f6fb0;

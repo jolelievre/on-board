@@ -5,6 +5,7 @@ import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
+import { Avatar } from "../../ui/Avatar";
 
 type Props = {
   round: number;
@@ -60,7 +61,7 @@ export function BidRecapScreen({
         <p className={styles.commentary}>{commentary}</p>
 
         <div className={styles.list}>
-          {players.map((p) => {
+          {players.map((p, i) => {
             const v = bids[p.id] ?? 0;
             const isZero = v === 0;
             return (
@@ -69,8 +70,12 @@ export function BidRecapScreen({
                 className={styles.entry}
                 data-testid={`sk-bid-recap-${p.id}`}
               >
-                <span className={styles.entryName}>
-                  {displayPlayerName(p, ownedIndex)}
+                <span className={styles.entryLeft}>
+                  <span className={styles.seatBadge}>{i + 1}</span>
+                  <Avatar profile={p.profile} size="sm" />
+                  <span className={styles.entryName}>
+                    {displayPlayerName(p, ownedIndex)}
+                  </span>
                 </span>
                 <span
                   className={`${styles.entryValue} ${isZero ? styles.zero : ""}`}

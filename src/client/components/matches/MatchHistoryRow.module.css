@@ -1,180 +1,221 @@
 .matchCard {
+  position: relative;
+  display: block;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
-  padding: 0.75rem 0.875rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  padding: 0.625rem 0.875rem 0.625rem 1rem;
   text-decoration: none;
   color: inherit;
+  /* Both layouts use a fixed minimum height so a list of mixed 2-player
+   * and 3+-player rows scans as a column of cards rather than a jagged
+   * stack. ~58px lands the row on a comfortable touch target without
+   * looking cramped. */
+  min-height: 58px;
 }
 
-.matchHead {
-  display: flex;
+/* Teal edge tab on the left — drawn as a `:before` so it doesn't take
+ * layout space. Only rendered when the row represents the viewer. */
+.matchCardMe::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 0 2px 2px 0;
+  background: var(--color-accent);
+}
+
+/* ──────────── 2-player ──────────── */
+
+.twoPlayerRoot {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.matchHeadLeft {
-  display: flex;
-  align-items: baseline;
   gap: 0.5rem;
   min-width: 0;
 }
 
-.matchDate {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  color: var(--color-ink-faint);
-  letter-spacing: 0.04em;
-}
-
-.matchGame {
-  font-family: var(--font-display);
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--color-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.players {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-}
-
-.playerCell {
-  flex: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  justify-content: space-between;
-  padding: 0.375rem 0.625rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-}
-
-.playerWinner {
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  border-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
-}
-
-.playerName {
-  font-family: var(--font-body);
-  font-size: 0.95rem;
-  font-weight: 400;
-  color: var(--color-ink);
+.gameGlyph {
+  color: var(--color-ink-soft);
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  justify-content: center;
 }
 
-.playerNameWinner {
-  color: var(--color-primary);
+.side {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
-/* Heavy weight reserved for "this row represents me" — applies whether
- * or not I won, so I can spot myself at a glance. Goes wide on
- * purpose (default 400 → self 800) so the contrast survives the
- * Caveat handwriting font where mid-range weights look near-identical.
- * Stacks with `playerNameWinner` (winner-and-me ⇒ heavy + primary). */
-.playerNameSelf {
-  font-weight: 800;
+/* Mirror the layout for the right side: avatar sits on the right of
+ * the name so both faces flank the VS mark. */
+.sideRight {
+  flex-direction: row-reverse;
 }
 
-.playerNameDim {
-  color: var(--color-ink-faint);
+.avatarWrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
-.playerScore {
+.sideMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sideRight .sideMeta {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.nameWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.nameWrapDim {
+  opacity: 0.7;
+}
+
+.nameText {
+  position: relative;
+  z-index: 1;
   font-family: var(--font-body);
-  font-size: 1.15rem;
+  font-size: 0.95rem;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Compensate Caveat's italic lean so the last glyph isn't clipped. */
+  padding-inline-end: 0.25em;
+}
+
+.score {
+  font-family: var(--font-body);
+  font-size: 1.05rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--color-ink);
 }
 
-.playerScoreWinner {
-  color: var(--color-primary);
+.scoreWinner {
+  color: var(--color-accent);
 }
 
-.playerScoreDim {
+.scoreDim {
   color: var(--color-ink-faint);
 }
 
-.versus {
-  font-family: var(--font-display);
-  font-size: 0.85rem;
-  color: var(--color-ink-faint);
-  font-weight: 600;
-}
-
-/* Compact podium summary used for 3+ player matches: top three on a single
- * line so the card stays as terse as the 2-player "vs" layout. The full
- * standings live one tap deeper, on the match scoreboard. */
-.podium {
+.vsBlock {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  flex-wrap: nowrap;
-  overflow: hidden;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
-.podiumEntry {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.25rem;
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-}
-
-.podiumEntry.podiumWinner {
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  border-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
-}
-
-.podiumRank {
+.vsDate {
   font-family: var(--font-mono);
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: var(--color-ink-faint);
+  font-size: 0.625rem;
   letter-spacing: 0.04em;
-  flex: 0 0 auto;
+  color: var(--color-ink-faint);
 }
 
-.podiumName {
-  font-family: var(--font-body);
-  font-size: 0.95rem;
-  font-weight: 400;
-  color: var(--color-ink);
-  flex: 1 1 auto;
+/* ──────────── 3+ player ──────────── */
+
+.multiRoot {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  /* Compensate Caveat's italic lean so the last glyph isn't clipped. */
-  padding-inline-end: 0.25em;
 }
 
-/* Heavy weight on podium rows to flag "this is me" in 3+ player views.
- * Same rule as `.playerNameSelf` for the compact "vs" layout. */
-.podiumNameSelf {
-  font-weight: 800;
+.multiLeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
-.podiumMore {
+.beat {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-ink-soft);
+  flex-shrink: 0;
+}
+
+.stack {
+  display: inline-flex;
+  align-items: center;
+  /* Negative gap so avatars overlap by ~⅓ of their width. */
+  gap: -8px;
+  min-width: 0;
+}
+
+.stackItem {
+  display: inline-flex;
+  /* Each item pulls left over its predecessor so the chain reads
+   * left-to-right with the leader's neighbour on top of the next, etc. */
+  margin-left: -8px;
+  /* Surface-coloured ring around the small avatar for legibility — keeps
+   * adjacent faces visually distinct without an explicit border. */
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--color-surface);
+}
+
+.stackItem:first-child {
+  margin-left: 0;
+}
+
+.stackOverflow {
+  margin-left: 4px;
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  color: var(--color-ink-faint);
   letter-spacing: 0.04em;
-  flex: 0 0 auto;
-  align-self: baseline;
+  color: var(--color-ink-faint);
+}
+
+.multiMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.multiScore {
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+}
+
+.multiDate {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-faint);
+  white-space: nowrap;
+}
+
+/* ──────────── Me-ring on avatars ──────────── *
+ *
+ * Forces the Avatar's `--ring-width` and `--ring-color` CSS variables
+ * to the accent (teal) ring used everywhere "this is me" needs a
+ * visual signal. Avatar's stamp ring (`avatarRing`) is suppressed by
+ * passing `ring={null}` so this is the only ring drawn.
+ */
+.meRing {
+  --ring-width: max(2px, calc(var(--avatar-size) * 0.07));
+  --ring-color: var(--color-accent);
 }

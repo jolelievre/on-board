@@ -74,6 +74,7 @@
     "declareDraw": "Déclarer une égalité",
     "draw": "Égalité",
     "winner": "Vainqueur : {{name}}",
+    "winnerLabel": "Vainqueur",
     "victoryType": {
       "score": "Aux points",
       "military_supremacy": "Suprématie militaire",
@@ -101,6 +102,8 @@
     },
     "history": {
       "empty": "Aucune partie pour le moment.",
+      "beat": "bat",
+      "moreCount": "+{{count}}",
       "inProgress": "En cours",
       "resume": "Reprendre",
       "vs": "vs"
@@ -193,6 +196,7 @@
         "roundTitle": "Manche {{n}}",
         "cardsEach_one": "1 carte chacun · {{name}} distribue",
         "cardsEach_other": "{{count}} cartes chacun · {{name}} distribue",
+        "dealerChip": "{{name}} distribue",
         "standingsTitle": "Classement",
         "continueCta": "Pari de la M{{n}} →",
         "editLastRoundCta": "← Modifier la manche {{n}}"
@@ -300,6 +304,59 @@
       "permissionDenied": "Accès à la caméra refusé. Autorisez-le dans les réglages de votre navigateur.",
       "noCamera": "Aucune caméra détectée.",
       "unknown": "Impossible d'ouvrir la caméra."
+    }
+  },
+  "studio": {
+    "eyebrow": "MODIFIER LE PROFIL",
+    "currentStamp": "VOTRE TIMBRE ACTUEL",
+    "noPhotoYet": "PAS ENCORE DE PHOTO",
+    "newPhoto": {
+      "title": "Nouvelle photo",
+      "subtitle": "ouvre l'appareil photo"
+    },
+    "fromGallery": {
+      "title": "Depuis la galerie",
+      "subtitle": "choisir un fichier existant"
+    },
+    "styleStamp": {
+      "title": "Styliser le timbre",
+      "subtitle": "garder la photo · changer cadre & contour"
+    },
+    "monogramFallback": "Utiliser mon monogramme « {{initial}} »",
+    "camera": {
+      "hint": "Alignez votre visage avec le cercle",
+      "starting": "Démarrage de la caméra…",
+      "unavailable": "Caméra indisponible — utilisez la galerie",
+      "selfie": "SELFIE",
+      "rear": "ARRIÈRE",
+      "gallery": "Galerie",
+      "flip": "Changer",
+      "shutter": "Capturer"
+    },
+    "reposition": {
+      "heading": "Glisser & pincer pour ajuster",
+      "retake": "Reprendre",
+      "confirm": "Utiliser la photo"
+    },
+    "style": {
+      "heading": "Stylisez votre timbre",
+      "frameLabel": "Cadre",
+      "ringLabel": "Contour coloré",
+      "frames": {
+        "circle": "Rond",
+        "rounded": "Arrondi",
+        "tag": "Étiquette"
+      },
+      "ringOff": "Sans contour",
+      "back": "Retour",
+      "save": "Enregistrer le timbre",
+      "saving": "Enregistrement…",
+      "saveError": "Impossible d'enregistrer votre timbre"
+    },
+    "saved": {
+      "title": "Enregistré",
+      "editAgain": "Modifier à nouveau",
+      "done": "Terminé"
     }
   },
   "merge": {

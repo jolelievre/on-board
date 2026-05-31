@@ -49,6 +49,7 @@ type Props = {
 export function SevenWondersDuelScorer({ match }: Props) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
+  const viewerId = session?.user.id ?? null;
   const ownedIndex = useOwnedProfileIndex(session?.user.id);
   const matchId = match.id;
 
@@ -144,9 +145,13 @@ export function SevenWondersDuelScorer({ match }: Props) {
     ? displayPlayerName(supremacyPlayer, ownedIndex)
     : "";
 
+  // displayPlayers carries the embedded `profile` projection through to
+  // `HandMatchGrid` so its header can render the Phase 7 avatars + the
+  // leader's crown badge without re-resolving names downstream.
   const displayPlayers = match.players.map((p) => ({
     id: p.id,
     name: displayPlayerName(p, ownedIndex),
+    profile: p.profile,
   }));
 
   const [completing, setCompleting] = useState(false);
@@ -183,12 +188,15 @@ export function SevenWondersDuelScorer({ match }: Props) {
     : null;
   const winnerName = winner ? displayPlayerName(winner, ownedIndex) : null;
   const winnerTotal = winner ? (totals[winner.id] ?? 0) : null;
-  const loserTotal =
+  // Phase 7: pass the runner-up to the WinnerBanner so it can render
+  // their small avatar alongside the winner's. With only two seats in
+  // 7WD, the runner-up is whoever isn't the winner.
+  const runnerUp =
     isCompleted && winner
-      ? (match.players
-          .filter((p) => p.id !== winner.id)
-          .map((p) => totals[p.id] ?? 0)[0] ?? null)
+      ? (match.players.find((p) => p.id !== winner.id) ?? null)
       : null;
+  const loserTotal =
+    runnerUp ? (totals[runnerUp.id] ?? 0) : null;
 
   const scoreWinnerName =
     outcome.kind === "winner"
@@ -225,6 +233,9 @@ export function SevenWondersDuelScorer({ match }: Props) {
           winnerScore={winnerTotal}
           loserScore={loserTotal}
           victoryType={match.victoryType}
+          winnerProfile={winner?.profile ?? null}
+          runnerUpProfile={runnerUp?.profile ?? null}
+          viewerId={viewerId}
         />
       )}
 

@@ -27,6 +27,24 @@ type AuthEnv = {
 // Same CUID shape check as matches.ts. Accepts both CUID v1 and v2.
 const CUID_RE = /^[a-z][a-z0-9]{19,31}$/;
 
+const AVATAR_FRAMES = ["circle", "rounded", "tag"] as const;
+type AvatarFrame = (typeof AVATAR_FRAMES)[number];
+
+// Must stay in sync with the `Category` union in
+// `src/client/components/ui/category.ts`. The server only validates
+// shape here — the visual mapping lives client-side.
+const AVATAR_RINGS = [
+  "civil",
+  "scientific",
+  "commercial",
+  "guilds",
+  "wonders",
+  "progress",
+  "treasury",
+  "military",
+] as const;
+type AvatarRing = (typeof AVATAR_RINGS)[number];
+
 /** Shape returned by every profile endpoint. The `linkedUser` block is a
  * thin projection that lets the client render the canonical avatar / name
  * for linked profiles without an extra `/api/users` lookup. */
@@ -37,6 +55,8 @@ const profileSelect = {
   alias: true,
   customAvatarUrl: true,
   useLinkedAvatar: true,
+  avatarFrame: true,
+  avatarRing: true,
   usedAt: true,
   createdAt: true,
   updatedAt: true,
@@ -163,9 +183,13 @@ export const profilesRoutes = new Hono<AuthEnv>()
     const id = c.req.param("id");
     const body = await c.req.json();
 
-    const { alias, useLinkedAvatar } = body as {
+    const { alias, useLinkedAvatar, avatarFrame, avatarRing } = body as {
       alias?: string;
       useLinkedAvatar?: boolean;
+      avatarFrame?: string;
+      // Accepts `string | null` because clearing the ring is a valid edit;
+      // `undefined` means "leave it alone" (standard PATCH semantics).
+      avatarRing?: string | null;
     };
 
     if (alias !== undefined) {
@@ -176,7 +200,31 @@ export const profilesRoutes = new Hono<AuthEnv>()
     if (useLinkedAvatar !== undefined && typeof useLinkedAvatar !== "boolean") {
       return c.json({ error: "useLinkedAvatar must be a boolean" }, 400);
     }
-    if (alias === undefined && useLinkedAvatar === undefined) {
+    if (
+      avatarFrame !== undefined &&
+      !AVATAR_FRAMES.includes(avatarFrame as AvatarFrame)
+    ) {
+      return c.json(
+        { error: `avatarFrame must be one of: ${AVATAR_FRAMES.join(", ")}` },
+        400,
+      );
+    }
+    if (
+      avatarRing !== undefined &&
+      avatarRing !== null &&
+      !AVATAR_RINGS.includes(avatarRing as AvatarRing)
+    ) {
+      return c.json(
+        { error: `avatarRing must be null or one of: ${AVATAR_RINGS.join(", ")}` },
+        400,
+      );
+    }
+    if (
+      alias === undefined &&
+      useLinkedAvatar === undefined &&
+      avatarFrame === undefined &&
+      avatarRing === undefined
+    ) {
       return c.json({ error: "No editable field provided" }, 400);
     }
 
@@ -203,6 +251,8 @@ export const profilesRoutes = new Hono<AuthEnv>()
       data: {
         ...(trimmedAlias !== undefined ? { alias: trimmedAlias } : {}),
         ...(useLinkedAvatar !== undefined ? { useLinkedAvatar } : {}),
+        ...(avatarFrame !== undefined ? { avatarFrame } : {}),
+        ...(avatarRing !== undefined ? { avatarRing } : {}),
       },
       select: profileSelect,
     });

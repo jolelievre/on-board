@@ -1,0 +1,26 @@
+.root {
+  position: absolute;
+  /* Bleed slightly past the text on both sides for the notebook-marker
+   * feel — the highlighter swipe always overshoots the word edges. */
+  left: -4px;
+  right: -4px;
+  top: 2px;
+  bottom: 1px;
+  background: var(--color-accent);
+  /* Translucent so the text underneath stays legible. The accent token
+   * is opaque, so we set opacity here. Slightly higher opacity in
+   * Candlelit (dark) since the dark canvas absorbs more of it; falls
+   * back to the parchment opacity by default. */
+  opacity: 0.2;
+  /* Hand-drawn asymmetric corners, matching the project's other
+   * sketch primitives. */
+  border-radius: 7px 10px 6px 11px;
+  /* Slight rotation for the marker-stroke feel. */
+  transform: rotate(-1.4deg);
+  z-index: 0;
+  pointer-events: none;
+}
+
+[data-theme="candlelit"] .root {
+  opacity: 0.26;
+}

@@ -256,7 +256,10 @@ function ProfileDetailBody({
                     gameSlug={r.gameSlug}
                     gameName={r.gameName}
                     locale={i18n.language}
-                    viewerId={viewerId}
+                    // Phase 7: on a profile detail page every row is
+                    // already this person, so the me-highlight would be
+                    // visual noise. Suppress by passing null.
+                    viewerId={null}
                   />
                 </div>
               ))}

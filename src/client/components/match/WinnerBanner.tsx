@@ -1,5 +1,8 @@
 import { useTranslation } from "react-i18next";
+import type { PlayerProfile } from "../../types/match";
+import { Avatar } from "../ui/Avatar";
 import { SketchRect } from "../ui/SketchRect";
+import { WinnerBadge } from "../ui/WinnerBadge";
 import styles from "./WinnerBanner.module.css";
 
 type Props = {
@@ -11,6 +14,14 @@ type Props = {
   loserScore: number | null;
   /** Mapped victory type from the server. */
   victoryType: string | null;
+  /** Phase 7: avatars on the banner. Pass the embedded profiles from
+   * the match's Player rows so the resolver picks up the chosen stamp
+   * (frame + ring). Omit to render the banner without avatars (e.g.
+   * legacy contexts where Player data isn't on hand). */
+  winnerProfile?: PlayerProfile | null;
+  runnerUpProfile?: PlayerProfile | null;
+  /** Viewer id for the Avatar's resolve logic. */
+  viewerId?: string | null;
 };
 
 export function WinnerBanner({
@@ -18,6 +29,9 @@ export function WinnerBanner({
   winnerScore,
   loserScore,
   victoryType,
+  winnerProfile,
+  runnerUpProfile,
+  viewerId,
 }: Props) {
   const { t } = useTranslation();
 
@@ -66,13 +80,22 @@ export function WinnerBanner({
         strokeWidth={2.2}
       />
       <div className={styles.body}>
-        <span className={styles.trophy} aria-hidden>
-          🏆
-        </span>
-        <div>
+        {winnerProfile ? (
+          <span className={styles.avatarWrap}>
+            <Avatar profile={winnerProfile} viewerId={viewerId} size="md" />
+            <WinnerBadge overlay size={20} title={t("matches.winnerLabel")} />
+          </span>
+        ) : (
+          // Fallback for callers without a winner profile available —
+          // keep the badge so the banner still reads "winner".
+          <span className={styles.avatarWrap}>
+            <WinnerBadge size={26} title={t("matches.winnerLabel")} />
+          </span>
+        )}
+        <div className={styles.titleBlock}>
           <p className={styles.title}>
             {t("matches.winner", { name: winnerName })}
-            {scoreLine && <> {scoreLine}</>}
+            {scoreLine && <span className={styles.scoreLine}> {scoreLine}</span>}
           </p>
           {victoryType && (
             <p className={styles.subtitle}>
@@ -82,6 +105,11 @@ export function WinnerBanner({
             </p>
           )}
         </div>
+        {runnerUpProfile && (
+          <span className={styles.runnerUp}>
+            <Avatar profile={runnerUpProfile} viewerId={viewerId} size="sm" />
+          </span>
+        )}
       </div>
     </div>
   );

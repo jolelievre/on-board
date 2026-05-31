@@ -1,0 +1,183 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* The studio mounts inline within the profile-edit surface; we
+   * deliberately constrain to a portrait-ish stage rather than full
+   * viewport so it nests cleanly inside `EditableAvatar`. */
+  align-items: stretch;
+}
+
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.topButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  /* Square stage so the circular cut-out is round even on landscape
+   * cameras. */
+  aspect-ratio: 1 / 1;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+}
+
+.video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Front camera preview is mirrored for natural framing — the captured
+ * file is un-mirrored separately in `handleShutter`. */
+.videoMirrored {
+  transform: scaleX(-1);
+}
+
+/* Warm-ink scrim with a circular cut-out. The two radial gradients
+ * draw the dark overlay everywhere except the centre circle (≈ 70%
+ * of the stage's short side). */
+.scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--color-studio-scrim);
+  /* Two stops: transparent inside the circle, opaque outside. Using
+   * `radial-gradient` on `mask` keeps the cut-out perfectly circular. */
+  -webkit-mask: radial-gradient(
+    circle at 50% 50%,
+    transparent 0,
+    transparent 34%,
+    #000 35%
+  );
+  mask: radial-gradient(
+    circle at 50% 50%,
+    transparent 0,
+    transparent 34%,
+    #000 35%
+  );
+  opacity: 0.78;
+  pointer-events: none;
+}
+
+.framingRing {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 68%;
+  height: 68%;
+  transform: translate(-50%, -50%) rotate(-3deg);
+  border-radius: 50%;
+  border: 2px dashed rgba(255, 240, 200, 0.9);
+  pointer-events: none;
+}
+
+.hintLabel,
+.statusLabel,
+.errorLabel {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  color: #fbf6e9;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  margin: 0;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.errorLabel {
+  color: var(--color-warning);
+}
+
+.controlsRow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 4px 0;
+  background: transparent;
+}
+
+.controlsRow > :first-child {
+  justify-self: end;
+}
+.controlsRow > :last-child {
+  justify-self: start;
+}
+
+.roundButton {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 56px;
+  height: 56px;
+  padding: 6px 0;
+  border-radius: 999px;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.roundLabel {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+  line-height: 1;
+}
+
+.shutter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  border: 3px solid var(--color-primary);
+  cursor: pointer;
+}
+
+.shutter:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.shutterCore {
+  display: inline-block;
+  width: 50px;
+  height: 50px;
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+
+.controlSpacer {
+  width: 56px;
+  height: 56px;
+  display: inline-block;
+}

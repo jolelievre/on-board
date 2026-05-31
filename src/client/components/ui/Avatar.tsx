@@ -1,4 +1,4 @@
-import type { LocalProfile } from "../../lib/db";
+import type { AvatarFrame, AvatarRing, LocalProfile } from "../../lib/db";
 import { displayProfileName } from "../../../shared/players";
 import { useOwnedProfileIndex } from "../../hooks/data/useOwnedProfileIndex";
 import styles from "./Avatar.module.css";
@@ -21,11 +21,42 @@ const SIZE_CLASS: Record<AvatarSize, string> = {
   xl: styles.xl,
 };
 
+// Phase 7: per-frame border-radius. Percentages scale with `--avatar-size`
+// so the same class works for every size. Tag uses asymmetric corners for
+// the scrapbook look from the design handoff.
+const FRAME_CLASS: Record<AvatarFrame, string> = {
+  circle: styles.frameCircle,
+  rounded: styles.frameRounded,
+  tag: styles.frameTag,
+};
+
+// Phase 7: ring colour swatches. Each key maps to a `--color-cat-*-strong`
+// CSS variable so the ring re-themes between Parchment and Candlelit. Null
+// = no ring (the default).
+const RING_CLASS: Record<Exclude<AvatarRing, null>, string> = {
+  civil: styles.ringCivil,
+  scientific: styles.ringScientific,
+  commercial: styles.ringCommercial,
+  guilds: styles.ringGuilds,
+  wonders: styles.ringWonders,
+  progress: styles.ringProgress,
+  treasury: styles.ringTreasury,
+  military: styles.ringMilitary,
+};
+
 export type AvatarSize = "sm" | "md" | "lg" | "xl";
 
 type CommonProps = {
   size?: AvatarSize;
   className?: string;
+  /** Stamp frame override. When omitted, falls back to `profile.avatarFrame`
+   * (for ProfileSource) or "circle" (for FallbackSource). */
+  frame?: AvatarFrame;
+  /** Stamp colour-ring override. When omitted, falls back to
+   * `profile.avatarRing` (for ProfileSource) or null (for FallbackSource).
+   * Pass null explicitly to suppress a ring even when the profile has one
+   * (used by the studio's "off" swatch preview). */
+  ring?: AvatarRing;
 };
 
 type ProfileSource = {
@@ -37,6 +68,8 @@ type ProfileSource = {
     | "linkedUserId"
     | "customAvatarUrl"
     | "useLinkedAvatar"
+    | "avatarFrame"
+    | "avatarRing"
     | "linkedUser"
   >;
   /** The viewer for resolution: a linked user looking at their own
@@ -57,9 +90,13 @@ type FallbackSource = {
 type Props = CommonProps & (ProfileSource | FallbackSource);
 
 /**
- * Reusable avatar. In Phase 6-A it only renders the linked user's photo
- * or an initial-letter fallback — owner-uploaded custom avatars land in
- * Phase 6-B and the resolver below will pick them up automatically.
+ * Reusable avatar. Renders a profile photo (custom upload or linked Google
+ * photo) or an initial-letter fallback in a deterministic colour bucket.
+ *
+ * Phase 7 adds **stamp** styling on top: a `frame` (circle | rounded | tag)
+ * and a `ring` (one of 8 7WD category colours, or null). Defaults read
+ * from `profile.avatarFrame` / `profile.avatarRing` so every consumer
+ * picks up the owner-chosen stamp without threading the props manually.
  *
  * Resolution order for an owner viewing a profile:
  *   1. `customAvatarUrl` is set AND `useLinkedAvatar` is false → use it
@@ -76,9 +113,33 @@ type Props = CommonProps & (ProfileSource | FallbackSource);
 export function Avatar(props: Props) {
   const size: AvatarSize = props.size ?? "md";
   const sizeClass = SIZE_CLASS[size];
-  const className = props.className
-    ? `${styles.root} ${sizeClass} ${props.className}`
-    : `${styles.root} ${sizeClass}`;
+
+  // Frame: explicit prop wins; otherwise read from the profile when
+  // available; else circle. Cover legacy/undefined values defensively.
+  const frame: AvatarFrame =
+    props.frame ??
+    ("profile" in props ? (props.profile.avatarFrame ?? "circle") : "circle");
+  // Ring: distinguish "no prop" from "explicit null" so a caller can
+  // suppress the profile's ring on a preview.
+  const ring: AvatarRing =
+    props.ring !== undefined
+      ? props.ring
+      : "profile" in props
+        ? (props.profile.avatarRing ?? null)
+        : null;
+
+  const frameClass = FRAME_CLASS[frame];
+  const ringClass = ring ? `${styles.hasRing} ${RING_CLASS[ring]}` : "";
+
+  const className = [
+    styles.root,
+    sizeClass,
+    frameClass,
+    ringClass,
+    props.className,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   // Hook is called unconditionally so the rules-of-hooks stay happy
   // across both render branches. Pass undefined when this Avatar isn't

@@ -15,6 +15,23 @@ export type ApiGame = {
   iconUrl?: string | null;
 };
 
+/** Phase 7 stamp frame, mirrored from `Profile.avatarFrame`. */
+export type ApiAvatarFrame = "circle" | "rounded" | "tag";
+
+/** Phase 7 stamp colour ring, mirrored from `Profile.avatarRing`.
+ * The server only emits one of the 8 7WD category keys or null;
+ * the PATCH endpoint rejects anything else. */
+export type ApiAvatarRing =
+  | "civil"
+  | "scientific"
+  | "commercial"
+  | "guilds"
+  | "wonders"
+  | "progress"
+  | "treasury"
+  | "military"
+  | null;
+
 /** Embedded Profile projection on each Player row. The server always
  * projects the full Profile (plus its linked-user join) on match
  * responses so the client can render any player without a separate
@@ -27,6 +44,11 @@ export type ApiPlayerProfile = {
   alias: string;
   customAvatarUrl: string | null;
   useLinkedAvatar: boolean;
+  /** Phase 7 stamp fields — see `LocalProfile` in db.ts for semantics.
+   * `avatarFrame` defaults server-side to "circle"; `avatarRing` is
+   * nullable. Optional here so legacy cached responses still parse. */
+  avatarFrame?: ApiAvatarFrame;
+  avatarRing?: ApiAvatarRing;
   linkedUser: {
     id: string;
     name: string;
@@ -64,6 +86,11 @@ export type ApiProfile = {
   alias: string;
   customAvatarUrl: string | null;
   useLinkedAvatar: boolean;
+  /** Phase 7 stamp fields. Optional so the type still describes
+   * legacy persisted-cache rows that predate the column. The
+   * pull-sync merger applies "circle" / null defaults. */
+  avatarFrame?: ApiAvatarFrame;
+  avatarRing?: ApiAvatarRing;
   usedAt: string;
   createdAt: string;
   updatedAt: string;

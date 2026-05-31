@@ -1,6 +1,8 @@
 import { createId } from "@paralleldrive/cuid2";
 import {
   db,
+  type AvatarFrame,
+  type AvatarRing,
   type LocalMatch,
   type LocalPlayer,
   type LocalProfile,
@@ -79,6 +81,8 @@ export async function createMatch(
         alias: profile.alias,
         customAvatarUrl: profile.customAvatarUrl,
         useLinkedAvatar: profile.useLinkedAvatar,
+        avatarFrame: profile.avatarFrame,
+        avatarRing: profile.avatarRing,
         linkedUser: profile.linkedUser
           ? {
               id: profile.linkedUser.id,
@@ -372,6 +376,8 @@ export async function createProfile(
     alias,
     customAvatarUrl: null,
     useLinkedAvatar: true,
+    avatarFrame: "circle",
+    avatarRing: null,
     usedAt: ts,
     createdAt: ts,
     updatedAt: ts,
@@ -486,6 +492,8 @@ export async function mergeProfile(input: {
           alias: target.alias,
           customAvatarUrl: target.customAvatarUrl,
           useLinkedAvatar: target.useLinkedAvatar,
+          avatarFrame: target.avatarFrame,
+          avatarRing: target.avatarRing,
           linkedUser: target.linkedUser
             ? {
                 id: target.linkedUser.id,
@@ -686,19 +694,38 @@ export type PatchProfileInput = {
   profileId: string;
   alias?: string;
   useLinkedAvatar?: boolean;
+  /** Stamp frame shape (Phase 7). Pass to update; omit to leave alone. */
+  avatarFrame?: AvatarFrame;
+  /** Stamp colour ring (Phase 7). Pass `null` to clear, omit to leave alone. */
+  avatarRing?: AvatarRing;
+};
+
+type PatchProfileBody = {
+  alias?: string;
+  useLinkedAvatar?: boolean;
+  avatarFrame?: AvatarFrame;
+  avatarRing?: AvatarRing;
 };
 
 /**
  * Edit a Profile's owner-controlled fields. Optimistically applies the
- * patch to Dexie and enqueues a PATCH /api/profiles/:id. Both fields are
- * optional; passing neither is a no-op (the server would reject it).
+ * patch to Dexie and enqueues a PATCH /api/profiles/:id. All fields are
+ * optional; passing none is a no-op (the server would reject it).
  */
 export async function patchProfile(input: PatchProfileInput): Promise<void> {
   const ts = nowIso();
-  const body: { alias?: string; useLinkedAvatar?: boolean } = {};
+  const body: PatchProfileBody = {};
   if (input.alias !== undefined) body.alias = input.alias.trim();
   if (input.useLinkedAvatar !== undefined)
     body.useLinkedAvatar = input.useLinkedAvatar;
+  if (input.avatarFrame !== undefined) body.avatarFrame = input.avatarFrame;
+  // `avatarRing: null` is a valid edit (clears the ring), so we must
+  // distinguish it from "omitted". `hasOwnProperty` is the unambiguous
+  // signal; `=== undefined` would also be false for explicit null but
+  // this form documents intent.
+  if (Object.prototype.hasOwnProperty.call(input, "avatarRing")) {
+    body.avatarRing = input.avatarRing ?? null;
+  }
 
   if (Object.keys(body).length === 0) return;
 
@@ -710,6 +737,12 @@ export async function patchProfile(input: PatchProfileInput): Promise<void> {
         ...(body.alias !== undefined ? { alias: body.alias } : {}),
         ...(body.useLinkedAvatar !== undefined
           ? { useLinkedAvatar: body.useLinkedAvatar }
+          : {}),
+        ...(body.avatarFrame !== undefined
+          ? { avatarFrame: body.avatarFrame }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(body, "avatarRing")
+          ? { avatarRing: body.avatarRing ?? null }
           : {}),
         updatedAt: ts,
       };
