@@ -254,14 +254,14 @@ function TwoPlayerSide({
         profile={player.profile}
         viewerId={viewerId}
         size="md"
-        ring={isMe ? null : undefined}
         winner={isWinner}
         // `.vsAvatar` bumps the avatar to 48px — same as the
         // multi-player leader — so both row variants share a
-        // visual scale. The `me`-ring class still composes on top.
-        className={[styles.vsAvatar, isMe && styles.meRing]
-          .filter(Boolean)
-          .join(" ")}
+        // visual scale. The me-highlight relies on the row's edge
+        // tab + the Highlighter swipe behind the name; the avatar
+        // wears its own stamp ring even on the viewer's row, so the
+        // viewer's chosen colour comes through.
+        className={styles.vsAvatar}
       />
       <span className={styles.sideMeta}>
         <span
@@ -316,11 +316,12 @@ function MultiPlayerLayout({
         profile={leader.profile}
         viewerId={viewerId}
         size="md"
-        ring={isMe(leader) ? null : undefined}
         winner={isWinner}
-        className={[styles.multiLeaderAvatar, isMe(leader) && styles.meRing]
-          .filter(Boolean)
-          .join(" ")}
+        // Stamp ring stays the owner's choice even on the viewer's
+        // own row — the me-highlight signals identity through the
+        // edge tab + Highlighter swipe instead of repainting the
+        // ring colour.
+        className={styles.multiLeaderAvatar}
       />
 
       {/* Centre column: leader name (top), stack of other players
@@ -353,12 +354,11 @@ function MultiPlayerLayout({
                 // glance. `size="md"` + a CSS class that nudges the
                 // avatar-size variable keeps the stack visibly under
                 // the leader's 48px while staying above the previous
-                // too-tiny sm (24).
+                // too-tiny sm (24). Stamp ring stays the owner's
+                // choice; me-highlight is conveyed by the row's edge
+                // tab + Highlighter, not by overriding the ring.
                 size="md"
-                ring={isMe(p) ? null : undefined}
-                className={[styles.multiStackAvatar, isMe(p) && styles.meRing]
-                  .filter(Boolean)
-                  .join(" ")}
+                className={styles.multiStackAvatar}
               />
               {/* Visually hidden alias — keeps the name in the row's
                   accessibility tree (each face is otherwise just an

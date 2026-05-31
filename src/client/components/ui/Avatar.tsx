@@ -191,7 +191,7 @@ export function Avatar(props: Props) {
   const showImage = resolvedUrl !== null && resolvedUrl !== failedUrl;
 
   // Outer root carries layout / size / custom CSS overrides
-  // (`--avatar-size`, `--ring-color`, `meRing` etc.). All decoration
+  // (`--avatar-size` token overrides, sizing classes, etc.). All decoration
   // sits on the inner photoFrame so the WinnerBadge can overhang
   // without being clipped.
   const rootClass = [styles.root, sizeClass, props.className]

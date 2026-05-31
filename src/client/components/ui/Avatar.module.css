@@ -1,6 +1,6 @@
 /* Outer wrapper — layout, positioning context for the optional
  * WinnerBadge overlay, and the `--avatar-size` token consumers
- * override (`vsAvatar`, `multiLeaderAvatar`, `meRing`, etc.). No
+ * override (`vsAvatar`, `multiLeaderAvatar`, etc.). No
  * clipping here so the badge overlay can stick out past the avatar's
  * circular edge without being cropped. */
 .root {

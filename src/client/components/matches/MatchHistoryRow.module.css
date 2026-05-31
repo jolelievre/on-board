@@ -322,9 +322,3 @@
 .vsAvatar {
   --avatar-size: 48px;
 }
-
-/* ──────────── Me-ring on avatars ──────────── */
-.meRing {
-  --ring-width: max(2px, calc(var(--avatar-size) * 0.07));
-  --ring-color: var(--color-accent);
-}
