@@ -42,8 +42,8 @@ function TermsEn() {
     <>
       <p>
         OnBoard is a small board-game score tracker. By signing in, you agree
-        to these terms. The service is provided by Jonathan Lelièvre as a
-        personal project, free of charge and "as is".
+        to these terms. The service is provided as a personal project, free of
+        charge and "as is".
       </p>
 
       <h2>1. Acceptable use</h2>
@@ -84,7 +84,7 @@ function TermsEn() {
 
       <h2>5. Limitation of liability</h2>
       <p>
-        To the maximum extent permitted by law, Jonathan Lelièvre is not
+        To the maximum extent permitted by law, the service owner is not
         liable for any direct, indirect, or consequential damages arising
         from use of the service.
       </p>
@@ -104,8 +104,8 @@ function TermsEn() {
 
       <h2>8. Contact</h2>
       <p>
-        Questions:{" "}
-        <a href="mailto:jo.lelievre@gmail.com">jo.lelievre@gmail.com</a>.
+        Questions can be sent through the same channel by which you received
+        access to this app.
       </p>
     </>
   );
@@ -116,8 +116,8 @@ function TermsFr() {
     <>
       <p>
         OnBoard est un petit suivi de scores de jeux de société. En vous
-        connectant, vous acceptez ces conditions. Le service est fourni par
-        Jonathan Lelièvre à titre personnel, gratuitement et « en l'état ».
+        connectant, vous acceptez ces conditions. Le service est fourni à
+        titre personnel, gratuitement et « en l'état ».
       </p>
 
       <h2>1. Utilisation acceptable</h2>
@@ -163,9 +163,9 @@ function TermsFr() {
 
       <h2>5. Limitation de responsabilité</h2>
       <p>
-        Dans toute la mesure permise par la loi, Jonathan Lelièvre n'est
-        responsable d'aucun dommage direct, indirect ou consécutif découlant
-        de l'utilisation du service.
+        Dans toute la mesure permise par la loi, la personne qui gère le
+        service n'est responsable d'aucun dommage direct, indirect ou
+        consécutif découlant de l'utilisation du service.
       </p>
 
       <h2>6. Modifications de ces conditions</h2>
@@ -183,8 +183,8 @@ function TermsFr() {
 
       <h2>8. Contact</h2>
       <p>
-        Questions :{" "}
-        <a href="mailto:jo.lelievre@gmail.com">jo.lelievre@gmail.com</a>.
+        Toute question peut être envoyée par le même canal via lequel vous
+        avez reçu l'accès à cette application.
       </p>
     </>
   );

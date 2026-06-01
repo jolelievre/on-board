@@ -43,7 +43,7 @@ function PrivacyEn() {
       <p>
         OnBoard is a small board-game score tracker shared with friends. This
         page describes what data it collects and how it's used. The service is
-        operated by Jonathan Lelièvre as a personal project, not by a company.
+        operated as a personal project, not by a company.
       </p>
 
       <h2>1. Data we collect</h2>
@@ -77,10 +77,9 @@ function PrivacyEn() {
 
       <h2>3. Storage</h2>
       <p>
-        All data is stored on a server operated by Jonathan Lelièvre
-        (self-hosted via Coolify). Uploaded avatars live on the same server's
-        filesystem. We do not use third-party analytics, tracking pixels, or
-        advertising networks.
+        All data is stored on a private server. Uploaded avatars live on the
+        same server's filesystem. We do not use third-party analytics,
+        tracking pixels, or advertising networks.
       </p>
 
       <h2>4. Third parties</h2>
@@ -100,16 +99,16 @@ function PrivacyEn() {
       <h2>6. Your rights</h2>
       <p>
         You can request deletion of your account and all related data at any
-        time by contacting{" "}
-        <a href="mailto:jo.lelievre@gmail.com">jo.lelievre@gmail.com</a>.
-        Account deletion removes your User row, all profiles you own, all
-        matches you created, and all avatars you uploaded.
+        time by contacting the service owner through the channel by which you
+        received access to this app. Account deletion removes your User row,
+        all profiles you own, all matches you created, and all avatars you
+        uploaded.
       </p>
 
       <h2>7. Contact</h2>
       <p>
-        Questions about this policy:{" "}
-        <a href="mailto:jo.lelievre@gmail.com">jo.lelievre@gmail.com</a>.
+        Questions about this policy can be sent through the same channel by
+        which you received access to this app.
       </p>
     </>
   );
@@ -121,8 +120,7 @@ function PrivacyFr() {
       <p>
         OnBoard est un petit suivi de scores de jeux de société partagé entre
         amis. Cette page décrit les données collectées et leur utilisation. Le
-        service est exploité par Jonathan Lelièvre à titre personnel, et non
-        par une entreprise.
+        service est exploité à titre personnel, et non par une entreprise.
       </p>
 
       <h2>1. Données collectées</h2>
@@ -158,10 +156,10 @@ function PrivacyFr() {
 
       <h2>3. Stockage</h2>
       <p>
-        Toutes les données sont stockées sur un serveur exploité par Jonathan
-        Lelièvre (auto-hébergement via Coolify). Les avatars téléchargés sont
-        stockés sur le système de fichiers du même serveur. Nous n'utilisons
-        ni outils d'analyse tiers, ni pixels de suivi, ni régies publicitaires.
+        Toutes les données sont stockées sur un serveur privé. Les avatars
+        téléchargés sont stockés sur le système de fichiers du même serveur.
+        Nous n'utilisons ni outils d'analyse tiers, ni pixels de suivi, ni
+        régies publicitaires.
       </p>
 
       <h2>4. Tiers</h2>
@@ -182,17 +180,17 @@ function PrivacyFr() {
       <h2>6. Vos droits</h2>
       <p>
         Vous pouvez demander la suppression de votre compte et de toutes les
-        données associées à tout moment en écrivant à{" "}
-        <a href="mailto:jo.lelievre@gmail.com">jo.lelievre@gmail.com</a>.
-        La suppression du compte efface votre ligne utilisateur, tous les
-        profils que vous possédez, toutes les parties que vous avez créées
-        ainsi que tous les avatars que vous avez téléchargés.
+        données associées à tout moment en contactant la personne qui gère le
+        service par le canal via lequel vous avez reçu l'accès à cette
+        application. La suppression du compte efface votre ligne utilisateur,
+        tous les profils que vous possédez, toutes les parties que vous avez
+        créées ainsi que tous les avatars que vous avez téléchargés.
       </p>
 
       <h2>7. Contact</h2>
       <p>
-        Questions sur cette politique :{" "}
-        <a href="mailto:jo.lelievre@gmail.com">jo.lelievre@gmail.com</a>.
+        Toute question sur cette politique peut être envoyée par le même
+        canal via lequel vous avez reçu l'accès à cette application.
       </p>
     </>
   );
