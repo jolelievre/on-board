@@ -10,13 +10,29 @@
   },
   "auth": {
     "signIn": "Se connecter",
-    "signInWithGoogle": "Se connecter avec Google",
+    "signInWith": {
+      "google": "Se connecter avec Google",
+      "facebook": "Se connecter avec Facebook",
+      "apple": "Se connecter avec Apple"
+    },
     "signOut": "Se déconnecter",
     "name": "Nom",
     "email": "E-mail",
     "password": "Mot de passe",
     "defaultName": "Utilisateur test",
-    "or": "ou"
+    "or": "ou",
+    "legalFooter": "En vous connectant, vous acceptez nos <termsLink>Conditions</termsLink> et notre <privacyLink>Politique de confidentialité</privacyLink>."
+  },
+  "legal": {
+    "privacy": {
+      "title": "Politique de confidentialité",
+      "lastUpdated": "Dernière mise à jour :"
+    },
+    "terms": {
+      "title": "Conditions d'utilisation",
+      "lastUpdated": "Dernière mise à jour :"
+    },
+    "back": "Retour"
   },
   "settings": {
     "title": "Paramètres",

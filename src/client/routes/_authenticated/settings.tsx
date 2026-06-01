@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient, updateProfile } from "../../lib/auth-client";
@@ -119,6 +119,12 @@ function SettingsPage() {
           >
             {t("auth.signOut")}
           </Button>
+
+          <nav className={styles.legalLinks} aria-label="legal">
+            <Link to="/privacy">{t("legal.privacy.title")}</Link>
+            <span aria-hidden>·</span>
+            <Link to="/terms">{t("legal.terms.title")}</Link>
+          </nav>
         </div>
       </div>
     </>

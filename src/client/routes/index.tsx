@@ -1,12 +1,17 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { useTranslation } from "react-i18next";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { authClient } from "../lib/auth-client";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { LanguageSelector } from "../components/LanguageSelector";
 import { Logo } from "../components/ui/Logo";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
+import {
+  PROVIDER_GLYPHS,
+  PROVIDER_ORDER,
+  type SocialProviderId,
+} from "../components/auth/providerGlyphs";
 import styles from "./index.module.css";
 
 export const Route = createFileRoute("/")({
@@ -56,18 +61,7 @@ function LoginPage() {
       <div className={styles.middleSpacer} />
 
       <div className={`${styles.actions} ${styles.actionsBlock}`}>
-        {!import.meta.env.VITE_TEST_AUTH && (
-          <button
-            type="button"
-            onClick={() =>
-              authClient.signIn.social({ provider: "google", callbackURL: "/games" })
-            }
-            className={styles.googleButton}
-          >
-            <GoogleGlyph />
-            {t("auth.signInWithGoogle")}
-          </button>
-        )}
+        {!import.meta.env.VITE_TEST_AUTH && <SocialProviderButtons />}
 
         {import.meta.env.VITE_TEST_AUTH && (
           <>
@@ -81,6 +75,16 @@ function LoginPage() {
         )}
       </div>
 
+      <p className={styles.legalFooter}>
+        <Trans
+          i18nKey="auth.legalFooter"
+          components={{
+            termsLink: <Link to="/terms" />,
+            privacyLink: <Link to="/privacy" />,
+          }}
+        />
+      </p>
+
       <div className={styles.bottom}>
         <LanguageSelector />
       </div>
@@ -88,27 +92,66 @@ function LoginPage() {
   );
 }
 
-function GoogleGlyph() {
+/**
+ * Render one button per OAuth provider that the server has credentials for.
+ * The server-side `/api/auth/providers` endpoint is the source of truth —
+ * a provider whose env vars aren't set on this deploy simply doesn't
+ * render, even if the client code knows about it.
+ */
+function SocialProviderButtons() {
+  const { t } = useTranslation();
+  const enabled = useEnabledProviders();
+
+  if (!enabled) {
+    return null;
+  }
+
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-      <path
-        fill="#4285F4"
-        d="M17.6 9.2c0-.6-.1-1.2-.2-1.7H9v3.4h4.8a4.1 4.1 0 01-1.8 2.7v2.2h2.9c1.7-1.6 2.7-3.9 2.7-6.6z"
-      />
-      <path
-        fill="#34A853"
-        d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2a5.4 5.4 0 01-8.1-2.8H1v2.3A9 9 0 009 18z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M3.96 10.7a5.4 5.4 0 010-3.4V5H1a9 9 0 000 8z"
-      />
-      <path
-        fill="#EA4335"
-        d="M9 3.6c1.3 0 2.5.5 3.4 1.3L15 2.3A9 9 0 001 5l3 2.3A5.4 5.4 0 019 3.6z"
-      />
-    </svg>
+    <>
+      {PROVIDER_ORDER.filter((id) => enabled.includes(id)).map((id) => {
+        const Glyph = PROVIDER_GLYPHS[id];
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() =>
+              authClient.signIn.social({ provider: id, callbackURL: "/games" })
+            }
+            className={styles.providerButton}
+            data-provider={id}
+          >
+            <Glyph />
+            {t(`auth.signInWith.${id}`)}
+          </button>
+        );
+      })}
+    </>
   );
+}
+
+/** Fetch the list of OAuth providers configured on the server. */
+function useEnabledProviders(): SocialProviderId[] | null {
+  const [providers, setProviders] = useState<SocialProviderId[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/providers")
+      .then((r) => r.json() as Promise<{ providers: SocialProviderId[] }>)
+      .then((data) => {
+        if (!cancelled) setProviders(data.providers);
+      })
+      .catch(() => {
+        // Server unreachable (offline / cold start) — fall back to an
+        // empty list, which hides the buttons but keeps the rest of the
+        // login page usable. The user can retry once back online.
+        if (!cancelled) setProviders([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return providers;
 }
 
 function TestAuthForm() {
