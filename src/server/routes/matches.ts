@@ -34,6 +34,8 @@ const playerProfileInclude = {
       alias: true,
       customAvatarUrl: true,
       useLinkedAvatar: true,
+      avatarFrame: true,
+      avatarRing: true,
       linkedUser: {
         select: {
           id: true,

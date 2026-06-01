@@ -1,0 +1,28 @@
+.root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px dashed var(--color-border-strong);
+  /* Slight rotation for the hand-drawn feel matching the rest of the
+   * sketch-style primitives (`SketchRect`, `SketchUnderline`). */
+  transform: rotate(-6deg);
+}
+
+.label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-primary);
+  letter-spacing: -0.5px;
+  /* Pulled forward so the dashed ring sits behind it. */
+  position: relative;
+  z-index: 1;
+}

@@ -1,0 +1,57 @@
+/* Shared layout primitives for the Avatar Capture Studio (Phase 7).
+ * Per-screen styles live in their own `.module.css` files. */
+
+.root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.fileInput {
+  display: none;
+}
+
+.error {
+  color: var(--color-danger);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* Done button — absolutely anchored to the studio root's top-right
+ * corner so it sits visibly outside the in-flow Hub content and
+ * doesn't visually wedge between the avatar and any sibling sections
+ * (alias / link / merge) inside the ProfileEditPanel wrapping Group.
+ * Tighter padding than the default Button.sm to keep the corner
+ * footprint small. */
+.doneButton {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0.3rem 0.65rem;
+  z-index: 2;
+}
+
+/* Shared header eyebrow used by every studio screen — uppercase mono
+ * with letter-spacing, matching the design handoff. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.6875rem; /* ~11px @ scaled root */
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+  margin: 0;
+}
+
+/* Caption variant used under the stamp preview on the Hub. */
+.caption {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.625rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+}

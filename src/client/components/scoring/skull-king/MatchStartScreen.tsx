@@ -6,6 +6,7 @@ import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
+import { Avatar } from "../../ui/Avatar";
 
 type Props = {
   /** Player order to render. The component reorders an internal copy and
@@ -32,7 +33,8 @@ export function MatchStartScreen({
 }: Props) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const viewerId = session?.user.id ?? null;
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   const dragIndexRef = useRef<number | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -253,6 +255,11 @@ export function MatchStartScreen({
                 >
                   {i + 1}
                 </span>
+                <Avatar
+                  profile={p.profile}
+                  viewerId={viewerId}
+                  size="md"
+                />
                 <span className={styles.seatName}>
                   {displayPlayerName(p, ownedIndex)}
                 </span>

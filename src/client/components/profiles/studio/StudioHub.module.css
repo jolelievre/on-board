@@ -1,0 +1,88 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.previewBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 2px;
+}
+
+.preview {
+  --avatar-size: 96px;
+}
+
+.alias {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--color-ink);
+}
+
+/* 2-column grid. Buttons wrap to additional rows as the Account
+ * toggle turns on (linked profiles get 4 actions; unlinked, 3). */
+.actionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.actionButton {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 84px;
+  padding: 12px 8px;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 12px;
+  color: var(--color-ink);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.actionButton:hover:not(:disabled),
+.actionButton:focus-visible {
+  background: var(--color-surface-alt);
+  border-color: var(--color-ink);
+}
+
+.actionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* `aria-pressed` toggle state for the Account button — accent-coloured
+ * border + tinted background so the active mode is obvious without a
+ * separate icon. */
+.actionButtonPressed,
+.actionButtonPressed:hover:not(:disabled),
+.actionButtonPressed:focus-visible {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+}
+
+.actionIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-ink);
+  line-height: 0;
+}
+
+.actionLabel {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-ink);
+  line-height: 1;
+  text-align: center;
+}

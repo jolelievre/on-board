@@ -13,10 +13,20 @@
 
 .headerStrip {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
   gap: 10px;
+}
+
+/* Phase 7: avatar + name cluster on the left side of the round-result
+ * header. The avatar's `md` size (40px) reads well at the screen's
+ * scale without dominating the bid value on the right. */
+.playerHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
 }
 
 .playerName {

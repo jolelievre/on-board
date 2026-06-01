@@ -24,7 +24,10 @@ export type IconName =
   | "camera"
   | "image"
   | "refresh"
-  | "merge";
+  | "merge"
+  | "crown"
+  | "skull-king"
+  | "info";
 
 type Props = {
   name: IconName;
@@ -258,6 +261,59 @@ export function Icon({ name, size = 20, stroke = 1.6, className, title }: Props)
           {titleEl}
           <path d="M6 3v6a4 4 0 004 4h4a4 4 0 014 4v4M18 3v6" />
           <path d="M3 6l3-3 3 3M15 6l3-3 3 3" />
+        </svg>
+      );
+    case "crown":
+      // Phase 7 — bold filled crown for the winner badge. Filled with
+      // `currentColor` so the consumer (WinnerBadge) drives the colour
+      // via CSS — `color: var(--color-crown-gold-ink)` inside a gold disc.
+      return (
+        <svg {...props} fill="currentColor" stroke="none">
+          {titleEl}
+          <path
+            d="M2.5 7.5 L7 12 L12 4 L17 12 L21.5 7.5 L19.5 19 L4.5 19 Z"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
+          />
+          <rect x="4.5" y="18.5" width="15" height="2.6" rx="1" />
+          <circle cx="2.5" cy="7.5" r="1.7" />
+          <circle cx="21.5" cy="7.5" r="1.7" />
+          <circle cx="12" cy="4" r="1.9" />
+        </svg>
+      );
+    case "info":
+      // Lower-case "i" in a circle — used as the universal info /
+      // disclosure affordance. Stroke-based to match the rest of the
+      // set; the dot is a filled circle for crispness at small sizes.
+      return (
+        <svg {...props}>
+          {titleEl}
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="8" r="1.1" fill="currentColor" stroke="none" />
+          <path d="M12 11.5v5" />
+        </svg>
+      );
+    case "skull-king":
+      // Phase 7 — crowned-skull mark for Skull King game rows. Single-tone
+      // (currentColor) so it fits the project's Icon convention.
+      return (
+        <svg {...props} fill="currentColor" stroke="none">
+          {titleEl}
+          {/* Crown atop the skull */}
+          <path
+            d="M5 9 L8 6.5 L12 4.5 L16 6.5 L19 9 L17.5 13 L6.5 13 Z"
+            stroke="currentColor"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
+          {/* Skull body */}
+          <path d="M6 12 C6 8.5 8.6 6.5 12 6.5 C15.4 6.5 18 8.5 18 12 C18 14.4 16.6 16 15.4 16.6 L15.4 19 L8.6 19 L8.6 16.6 C7.4 16 6 14.4 6 12 Z" />
+          {/* Eye sockets — punched out with the page background colour */}
+          <circle cx="9.6" cy="12" r="1.7" fill="var(--color-surface)" />
+          <circle cx="14.4" cy="12" r="1.7" fill="var(--color-surface)" />
+          <rect x="10" y="16.5" width="1.4" height="2.5" fill="var(--color-surface)" />
+          <rect x="12.6" y="16.5" width="1.4" height="2.5" fill="var(--color-surface)" />
         </svg>
       );
   }

@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./ScoreboardScreen.module.css";
+import { Avatar } from "../../ui/Avatar";
 import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
@@ -22,7 +23,8 @@ type Props = {
 export function ScoreboardScreen({ players, entries, currentRound }: Props) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const viewerId = session?.user.id ?? null;
+  const ownedIndex = useOwnedProfileIndex(viewerId);
 
   // Per-cell: bid/tricks/total/bonus computed once.
   const cells: Record<
@@ -126,11 +128,24 @@ export function ScoreboardScreen({ players, entries, currentRound }: Props) {
                 <th className={`${styles.th} ${styles.thRound}`}>
                   <span>R</span>
                 </th>
-                {players.map((p) => (
-                  <th key={p.id} className={styles.th}>
-                    {displayPlayerName(p, ownedIndex)}
-                  </th>
-                ))}
+                {players.map((p) => {
+                  const isLeader = ranks[p.id] === 1 && (totals[p.id] ?? 0) > 0;
+                  return (
+                    <th key={p.id} className={styles.th}>
+                      <span className={styles.thHeader}>
+                        <Avatar
+                          profile={p.profile}
+                          viewerId={viewerId}
+                          size="md"
+                          winner={isLeader}
+                        />
+                        <span className={styles.thName}>
+                          {displayPlayerName(p, ownedIndex)}
+                        </span>
+                      </span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -262,7 +277,7 @@ function Sparkline({
   roundsPlayed: number;
 }) {
   const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const ownedIndex = useOwnedProfileIndex(session?.user.id ?? null);
   const W = 320;
   const H = 80;
 

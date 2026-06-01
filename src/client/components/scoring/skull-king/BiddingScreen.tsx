@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./BiddingScreen.module.css";
+import { Avatar } from "../../ui/Avatar";
 import { DigitGrid } from "../../ui/sk/DigitGrid";
 import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
@@ -35,7 +36,8 @@ export function BiddingScreen({
 }: Props) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const viewerId = session?.user.id ?? null;
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   const active = players[activeIndex];
   const bidCount = players.filter((p) => bids[p.id] != null).length;
   const allDone = bidCount === players.length;
@@ -93,6 +95,11 @@ export function BiddingScreen({
             >
               <span className={styles.rowLeft}>
                 <span className={styles.posBadge}>{i + 1}</span>
+                <Avatar
+                  profile={p.profile}
+                  viewerId={viewerId}
+                  size="md"
+                />
                 <span className={styles.rowName}>{displayPlayerName(p, ownedIndex)}</span>
               </span>
               {v != null ? (
@@ -114,6 +121,9 @@ export function BiddingScreen({
 
       <div className={styles.sheet}>
         <div className={styles.sheetHeader}>
+          {active && (
+            <Avatar profile={active.profile} viewerId={viewerId} size="md" />
+          )}
           <span className={styles.sheetTitle}>
             {active
               ? t("scoring.skullKing.bid.playerBid", {

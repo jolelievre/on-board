@@ -142,6 +142,12 @@ test.describe("Profile alias propagation to friend devices", () => {
       const renamedAlias = `Chuck-${Math.random().toString(36).slice(2, 6)}`;
       await aPage.goto(`/players/${charlie.id}`);
       await aPage.waitForLoadState("domcontentloaded");
+      // Alias editor now lives inside the profile editor — open the
+      // editor via the pencil first.
+      await aPage.click("[data-testid='profile-edit-avatar']");
+      await expect(
+        aPage.locator("[data-testid='profile-editor']"),
+      ).toBeVisible({ timeout: 5_000 });
       const aliasInput = aPage.locator(
         "[data-testid='profile-alias-input']",
       );

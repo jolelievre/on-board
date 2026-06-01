@@ -116,10 +116,9 @@
 
 .sheetHeader {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
-  gap: 8px;
+  gap: 10px;
 }
 
 .sheetTitle {

@@ -11,6 +11,26 @@ export type LocalProfileLinkedUser = {
   email?: string;
 };
 
+/** Stamp frame shape — controls border-radius on the rendered avatar.
+ * "circle" is the default for legacy rows (and the v6 upgrader default).
+ * "tag" is the asymmetric-radius scrapbook look. */
+export type AvatarFrame = "circle" | "rounded" | "tag";
+
+/** Stamp colour ring — one of the 8 7WD category keys or null for no
+ * ring. Stored as a key (not hex) so it re-themes between Parchment
+ * and Candlelit. Mirrors the `Category` union in
+ * `src/client/components/ui/category.ts`. */
+export type AvatarRing =
+  | "civil"
+  | "scientific"
+  | "commercial"
+  | "guilds"
+  | "wonders"
+  | "progress"
+  | "treasury"
+  | "military"
+  | null;
+
 /** Server-mirrored Profile row (Phase 6-A). One per person the user knows.
  * Owned by the user when unclaimed; visible to both owner and linked user
  * once `linkedUserId` is set. UI reads through this table exclusively. */
@@ -21,6 +41,12 @@ export type LocalProfile = {
   alias: string;
   customAvatarUrl: string | null;
   useLinkedAvatar: boolean;
+  /** Phase 7: stamp shape. Defaults to "circle" for v5-and-earlier rows
+   * that predate the column; the next pull-sync brings down the
+   * server's authoritative value. */
+  avatarFrame: AvatarFrame;
+  /** Phase 7: stamp colour ring. `null` = no ring. */
+  avatarRing: AvatarRing;
   /** ISO timestamp — drives suggestion ordering. */
   usedAt: string;
   createdAt: string;
@@ -78,6 +104,12 @@ export type LocalPlayerProfile = {
   alias: string;
   customAvatarUrl: string | null;
   useLinkedAvatar: boolean;
+  /** Phase 7 stamp fields — mirrored from the Profile row so every
+   * consumer surface (match history, scoreboard, banners) reads a
+   * consistent stamp. Defaults applied at read time when undefined
+   * (Dexie rows from v5 don't have these fields until the next pull). */
+  avatarFrame: AvatarFrame;
+  avatarRing: AvatarRing;
   linkedUser: {
     id: string;
     name: string;
@@ -238,6 +270,43 @@ class OnBoardDB extends Dexie {
       profileGroupMembers: null,
       syncMeta: "key",
     });
+
+    // v6 — Phase 7: introduce stamp fields (`avatarFrame`, `avatarRing`)
+    // on Profile + the embedded Player.profile projection. No indexes
+    // change (the new fields are read-only render inputs, never query
+    // keys). The upgrader backfills "circle" / null on existing rows
+    // so the UI can read them unconditionally before the next pull-sync
+    // brings down the server's authoritative values.
+    this.version(6)
+      .stores({
+        syncQueue: "++id, createdAt, status",
+        games: "id, slug",
+        matches:
+          "id, gameId, status, startedAt, updatedAt, [createdById+startedAt]",
+        players:
+          "id, matchId, profileId, profileLinkedUserId, [matchId+position]",
+        scores: "id, matchId, [matchId+playerId+category], updatedAt",
+        profiles: "id, ownerId, linkedUserId, usedAt, updatedAt",
+        syncMeta: "key",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("profiles")
+          .toCollection()
+          .modify((row: Partial<LocalProfile>) => {
+            if (row.avatarFrame === undefined) row.avatarFrame = "circle";
+            if (row.avatarRing === undefined) row.avatarRing = null;
+          });
+        await tx
+          .table("players")
+          .toCollection()
+          .modify((row: LocalPlayer) => {
+            if (row.profile.avatarFrame === undefined)
+              row.profile.avatarFrame = "circle";
+            if (row.profile.avatarRing === undefined)
+              row.profile.avatarRing = null;
+          });
+      });
   }
 }
 

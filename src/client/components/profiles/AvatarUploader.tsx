@@ -1,35 +1,33 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { LocalProfile } from "../../lib/db";
-import { useCamera, type CameraErrorKey } from "../../hooks/useCamera";
-import {
-  uploadAvatar,
-  clearCustomAvatar,
-  patchProfile,
-} from "../../lib/mutations";
-import { Avatar } from "../ui/Avatar";
+import type { AvatarFrame, AvatarRing, LocalProfile } from "../../lib/db";
+import { type CameraErrorKey } from "../../hooks/useCamera";
+import { uploadAvatar, patchProfile } from "../../lib/mutations";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
-import styles from "./AvatarUploader.module.css";
+import { StudioHub } from "./studio/StudioHub";
+import { StudioCamera } from "./studio/StudioCamera";
+import { StudioReposition } from "./studio/StudioReposition";
+import { StudioStyle } from "./studio/StudioStyle";
+import { StudioSaved } from "./studio/StudioSaved";
+import studioStyles from "./studio/Studio.module.css";
 
-type Mode = "idle" | "camera" | "preview";
+type Screen = "hub" | "camera" | "reposition" | "style" | "saved";
 
 /**
- * Owner-side avatar uploader. Two paths, both end in
- * `uploadAvatar({ file })` → server sharp pipeline → Dexie mirror:
+ * Avatar Capture Studio (Phase 7) — replaces the flat shipped uploader
+ * with a small state machine: **Hub → Camera → Reposition → Style →
+ * Saved**, plus a gallery shortcut that skips the camera. The studio
+ * produces a **stamp**: a square JPEG (baked client-side from the
+ * reposition transform) plus a frame + colour-ring choice, persisted
+ * in one go on the save action.
  *
- *   1. **Camera capture** — `useCamera` starts a 1024×1024 stream,
- *      `capture()` returns a centre-cropped JPEG Blob.
- *   2. **Gallery upload** — `<input type="file" accept="image/*">`.
+ * The public component name is unchanged so `EditableAvatar` and the
+ * existing E2E selector (`[data-testid="avatar-uploader"]`) keep
+ * matching. Sub-screens live in `./studio/` for clarity.
  *
- * The component owns the bounding circle only when actively
- * capturing or previewing a new photo — in idle mode the parent is
- * responsible for showing the current avatar (we don't repeat it).
- *
- * Pass `onDone` to expose a "Done" button that closes whatever edit
- * surface the parent opened. After a successful upload the same
- * callback fires automatically, so a parent that mounts the uploader
- * inline can collapse back to a read-only avatar in one tap.
+ * Pass `onDone` to expose a done/close affordance — fires automatically
+ * after the user confirms the success step.
  */
 export function AvatarUploader({
   profile,
@@ -44,296 +42,259 @@ export function AvatarUploader({
   onDone?: () => void;
 }) {
   const { t } = useTranslation();
-  // Self-profile semantics: ownerId === linkedUserId === viewerId.
-  // Drives both the linked-avatar toggle copy and the initial camera
-  // facing-mode — selfie-style for your own photo, rear-facing for a
-  // friend you're pointing the phone at. The user can still flip.
-  const isSelf =
-    profile.linkedUserId !== null &&
-    profile.linkedUserId === viewerId &&
-    profile.ownerId === viewerId;
-  const camera = useCamera({
-    initialFacingMode: isSelf ? "user" : "environment",
-  });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [mode, setMode] = useState<Mode>("idle");
-  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [screen, setScreen] = useState<Screen>("hub");
+
+  // Raw image picked from camera or gallery — the source for reposition.
+  // We hold the object URL so the Reposition view can load it into an
+  // `<img>` and the offscreen canvas can read its natural pixels.
+  const [rawImageUrl, setRawImageUrl] = useState<string | null>(null);
+
+  // Baked square JPEG after the user confirms the reposition crop.
+  // Held until Save uploads it — lets the user wander back to the hub
+  // without losing the crop.
+  const [bakedBlob, setBakedBlob] = useState<Blob | null>(null);
+  const [bakedUrl, setBakedUrl] = useState<string | null>(null);
+
+  // Pending style state. Initialised from the profile so re-entering the
+  // studio after a previous save reflects the saved choice. The user's
+  // edits live here until Save commits.
+  const [pendingFrame, setPendingFrame] = useState<AvatarFrame>(
+    profile.avatarFrame,
+  );
+  const [pendingRing, setPendingRing] = useState<AvatarRing>(profile.avatarRing);
+
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Revoke object URLs on unmount / replacement so the renderer doesn't
+  // leak Blob handles when the studio closes mid-flow.
   useEffect(() => {
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if (rawImageUrl) URL.revokeObjectURL(rawImageUrl);
+      if (bakedUrl) URL.revokeObjectURL(bakedUrl);
     };
-  }, [previewUrl]);
+    // We intentionally re-run on URL changes to clean up the prior URL —
+    // the cleanup of the previous effect handles the old value.
+  }, [rawImageUrl, bakedUrl]);
 
-  // Stop the camera when the component unmounts or the user picks the
-  // gallery path mid-stream — keeps the LED off.
-  useEffect(() => {
-    return () => camera.stop();
-    // camera.stop is stable through the hook's useCallback
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const replaceRawImage = useCallback(
+    (next: string | null) => {
+      setRawImageUrl((prev) => {
+        if (prev && prev !== next) URL.revokeObjectURL(prev);
+        return next;
+      });
+    },
+    [],
+  );
 
-  const handleStartCamera = async () => {
-    setUploadError(null);
-    setMode("camera");
-    await camera.start();
+  const replaceBaked = useCallback(
+    (blob: Blob | null, url: string | null) => {
+      setBakedUrl((prev) => {
+        if (prev && prev !== url) URL.revokeObjectURL(prev);
+        return url;
+      });
+      setBakedBlob(blob);
+    },
+    [],
+  );
+
+  // Hub → camera
+  const handleOpenCamera = () => {
+    setSaveError(null);
+    setScreen("camera");
   };
 
-  const handleCapture = () => {
-    const blob = camera.capture();
-    if (!blob) return;
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewBlob(blob);
-    setPreviewUrl(URL.createObjectURL(blob));
-    camera.stop();
-    setMode("preview");
+  // Hub → gallery (native file picker)
+  const handleOpenGallery = () => {
+    setSaveError(null);
+    fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGalleryFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewBlob(file);
-    setPreviewUrl(URL.createObjectURL(file));
-    camera.stop();
-    setMode("preview");
+    const url = URL.createObjectURL(file);
+    replaceRawImage(url);
+    setScreen("reposition");
   };
 
-  const handleRetake = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewBlob(null);
-    setPreviewUrl(null);
-    setMode("idle");
+  // Camera → reposition (called by StudioCamera with the captured frame)
+  const handleCameraCapture = (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    replaceRawImage(url);
+    setScreen("reposition");
   };
 
-  const handleConfirm = async () => {
-    if (!previewBlob) return;
-    setUploadError(null);
+  // Reposition → style (called with the baked square)
+  const handleRepositionConfirm = (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    replaceBaked(blob, url);
+    setScreen("style");
+  };
+
+  // Hub → style (no new photo, just edit frame/ring)
+  const handleOpenStyle = () => {
+    setSaveError(null);
+    setScreen("style");
+  };
+
+  // Style → save
+  const handleSave = async () => {
+    setSaveError(null);
     setSubmitting(true);
     try {
-      await uploadAvatar({ profileId: profile.id, file: previewBlob });
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      setPreviewBlob(null);
-      setPreviewUrl(null);
-      setMode("idle");
-      // Stay in idle mode so the user can also clear, retake, or close
-      // explicitly via the "Done" button. Auto-closing on success would
-      // strand the user mid-flow if they wanted a follow-up action.
+      // Upload first (writes customAvatarUrl + flips useLinkedAvatar
+      // server-side), then patch frame/ring. Two round-trips so the
+      // server returns the canonical row each time and Dexie stays
+      // consistent.
+      if (bakedBlob) {
+        await uploadAvatar({ profileId: profile.id, file: bakedBlob });
+      }
+      if (
+        pendingFrame !== profile.avatarFrame ||
+        pendingRing !== profile.avatarRing
+      ) {
+        await patchProfile({
+          profileId: profile.id,
+          avatarFrame: pendingFrame,
+          avatarRing: pendingRing,
+        });
+      }
+      replaceBaked(null, null);
+      setScreen("saved");
     } catch (err) {
-      setUploadError(
-        err instanceof Error ? err.message : t("avatar.uploadFailed"),
+      setSaveError(
+        err instanceof Error
+          ? err.message
+          : t("studio.style.saveError"),
       );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleClear = async () => {
-    setUploadError(null);
-    setSubmitting(true);
-    try {
-      await clearCustomAvatar({ profileId: profile.id });
-    } catch (err) {
-      setUploadError(
-        err instanceof Error ? err.message : t("avatar.clearFailed"),
-      );
-    } finally {
-      setSubmitting(false);
-    }
+  // Universal back / cancel to the hub.
+  const backToHub = () => {
+    setScreen("hub");
   };
-
-  const cameraErrorMessage = camera.error
-    ? t(`avatar.cameraError.${camera.error}` as const)
-    : null;
-
-  const showLinkedToggle = profile.linkedUserId !== null;
 
   return (
-    <div className={styles.root} data-testid="avatar-uploader">
-      <canvas ref={camera.canvasRef} className={styles.canvas} />
-
-      <div className={styles.preview}>
-        {mode === "camera" ? (
-          <video
-            ref={camera.videoRef}
-            autoPlay
-            playsInline
-            muted
-            className={styles.video}
-          />
-        ) : mode === "preview" && previewUrl ? (
-          <img src={previewUrl} alt="" className={styles.previewImage} />
-        ) : (
-          // Idle: show the current resolved avatar at the full bounding
-          // circle size. `xl` matches the .preview frame (120px), so the
-          // photo fills the circle the same way the captured frames do.
-          <Avatar profile={profile} viewerId={viewerId} size="xl" />
-        )}
-      </div>
-
-      {cameraErrorMessage && (
-        <p className={styles.error}>{cameraErrorMessage}</p>
-      )}
-      {uploadError && <p className={styles.error}>{uploadError}</p>}
-
-      {mode === "camera" && (
-        <div className={styles.captureBar}>
-          {camera.canFlip && (
-            <button
-              type="button"
-              onClick={() => void camera.flip()}
-              className={styles.iconButton}
-              aria-label={t("avatar.flipCamera")}
-              data-testid="avatar-camera-flip"
-            >
-              <Icon name="refresh" size={18} />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={handleCapture}
-            disabled={!camera.isReady}
-            className={styles.captureButton}
-            aria-label={t("avatar.capture")}
-            data-testid="avatar-camera-capture"
-          >
-            <Icon name="camera" size={22} />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              camera.stop();
-              setMode("idle");
-            }}
-            className={styles.iconButton}
-            aria-label={t("common.cancel")}
-            data-testid="avatar-camera-cancel"
-          >
-            <Icon name="x" size={18} />
-          </button>
-        </div>
+    <div className={studioStyles.root} data-testid="avatar-uploader">
+      {screen === "hub" && (
+        <StudioHub
+          profile={profile}
+          viewerId={viewerId}
+          isSubmitting={submitting}
+          onNewPhoto={handleOpenCamera}
+          onFromGallery={handleOpenGallery}
+          onStyleStamp={handleOpenStyle}
+          // Pending style state is mirrored into the hub's stamp
+          // preview so a user who saved a new ring earlier still sees
+          // it on re-enter even before the next pull-sync round-trip.
+          previewFrame={pendingFrame}
+          previewRing={pendingRing}
+        />
       )}
 
-      {mode === "preview" && (
-        <div className={styles.actions}>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={handleRetake}
-            disabled={submitting}
-            data-testid="avatar-retake"
-          >
-            {t("avatar.retake")}
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={handleConfirm}
-            disabled={submitting}
-            data-testid="avatar-confirm"
-          >
-            {submitting ? t("common.saving") : t("avatar.confirm")}
-          </Button>
-        </div>
+      {screen === "camera" && (
+        <StudioCamera
+          isSelf={isSelfProfile(profile, viewerId)}
+          onCapture={handleCameraCapture}
+          onPickFromGallery={handleOpenGallery}
+          onCancel={backToHub}
+        />
       )}
 
-      {mode === "idle" && (
-        <>
-          <div className={styles.actions}>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => void handleStartCamera()}
-              disabled={submitting}
-              iconBefore={<Icon name="camera" size={16} />}
-              data-testid="avatar-open-camera"
-            >
-              {t("avatar.takePhoto")}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={submitting}
-              iconBefore={<Icon name="image" size={16} />}
-              data-testid="avatar-pick-file"
-            >
-              {t("avatar.chooseFile")}
-            </Button>
-            {profile.customAvatarUrl && (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => void handleClear()}
-                disabled={submitting}
-                data-testid="avatar-clear"
-              >
-                {t("avatar.clear")}
-              </Button>
-            )}
-            {onDone && (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={onDone}
-                disabled={submitting}
-                data-testid="avatar-done"
-              >
-                {t("common.done")}
-              </Button>
-            )}
-          </div>
+      {screen === "reposition" && rawImageUrl && (
+        <StudioReposition
+          imageUrl={rawImageUrl}
+          onRetake={() => {
+            replaceRawImage(null);
+            setScreen("hub");
+          }}
+          onConfirm={handleRepositionConfirm}
+        />
+      )}
 
-          {/* Linked-avatar toggle lives inside the uploader's idle UI:
-              it's an edit-time control, so hiding it until the user
-              taps the pencil keeps the read-only profile view clean.
-              Only rendered when the profile is actually linked. */}
-          {showLinkedToggle && (
-            <div className={styles.toggleRow}>
-              <label className={styles.toggleLabel}>
-                <input
-                  type="checkbox"
-                  checked={profile.useLinkedAvatar}
-                  onChange={(e) =>
-                    void patchProfile({
-                      profileId: profile.id,
-                      useLinkedAvatar: e.target.checked,
-                    })
-                  }
-                  data-testid="profile-use-linked-avatar"
-                />
-                <span>
-                  {isSelf
-                    ? t("avatar.useLinkedAvatarSelf")
-                    : t("avatar.useLinkedAvatar")}
-                </span>
-              </label>
-              <p className={styles.toggleHint}>
-                {isSelf
-                  ? t("avatar.useLinkedAvatarSelfHint")
-                  : t("avatar.useLinkedAvatarHint")}
-              </p>
-            </div>
-          )}
-        </>
+      {screen === "style" && (
+        <StudioStyle
+          profile={profile}
+          viewerId={viewerId}
+          // Preview reflects the pending edits. When the user reached
+          // Style after a new capture, `bakedUrl` overrides the
+          // profile's current photo in the preview.
+          previewOverrideUrl={bakedUrl}
+          frame={pendingFrame}
+          ring={pendingRing}
+          onFrameChange={setPendingFrame}
+          onRingChange={setPendingRing}
+          isSubmitting={submitting}
+          errorMessage={saveError}
+          onBack={backToHub}
+          onSave={() => void handleSave()}
+        />
+      )}
+
+      {screen === "saved" && (
+        <StudioSaved
+          profile={profile}
+          viewerId={viewerId}
+          frame={pendingFrame}
+          ring={pendingRing}
+          onEditAgain={() => setScreen("hub")}
+          onDone={onDone ?? backToHub}
+        />
+      )}
+
+      {saveError && screen === "hub" && (
+        <p className={studioStyles.error}>{saveError}</p>
       )}
 
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        onChange={handleFileChange}
-        className={styles.fileInput}
+        onChange={handleGalleryFile}
+        className={studioStyles.fileInput}
         data-testid="avatar-file-input"
       />
+
+      {/* The Hub always exposes a Done/Cancel affordance so the studio
+          is never a dead-end. When the parent passed `onDone`, this
+          delegates to the parent (collapses the editor); otherwise we
+          have nowhere to escape to since the studio IS the page — the
+          button just disappears in that case. */}
+      {screen === "hub" && onDone && (
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          onClick={onDone}
+          iconBefore={<Icon name="check" size={14} />}
+          className={studioStyles.doneButton}
+          data-testid="avatar-done"
+        >
+          {t("common.done")}
+        </Button>
+      )}
     </div>
   );
 }
 
-// Re-export the error key type so consumers needing translations can
-// resolve them via the same string union.
+/** Self-profile semantics: ownerId === linkedUserId === viewerId.
+ * Drives the camera's initial facing-mode — selfie for your own
+ * photo, rear-facing when you're aiming the phone at a friend. */
+function isSelfProfile(profile: LocalProfile, viewerId: string): boolean {
+  return (
+    profile.linkedUserId !== null &&
+    profile.linkedUserId === viewerId &&
+    profile.ownerId === viewerId
+  );
+}
+
+// Re-export so existing consumers (translation lookups) can resolve
+// camera-error keys through the same string union.
 export type { CameraErrorKey };

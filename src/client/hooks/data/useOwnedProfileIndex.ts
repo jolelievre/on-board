@@ -19,12 +19,17 @@ const EMPTY_INDEX: OwnedProfileIndex = {
  * profile edit (rename, link, unlink, merge) immediately propagates
  * to every consumer's next render with no manual write-through.
  *
- * Returns an empty index while `viewerId` is undefined — call sites
- * that render before the session settles get the snapshot fallback
- * (`profile.alias`) which is the desired pre-auth behavior.
+ * The `viewerId` parameter is **required** (`string | null`) — callers
+ * pass `null` when the session is still loading or genuinely absent
+ * (rare under `_authenticated/*` routes). Forcing the parameter
+ * prevents the silent "I forgot to thread the viewer through, so I
+ * get an empty index and the snapshot fallback kicks in" bug class.
+ * Mirrors the contract on `displayProfileName` /
+ * `displayProfileAvatar`, both of which already require an
+ * `OwnedProfileIndex`.
  */
 export function useOwnedProfileIndex(
-  viewerId: string | undefined,
+  viewerId: string | null,
 ): OwnedProfileIndex {
   const data = useLiveQuery(
     async (): Promise<OwnedProfileIndex> => {

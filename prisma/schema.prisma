@@ -161,6 +161,15 @@ model Profile {
   alias           String   /// Primary display name. Owner-editable even when linked.
   customAvatarUrl String?  /// Owner-uploaded avatar (ships in 6-B).
   useLinkedAvatar Boolean  @default(true) /// When linked: prefer linkedUser.avatarUrl over customAvatarUrl.
+  /// Stamp frame shape: "circle" | "rounded" | "tag". Applies to the
+  /// rendered avatar (photo OR initial fallback) on every consumer.
+  /// Owner-controlled; viewer-invariant.
+  avatarFrame     String   @default("circle")
+  /// Stamp colour ring: one of the 8 category keys (civil,
+  /// scientific, commercial, guilds, progress, treasury, military,
+  /// wonders) or null for no ring. Stored as a key (not hex) so the
+  /// rendered colour re-themes between Parchment and Candlelit.
+  avatarRing      String?
   usedAt          DateTime @default(now()) /// Bumped on each match create; drives suggestion ordering.
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

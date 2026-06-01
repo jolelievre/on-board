@@ -50,7 +50,10 @@ test.describe("Profile detail — merge", () => {
     await dupeRow.click();
     await page.waitForURL(/\/players\/[a-z0-9-]+$/);
 
-    // Trigger merge.
+    // Trigger merge — the action button lives inside the profile
+    // editor now, so open it via the pencil first.
+    await page.click("[data-testid='profile-edit-avatar']");
+    await expect(page.locator("[data-testid='profile-editor']")).toBeVisible();
     await page.click("[data-testid='profile-merge-action']");
     const survivorButton = page
       .locator("[data-testid^='merge-candidate-']", { hasText: survivor })
@@ -116,8 +119,9 @@ test.describe("Profile detail — avatar uploader", () => {
       page.locator("[data-testid='avatar-uploader']"),
     ).toBeVisible();
 
-    // Upload via the hidden file input — same code path the "Choose
-    // file" button triggers, just without the OS file picker.
+    // Upload via the hidden file input — same code path the Hub's
+    // "From gallery" action triggers (it's a programmatic click on this
+    // input). Studio jumps to the reposition screen on load.
     await page
       .locator("[data-testid='avatar-file-input']")
       .setInputFiles({
@@ -126,14 +130,33 @@ test.describe("Profile detail — avatar uploader", () => {
         buffer: TINY_PNG,
       });
 
-    await page.click("[data-testid='avatar-confirm']");
-    await expect(page.locator("[data-testid='avatar-clear']")).toBeVisible();
+    // Reposition → Use photo: bakes the square crop and advances to the
+    // Style screen.
+    await expect(
+      page.locator("[data-testid='studio-reposition']"),
+    ).toBeVisible();
+    await page.click("[data-testid='studio-reposition-confirm']");
 
-    // Clear it.
-    await page.click("[data-testid='avatar-clear']");
-    await expect(page.locator("[data-testid='avatar-clear']")).toHaveCount(0);
+    // Style → Save stamp: uploads the baked square + persists frame/ring.
+    await expect(page.locator("[data-testid='studio-style']")).toBeVisible();
+    await page.click("[data-testid='studio-style-save']");
 
-    // Close edit mode.
+    // Success state confirms the upload landed.
+    await expect(page.locator("[data-testid='studio-saved']")).toBeVisible();
+    await page.click("[data-testid='studio-saved-done']");
+
+    // Re-enter the editor to verify the studio Hub mounted with the
+    // saved stamp + a working Done button. The "Initial" /
+    // clear-photo affordance was removed in the Hub redesign — its
+    // role is now covered by Account-toggle (linked profiles) or by
+    // simply re-uploading; we no longer assert it.
+    await page.click("[data-testid='profile-edit-avatar']");
+    await expect(
+      page.locator("[data-testid='avatar-uploader']"),
+    ).toBeVisible();
+
+    // Close the editor via the studio's Done button (now a primary
+    // pill anchored to the studio's top-right corner).
     await page.click("[data-testid='avatar-done']");
     await expect(
       page.locator("[data-testid='avatar-uploader']"),

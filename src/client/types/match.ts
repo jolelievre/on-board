@@ -1,3 +1,5 @@
+import type { AvatarFrame, AvatarRing } from "../lib/db";
+
 export type PlayerProfile = {
   id: string;
   ownerId: string;
@@ -5,6 +7,12 @@ export type PlayerProfile = {
   alias: string;
   customAvatarUrl: string | null;
   useLinkedAvatar: boolean;
+  /** Phase 7 stamp fields — same semantics as `LocalProfile`. The
+   * denormalized projection on Player rows carries them so every
+   * scoring surface can render the owner's chosen stamp without an
+   * extra lookup. */
+  avatarFrame: AvatarFrame;
+  avatarRing: AvatarRing;
   linkedUser: {
     id: string;
     name: string;

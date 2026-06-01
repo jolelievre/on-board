@@ -137,6 +137,11 @@ test.describe("Alias — settings + propagation", () => {
     await page.goto(`/players/${friend.id}`);
     await page.waitForLoadState("domcontentloaded");
 
+    // Alias editor now lives inside the profile editor — open it.
+    await page.click("[data-testid='profile-edit-avatar']");
+    await expect(
+      page.locator("[data-testid='profile-editor']"),
+    ).toBeVisible();
     await page.fill("[data-testid='profile-alias-input']", "Bobby");
     await page.press("[data-testid='profile-alias-input']", "Enter");
     await expect(

@@ -977,7 +977,171 @@ Out of scope (decided during planning, not shipping): **shower-side feedback whe
 
 ---
 
-## Phase 7: Polish + Distribution
+## Phase 7: Avatars & Match Row — Design Refactor
+
+**Goal**: ship the design pass on the avatar / profile-photo feature done with Claude Design (handoff in `plan-assets/design_handoff_avatars/`). Two things land together: a state-machine **Avatar Capture Studio** replacing the current `AvatarUploader`, and **avatar "stamps"** (photo + frame + colour ring) threaded through match history, the winner banner, the 7 Wonders Duel scorer, and every Skull King screen via a unified one-line match row.
+
+The result is consistent player identification across every surface — set the stamp once in the studio, every consumer picks it up from the profile. Mocks are reference HTML/JSX prototypes, NOT code to port: recreate using the existing CSS-Modules + theme tokens + `Avatar` / `Button` / `Card` / `Pill` / `SketchRect` / `CatGlyph` / `Icon` primitives.
+
+### Data model
+
+The capture studio produces a **stamp**: a photo plus how it's framed. Add two fields to `Profile` (Prisma + Dexie `LocalProfile`):
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `avatarFrame` | `'circle' \| 'rounded' \| 'tag'` | `'circle'` | Stamp shape. Radii: circle `50%`, rounded `≈26%` of size, tag `10% 34% 10% 34%` of size. |
+| `avatarRing` | category key string \| null | `null` | One of `civil`, `scientific`, `commercial`, `guilds`, `progress`, `treasury`, `military`, `wonders`, or null. Stored as a key (not hex) so it re-themes. |
+
+- `customAvatarUrl` keeps its current meaning. Client **bakes the reposition transform into a square JPEG before upload** — server's existing `sharp` pipeline (`avatar-storage.ts`) is unchanged. No `avatarCrop` column.
+- Frame + ring apply uniformly to custom uploads, the linked Google photo, AND the initial-letter fallback.
+- Migration backfills existing rows with `avatarFrame='circle'`, `avatarRing=NULL`. Cosmetic; no behaviour change for unmigrated clients.
+- Dexie bumps v5 → v6 mirroring server fields; pull-sync populates.
+
+### Part 1 — Avatar Capture Studio
+
+**Replaces**: `src/client/components/profiles/AvatarUploader.tsx` (+ CSS). `EditableAvatar.tsx` unchanged structurally — same pencil-icon toggle, just opens the new studio.
+
+State machine — 4 screens (mock source: `mocks/studio/{app,camera,reposition,style}.jsx`):
+
+1. **Hub** — current stamp preview + alias + mono caption `YOUR CURRENT STAMP` / `NO PHOTO YET`. Three full-width action rows: **New photo** → camera; **From gallery** → native file input → reposition; **Style stamp** → style screen (accent border, disabled when no photo). Dashed "Use my "X" monogram" row clears the photo. Eyebrow `EDIT PROFILE` + existing `<ThemeToggle>` on the right. Critical UX fix: **styling reachable without retaking**.
+2. **Camera** — full-bleed feed, NOT the current cramped circle. Warm-ink scrim with circular cut-out + hand-drawn dashed framing ring (WYSIWYG with the final crop). Bottom strip: Gallery + real shutter (`primary`) + Flip; top bar: `✕ Cancel` + `SELFIE`/`REAR` pill. Mirror front-camera preview, un-mirror on capture. Error state: hide shutter, keep Gallery (graceful fallback).
+3. **Reposition** — the missing step. Circular crop window (~230px) with Pointer Events (drag, two-finger pinch, mouse wheel) + 1–4 zoom slider. Faint center cross guides. On confirm, bake `{x, y, scale}` into a square via offscreen canvas; that JPEG goes to `POST /api/profiles/:id/avatar`.
+4. **Style** — live stamp preview + frame swatch row (3 options) + colour ring row (off + 8 category swatches). Store category key, not hex. Save persists `customAvatarUrl` + `avatarFrame` + `avatarRing` together with a brief `✓ Saved` confirmation.
+
+`useCamera` extension: expose the live `<video>` element so reposition can sample non-centred crops. Existing `capture()` (1024×1024 centre-cropped JPEG) kept intact for any callers.
+
+### Part 2 — `Avatar` component (extend, don't fork)
+
+**Edit**: `src/client/components/ui/Avatar.tsx` + `Avatar.module.css`. Current `Avatar` already does photo URL resolution, `sm|md|lg|xl` sizes, 8-bucket initial fallback. Add:
+
+- **`frame?: 'circle' | 'rounded' | 'tag'`** — default from `profile.avatarFrame`. Drives `border-radius`. Applies to both photo and initial fallback.
+- **`ring?: CategoryKey | null`** — default from `profile.avatarRing`. Renders as `box-shadow: 0 0 0 <ringWidth>px var(--color-cat-<key>-strong)` where `ringWidth` scales ≈5–6% of avatar size.
+
+### Part 3 — Avatars in play
+
+General rules from review:
+
+- **Winner mark**: filled gold disc + dark crown glyph (`#C99A2E` light / `#F0C84B` dark), overlaid top-right on the winner's avatar. Used wherever a winner / leader is shown.
+- **"This is me"**: only in **match history / lists**, NOT during in-game scoring. Treatment = teal (`accent`) left edge tab on the row + teal `Highlighter` swipe behind my name + teal ring on my avatar. **No "You" pill** (dropped in review). This **replaces** the current bold-font `.playerNameSelf` treatment in `MatchHistoryRow`.
+- **Names always visible** beside avatars (especially the initial-fallback case).
+
+**3a. Unified Match Row** — `src/client/components/matches/MatchHistoryRow.tsx`. One compact component, identical in `/games/$slug_` history and on `/players/$profileId`, ONE line per match. Two layouts by player count:
+
+- **2 players**: symmetric `avatar — VS — avatar`. Each side horizontal: avatar + name + score; centered `VsMark`; date beneath. Winner side gets the crown + accent-coloured score.
+- **3+ players**: winner leads (avatar + crown + name), then `beat` + overlapping avatar stack (cap 4, then `+N`); winner's total score + date on the right.
+
+Small game glyph at left: existing `CatGlyph` for 7WD, new `Icon name="skull-king"` for SK. Pass `me` prop: history list = signed-in user; profile detail = null. **Replaces** the current bi-layout (compact / podium) and removes the truncating-title pattern.
+
+**3b. Winner Banner** — `src/client/components/match/WinnerBanner.tsx`. Winner's avatar + gold `WinnerBadge`, "X wins!", score line with runner-up's small avatar. Replaces today's 🏆 emoji. Draw rendering structurally unchanged.
+
+**3c. 7 Wonders Duel scorer header** — `src/client/components/scoring/SevenWondersDuelScorer.tsx`. Two player name-blocks gain `<Avatar>`; leader gets `WinnerBadge`. **No me-highlight here** (in-game). Grid cells inside unchanged.
+
+**3d. Skull King** — `src/client/components/scoring/skull-king/*`:
+
+| File | Change |
+|---|---|
+| `MatchStartScreen.tsx` | Seating list: avatar + seat-number badge per row; dealer keeps its pill |
+| `BiddingScreen.tsx` | Avatar + seat badge per row; active-player highlight stays; no me-highlight |
+| `BidRecapScreen.tsx` | Avatar + seat badge per bid card; no me-highlight |
+| `RoundResultScreen.tsx` | Player header gains avatar beside name |
+| `RoundTransitionScreen.tsx` | New **dealer chip** (avatar + small card glyph) above the deal-card stack; standings rows get avatars; leader gets `WinnerBadge`; no me-highlight |
+| `MatchCompleteScreen.tsx` | Winner's avatar + `WinnerBadge` up top; final-standings rows get avatars + existing medals |
+| `ScoreboardScreen.tsx` | Column headers gain avatars (scales 2–8 players); `#1` gets `WinnerBadge`; no me-highlight |
+
+Reuse `shared.module.css` / `sk/` primitives; only inject `<Avatar>` + `<WinnerBadge>` + (transition only) `<DealerChip>`.
+
+### New shared UI — favor `Icon`, dedicate only when compositional
+
+**Pure glyphs → add to `src/client/components/ui/Icon.tsx`** (the project's central glyph registry):
+
+- **`crown`** — new `IconName`; consumed by `WinnerBadge`.
+- **`skull-king`** — new `IconName` (crowned-skull mark); used at the left of SK match rows. Replaces the originally-considered `SkullKingMark.tsx` — no compositional logic, just a glyph.
+- **`cards`** — already exists; reuse for the dealer-chip glyph unless the mock visual differs enough to warrant a `dealer-card` entry.
+
+**Dedicated components (compositional / typographic / styled):**
+
+- **`WinnerBadge.tsx`** (`components/ui/`) — overlay wrapper: filled gold disc + absolute-positioned anchor + `<Icon name="crown">` inside.
+- **`VsMark.tsx`** (`components/ui/`) — Caveat "VS" inside a hand-drawn dashed ring; typographic, can't live in `Icon`.
+- **`Highlighter.tsx`** (`components/ui/`) — translucent skewed accent block.
+- **`DealerChip.tsx`** (`scoring/skull-king/sk/`) — composition: `<Avatar>` + `<Icon name="cards">` + label.
+
+Theme tokens: add `--color-crown-gold-{light,dark}` if not already present; both `Parchment` and `Candlelit` from day one.
+
+### Delivery — single PR (`feat/avatar-studio-and-stamps`, ~5–7 days)
+
+Shipping the whole phase as one PR. The visual story is coherent end-to-end (a stamp set up in the studio is only meaningful when every consumer surface reads it), and reviewing as one unit avoids "stamps don't render anywhere yet" intermediate states. Order inside the branch so each commit leaves the app working:
+
+1. Foundations — Prisma migration + backfill, Dexie v5→v6, server `PATCH` accepts new fields, `mutations.ts` extension.
+2. `Avatar` extension (`frame` + `ring` props) + theme tokens.
+3. New shared UI — extend `Icon` (`crown`, `skull-king`); add `WinnerBadge`, `VsMark`, `Highlighter`, `DealerChip`.
+4. Capture Studio — 4-screen state machine, `useCamera` exposes video element, client-side canvas baking, i18n in en/fr.
+5. In-play surfaces — `MatchHistoryRow`, `WinnerBanner`, `SevenWondersDuelScorer` header.
+6. Skull King pass — all 7 SK screens per the table; `DealerChip` integrated on `RoundTransitionScreen`.
+7. E2E — new `avatar-studio.spec.ts`, `match-row-me-highlight.spec.ts`; update `match-history`, `skull-king`, `7wd-scorer`, `settings-avatar-edit`.
+
+**Crop strategy: client-side bake.** Reposition draws the `{x, y, scale}`-transformed image into an offscreen square canvas, exports to JPEG, uploads. Server `sharp` pipeline unchanged.
+
+**Theme scope: both `Parchment` and `Candlelit` from day one.** Every new component reads CSS custom properties; no inline hex.
+
+### Critical files
+
+| File | Action |
+|---|---|
+| `prisma/schema.prisma` | Add `avatarFrame`, `avatarRing` on `Profile`; migration backfill |
+| `src/server/routes/profiles.ts` | `PATCH` accepts new fields |
+| `src/client/lib/db.ts` | Dexie v6: same two fields |
+| `src/client/lib/mutations.ts` | Extend `patchProfile` |
+| `src/client/components/ui/Avatar.tsx` (+ CSS) | `frame` + `ring` props |
+| `src/client/components/profiles/AvatarUploader.tsx` (+ CSS) | Rebuild as 4-screen state machine |
+| `src/client/components/profiles/EditableAvatar.tsx` | Opens new studio (minor) |
+| `src/client/hooks/useCamera.ts` | Expose video element access |
+| `src/client/components/ui/Icon.tsx` | Add `crown` + `skull-king`; reuse existing `cards` for dealer chip |
+| `src/client/components/ui/WinnerBadge.tsx` | New — gold disc wrapping `<Icon name="crown">` |
+| `src/client/components/ui/VsMark.tsx` | New — Caveat "VS" in dashed ring |
+| `src/client/components/ui/Highlighter.tsx` | New — translucent skewed accent block |
+| `src/client/components/scoring/skull-king/sk/DealerChip.tsx` | New — composition |
+| `src/client/components/matches/MatchHistoryRow.tsx` (+ CSS) | Full rewrite, two-layout, new "me" treatment |
+| `src/client/components/match/WinnerBanner.tsx` | Crown badge + avatars |
+| `src/client/components/scoring/SevenWondersDuelScorer.tsx` | Header avatars + leader crown |
+| `src/client/components/scoring/skull-king/*.tsx` | Per Part 3d table |
+| `src/client/locales/{en,fr}/common.json` | `studio.*` + frame/ring strings |
+| `e2e/avatar-studio.spec.ts` | New |
+| `e2e/match-row-me-highlight.spec.ts` | New |
+
+### Out of scope (deferred)
+
+- `avatarCrop` (`{x, y, scale}`) as a separate schema field — we bake the transform into the JPEG.
+- "Per-viewer stamp" — frame/ring are owner-controlled, viewer-invariant.
+- Stamp on the bottom-nav profile pill / app header — not in the handoff scope.
+- Animated stamp transitions / progressive-load polish.
+
+### Reused, not rewritten
+
+- `useCamera` — extended (raw video access), not replaced.
+- Existing `Avatar.tsx` — extended.
+- Server `sharp` pipeline — unchanged.
+- `SketchRect`, `SketchUnderline`, `CatGlyph`, `Icon`, `Pill`, `Button`, `Card`, `Group`, `ThemeToggle` — reused.
+- `displayProfileName` viewer-aware override (from PR 6-C) — unchanged.
+- `shared.module.css` / `sk/` Skull-King primitives — reused.
+- Mock inline-style implementations (`mocks/lib/ob-kit.jsx`, `mocks/studio/*`) are references, NOT code to port.
+
+### Validation
+
+- `npm run lint && npm run type-check` clean.
+- `npm test` — full E2E suite green on Mobile Chrome + Mobile Safari.
+- `npm run db:migrate && npm run db:seed && npm run db:test:reset` — migration clean both ways.
+- Manual on integration deploy:
+  1. Gallery upload → reposition → save with custom frame + ring → stamp identical in every list, scorer, banner.
+  2. Linked friend with `useLinkedAvatar=true` → Google photo wears the owner's frame + ring choice.
+  3. Profile with no photo → initial-letter fallback wears frame + ring.
+  4. Match history: only "me" rows highlighted; `/players/$profileId`: none highlighted.
+  5. 7WD scorer mid-game: leader's crown badge moves as the score shifts.
+  6. Skull King full match: seat badges + avatars on all 7 screens, dealer chip on transition.
+  7. Toggle theme: every new surface reads correctly in both `Parchment` and `Candlelit`.
+
+---
+
+## Phase 8: Polish + Distribution
 
 **Goal**: Smooth experience, ready to share with friends.
 
@@ -992,7 +1156,7 @@ Out of scope (decided during planning, not shipping): **shower-side feedback whe
 
 ---
 
-## Phase 7b: Documentation pass (post-1.0)
+## Phase 8b: Documentation pass (post-1.0)
 
 **Goal**: Replace the bootstrap-era doc set with a stable reference, now that the architecture has settled. Triggered once v1.0 ships; PLAN.md itself converts into a CHANGELOG at this point because the phase-by-phase narrative is no longer load-bearing.
 
@@ -1015,7 +1179,7 @@ The gap today: project description, data model, auth flow, game rules, and API s
 
 ---
 
-## Phase 8: Skull King — Rascal Variant
+## Phase 9: Skull King — Rascal Variant
 
 **Goal**: Complete the Phase 4 scope by adding the Rascal variant alongside Classic.
 

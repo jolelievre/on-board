@@ -11,10 +11,23 @@
   gap: 0.625rem;
 }
 
-.trophy {
-  font-size: 1.65rem;
-  display: inline-block;
-  transform: rotate(-8deg);
+.titleBlock {
+  flex: 1;
+  min-width: 0;
+}
+
+.runnerUp {
+  display: inline-flex;
+  flex-shrink: 0;
+  /* Slight pull-in so the runner-up's photo nests against the title
+   * block visually, hinting "and this is who they beat". */
+  margin-left: -4px;
+  opacity: 0.85;
+}
+
+.scoreLine {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
 }
 
 .title {

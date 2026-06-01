@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./RoundTransitionScreen.module.css";
+import { Avatar } from "../../ui/Avatar";
+import { DealerChip } from "../../ui/sk/DealerChip";
 import { SkullGlyph } from "../../ui/sk/SkGlyphs";
 import { displayPlayerName } from "../../../../shared/players";
 import { useAuthSession } from "../../../hooks/useAuthSession";
@@ -39,7 +41,8 @@ export function RoundTransitionScreen({
 }: Props) {
   const { t } = useTranslation();
   const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id);
+  const viewerId = session?.user.id ?? null;
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   // One card per round number, no cap — round 10 deals 10 cards. The stack
   // is centred horizontally regardless of count.
   const cardCount = nextRound;
@@ -65,6 +68,16 @@ export function RoundTransitionScreen({
             name: displayPlayerName(nextDealer, ownedIndex),
           })}
         </p>
+      </div>
+
+      <div className={styles.dealerChipRow}>
+        <DealerChip
+          profile={nextDealer.profile}
+          viewerId={viewerId}
+          label={t("scoring.skullKing.transition.dealerChip", {
+            name: displayPlayerName(nextDealer, ownedIndex),
+          })}
+        />
       </div>
 
       <div className={styles.cardStack} aria-hidden>
@@ -103,6 +116,7 @@ export function RoundTransitionScreen({
         {standings.map((row, i) => {
           const sign = row.lastDelta >= 0 ? "+" : "";
           const direction = row.lastDelta >= 0 ? styles.up : styles.down;
+          const isLeader = i === 0;
           return (
             <div
               key={row.player.id}
@@ -110,6 +124,12 @@ export function RoundTransitionScreen({
               data-testid={`sk-transition-standing-${i}`}
             >
               <span className={styles.standingsRank}>#{i + 1}</span>
+              <Avatar
+                profile={row.player.profile}
+                viewerId={viewerId}
+                size="md"
+                winner={isLeader}
+              />
               <span className={styles.standingsName}>
                 {displayPlayerName(row.player, ownedIndex)}
               </span>

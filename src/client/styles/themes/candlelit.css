@@ -24,6 +24,16 @@
   --color-warning: #e5a24a;
   --color-danger: #d9603a;
 
+  /* Phase 7 — Winner crown badge (candlelit). Disc warmed-up gold +
+   * the same dark ink for the crown glyph so it stays legible. */
+  --color-crown-gold: #f0c84b;
+  --color-crown-gold-ink: #241b0f;
+
+  /* Phase 7 — Avatar Capture Studio scrim (candlelit).
+   * Darker than parchment's because the surrounding UI is dark already
+   * and a too-warm scrim would wash out the circular cut-out. */
+  --color-studio-scrim: #0c0a06;
+
   /* Categories — saturated, warm-tinted */
   --color-cat-civil-bg: #1a2640;
   --color-cat-civil-strong: #6e94d6;

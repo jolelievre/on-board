@@ -295,6 +295,10 @@ async function mergeProfiles(
       alias: p.alias,
       customAvatarUrl: p.customAvatarUrl,
       useLinkedAvatar: p.useLinkedAvatar,
+      // Phase 7 stamp fields. `??` covers legacy server responses /
+      // persisted-cache rows that predate the column.
+      avatarFrame: p.avatarFrame ?? "circle",
+      avatarRing: p.avatarRing ?? null,
       usedAt: p.usedAt,
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
@@ -455,7 +459,14 @@ async function mergeMatches(rows: ApiMatch[]): Promise<void> {
         profileId: p.profileId,
         profileLinkedUserId: p.profile.linkedUserId,
         position: p.position,
-        profile: p.profile,
+        // Apply Phase 7 stamp defaults at the API → Dexie boundary so
+        // every cached row carries the required fields, even when the
+        // server response or persisted cache predates the column.
+        profile: {
+          ...p.profile,
+          avatarFrame: p.profile.avatarFrame ?? "circle",
+          avatarRing: p.profile.avatarRing ?? null,
+        },
         updatedAt: p.updatedAt ?? incomingUpdatedAt,
       });
     }

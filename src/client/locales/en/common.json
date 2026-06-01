@@ -74,6 +74,7 @@
     "declareDraw": "Declare draw",
     "draw": "Draw",
     "winner": "Winner: {{name}}",
+    "winnerLabel": "Winner",
     "victoryType": {
       "score": "By score",
       "military_supremacy": "Military supremacy",
@@ -103,7 +104,9 @@
       "empty": "No matches yet.",
       "inProgress": "In progress",
       "resume": "Resume",
-      "vs": "vs"
+      "vs": "vs",
+      "beat": "beat",
+      "moreCount": "+{{count}}"
     }
   },
   "scoring": {
@@ -193,6 +196,7 @@
         "roundTitle": "Round {{n}}",
         "cardsEach_one": "1 card each · {{name}} deals",
         "cardsEach_other": "{{count}} cards each · {{name}} deals",
+        "dealerChip": "{{name}} deals",
         "standingsTitle": "Standings",
         "continueCta": "Bidding for R{{n}} →",
         "editLastRoundCta": "← Edit round {{n}}"
@@ -241,6 +245,9 @@
     "addProfileForm": {
       "placeholder": "Friend's name",
       "submit": "Add"
+    },
+    "editProfile": {
+      "title": "Edit profile"
     },
     "alias": {
       "title": "Display name",
@@ -300,6 +307,62 @@
       "permissionDenied": "Camera access denied. Allow it in your browser settings.",
       "noCamera": "No camera detected.",
       "unknown": "Could not open the camera."
+    }
+  },
+  "studio": {
+    "eyebrow": "EDIT PHOTO",
+    "currentStamp": "YOUR CURRENT STAMP",
+    "noPhotoYet": "NO PHOTO YET",
+    "newPhoto": {
+      "title": "Photo"
+    },
+    "fromGallery": {
+      "title": "Gallery"
+    },
+    "styleStamp": {
+      "title": "Style"
+    },
+    "useAccount": {
+      "title": "Account"
+    },
+    "useMonogram": {
+      "title": "Initial"
+    },
+    "monogramFallback": "Use my \"{{initial}}\" monogram",
+    "camera": {
+      "hint": "Line your face up with the circle",
+      "starting": "Starting camera…",
+      "unavailable": "Camera unavailable — use the gallery instead",
+      "selfie": "SELFIE",
+      "rear": "REAR",
+      "gallery": "Gallery",
+      "flip": "Flip",
+      "shutter": "Capture"
+    },
+    "reposition": {
+      "heading": "Drag & pinch to fit",
+      "retake": "Retake",
+      "confirm": "Use photo"
+    },
+    "style": {
+      "heading": "Style your stamp",
+      "frameLabel": "Frame",
+      "ringLabel": "Colour ring",
+      "frames": {
+        "circle": "Round",
+        "rounded": "Rounded",
+        "tag": "Tag"
+      },
+      "ringOff": "No ring",
+      "back": "Back",
+      "save": "Save stamp",
+      "saving": "Saving…",
+      "saveError": "Could not save your stamp"
+    },
+    "saved": {
+      "title": "Saved",
+      "editAgain": "Edit again",
+      "done": "Done"
     }
   },
   "merge": {

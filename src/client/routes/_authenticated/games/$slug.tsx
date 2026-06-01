@@ -69,7 +69,7 @@ function GameDetailPage() {
 
       <div className="px-5">
         <div className={styles.cover}>
-          <CoverArt slug={game.slug} width={350} height={120} />
+          <CoverArt slug={game.slug} width={350} height={120} fluid />
         </div>
 
         <h1 className={styles.title}>
@@ -115,6 +115,9 @@ function GameDetailPage() {
                 locale={i18n.language}
                 gameSlug={slug}
                 viewerId={viewerId}
+                // The page header already identifies the game; the
+                // floating top-left glyph would be redundant here.
+                showGameGlyph={false}
               />
             ))
           )}

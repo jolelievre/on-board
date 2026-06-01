@@ -1,20 +1,22 @@
+/* Outer wrapper — layout, positioning context for the optional
+ * WinnerBadge overlay, and the `--avatar-size` token consumers
+ * override (`vsAvatar`, `multiLeaderAvatar`, etc.). No
+ * clipping here so the badge overlay can stick out past the avatar's
+ * circular edge without being cropped. */
 .root {
   --avatar-size: 40px;
+  --ring-width: 0px;
+  --ring-color: transparent;
+  position: relative;
   width: var(--avatar-size);
   height: var(--avatar-size);
-  border-radius: 50%;
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  font-family: var(--font-display);
-  font-weight: 600;
   flex-shrink: 0;
-  user-select: none;
-  text-transform: uppercase;
-  letter-spacing: 0;
 }
 
+/* Size variants cascade `--avatar-size` (consumed by `.photoFrame`'s
+ * width/height) and the font-size used for the initial-letter
+ * fallback. */
 .sm {
   --avatar-size: 24px;
   font-size: 0.7rem;
@@ -35,11 +37,77 @@
   font-size: 2.6rem;
 }
 
+/* Inner element — handles clipping, frame radius, colour ring, and
+ * the bucket bg behind the initial-letter fallback. Sized to fill
+ * `.root` so size overrides on the outer span flow through. */
+.photoFrame {
+  width: 100%;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: 600;
+  user-select: none;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  box-shadow: 0 0 0 var(--ring-width) var(--ring-color);
+}
+
 .img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* Phase 7: stamp frame variants. Percentages scale with `--avatar-size`
+ * so a single class works for every size. `overflow: hidden` on
+ * `.photoFrame` clips the photo to the frame shape automatically. */
+.frameCircle {
+  border-radius: 50%;
+}
+
+.frameRounded {
+  /* ≈26% of size — softer than a pure square, still readable as "card". */
+  border-radius: 26%;
+}
+
+.frameTag {
+  /* Asymmetric corners — the scrapbook "tag" look from the design handoff. */
+  border-radius: 10% 34% 10% 34%;
+}
+
+/* Phase 7: ring activation. Width scales with size with a minimum of 2px
+ * so even the `sm` (24px) avatar gets a visible ring. */
+.hasRing {
+  --ring-width: max(2px, calc(var(--avatar-size) * 0.06));
+}
+
+.ringCivil {
+  --ring-color: var(--color-cat-civil-strong);
+}
+.ringScientific {
+  --ring-color: var(--color-cat-scientific-strong);
+}
+.ringCommercial {
+  --ring-color: var(--color-cat-commercial-strong);
+}
+.ringGuilds {
+  --ring-color: var(--color-cat-guilds-strong);
+}
+.ringProgress {
+  --ring-color: var(--color-cat-progress-strong);
+}
+.ringTreasury {
+  --ring-color: var(--color-cat-treasury-strong);
+}
+.ringMilitary {
+  --ring-color: var(--color-cat-military-strong);
+}
+.ringWonders {
+  --ring-color: var(--color-cat-wonders-strong);
 }
 
 /* 8 deterministic palette buckets — reuses the existing scoring-category

@@ -17,7 +17,8 @@ import { Input } from "../../../components/ui/Input";
 import { Pill } from "../../../components/ui/Pill";
 import { Icon } from "../../../components/ui/Icon";
 import { Button } from "../../../components/ui/Button";
-import { EditableAvatar } from "../../../components/profiles/EditableAvatar";
+import { Avatar } from "../../../components/ui/Avatar";
+import { AvatarUploader } from "../../../components/profiles/AvatarUploader";
 import { MergeDialog } from "../../../components/profiles/MergeDialog";
 import { LinkScanner } from "../../../components/profiles/LinkScanner";
 import { LinkCodeDisplay } from "../../../components/profiles/LinkCodeDisplay";
@@ -98,7 +99,7 @@ function ProfileDetailBody({
     profile.linkedUserId === viewerId && profile.ownerId === viewerId;
   const isLinked = profile.linkedUserId !== null;
   const isOwner = profile.ownerId === viewerId;
-  const ownedIndex = useOwnedProfileIndex(viewerId ?? undefined);
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   const name = displayProfileName(profile, ownedIndex);
   const [mergeOpen, setMergeOpen] = useState(false);
 
@@ -122,46 +123,30 @@ function ProfileDetailBody({
     <>
       <Header back={{ to: "/players", label: t("nav.players") }} />
       <div className="px-5">
-        <div className={styles.hero}>
-          {viewerId && (
-            <EditableAvatar
-              profile={profile}
-              viewerId={viewerId}
-              size="xl"
-              canEdit={isOwner}
-            />
-          )}
-          <h1 className={styles.title}>{name}</h1>
-          <div className={styles.heroBadges}>
-            {isSelf ? (
-              <Pill tone="primary">{t("players.you")}</Pill>
-            ) : isLinked ? (
-              <Pill tone="success">{t("players.linked")}</Pill>
-            ) : (
-              <Pill tone="muted">{t("players.unclaimed")}</Pill>
-            )}
-          </div>
-        </div>
-
-        {isOwner && (
-          <Group title={t("players.alias.title")}>
-            <AliasEditor profileId={profile.id} initialValue={profile.alias} />
-          </Group>
+        {viewerId && (
+          <ProfileEditPanel
+            // Key on profile id so a navigation to a different profile
+            // (e.g. after a merge → navigate to survivor) unmounts the
+            // panel and resets `editing` back to false. Without this,
+            // the previous page's edit state would persist and the
+            // survivor would land in edit mode instead of the default
+            // read-only hero.
+            key={profile.id}
+            profile={profile}
+            viewerId={viewerId}
+            isOwner={isOwner}
+            isSelf={isSelf}
+            isLinked={isLinked}
+            name={name}
+            onMergeOpen={() => setMergeOpen(true)}
+            onMergedTo={(survivorId) =>
+              void navigate({
+                to: "/players/$profileId",
+                params: { profileId: survivorId },
+              })
+            }
+          />
         )}
-
-        <LinkSection
-          profile={profile}
-          viewerId={viewerId}
-          isOwner={isOwner}
-          isSelf={isSelf}
-          isLinked={isLinked}
-          onMergedTo={(survivorId) =>
-            void navigate({
-              to: "/players/$profileId",
-              params: { profileId: survivorId },
-            })
-          }
-        />
 
         {!isSelf && headToHead && headToHead.matches > 0 && (
           <Group title={t("players.headToHead.title")}>
@@ -254,8 +239,13 @@ function ProfileDetailBody({
                   <MatchHistoryRow
                     match={r.match}
                     gameSlug={r.gameSlug}
-                    gameName={r.gameName}
                     locale={i18n.language}
+                    // Phase 7 (revised): the me-highlight (teal edge
+                    // tab + Highlighter swipe + accent avatar ring)
+                    // ships in both surfaces — the design rule that
+                    // suppressed it on profile detail was overruled
+                    // during the feedback round in favour of a
+                    // consistent visual language across surfaces.
                     viewerId={viewerId}
                   />
                 </div>
@@ -264,19 +254,6 @@ function ProfileDetailBody({
           </Group>
         )}
 
-        {isOwner && !isSelf && !isLinked && (
-          <div className={styles.mergeActionRow}>
-            <Button
-              type="button"
-              variant="ghost"
-              iconBefore={<Icon name="merge" size={16} />}
-              onClick={() => setMergeOpen(true)}
-              data-testid="profile-merge-action"
-            >
-              {t("merge.title")}
-            </Button>
-          </div>
-        )}
       </div>
 
       {mergeOpen && viewerId && (
@@ -294,6 +271,129 @@ function ProfileDetailBody({
         />
       )}
     </>
+  );
+}
+
+/**
+ * Profile editor panel — collapses every editing affordance behind a
+ * single pencil button, so the default profile view stays focused on
+ * the avatar / name / stats / matches.
+ *
+ * Default mode: the hero block (avatar + name + status pill) with a
+ * pencil button beside the avatar (only when the viewer owns the
+ * profile and it isn't their self-Profile — which redirects to
+ * Settings anyway).
+ *
+ * Edit mode opens a stack: the full Avatar Capture Studio, an alias
+ * editor, the link / unlink / QR card, and the unclaimed-merge button.
+ * Exiting happens via the studio Hub's Done button (`AvatarUploader`
+ * renders it whenever `onDone` is supplied) — that returns the panel
+ * to default mode.
+ */
+function ProfileEditPanel({
+  profile,
+  viewerId,
+  isOwner,
+  isSelf,
+  isLinked,
+  name,
+  onMergedTo,
+  onMergeOpen,
+}: {
+  profile: LocalProfile;
+  viewerId: string;
+  isOwner: boolean;
+  isSelf: boolean;
+  isLinked: boolean;
+  name: string;
+  onMergedTo: (survivorId: string) => void;
+  onMergeOpen: () => void;
+}) {
+  const { t } = useTranslation();
+  const [editing, setEditing] = useState(false);
+  const canEdit = isOwner && !isSelf;
+
+  if (editing && canEdit) {
+    return (
+      <Group title={t("players.editProfile.title")}>
+        <div className={styles.editorBody} data-testid="profile-editor">
+          <AvatarUploader
+            profile={profile}
+            viewerId={viewerId}
+            onDone={() => setEditing(false)}
+          />
+          <section className={styles.aliasSection}>
+            <h4 className={styles.sectionLabel}>
+              {t("players.alias.title")}
+            </h4>
+            <AliasEditor
+              profileId={profile.id}
+              initialValue={profile.alias}
+            />
+          </section>
+          <LinkSection
+            profile={profile}
+            viewerId={viewerId}
+            isOwner={isOwner}
+            isSelf={isSelf}
+            isLinked={isLinked}
+            onMergedTo={onMergedTo}
+          />
+          {!isLinked && (
+            <div className={styles.mergeActionRow}>
+              <Button
+                type="button"
+                variant="ghost"
+                iconBefore={<Icon name="merge" size={16} />}
+                onClick={onMergeOpen}
+                data-testid="profile-merge-action"
+              >
+                {t("merge.title")}
+              </Button>
+            </div>
+          )}
+        </div>
+      </Group>
+    );
+  }
+
+  return (
+    <div className={styles.hero}>
+      <div className={styles.heroAvatar}>
+        <Avatar profile={profile} viewerId={viewerId} size="xl" />
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className={styles.editButton}
+            aria-label={t("avatar.edit")}
+            data-testid="profile-edit-avatar"
+          >
+            <Icon name="pencil" size={12} />
+          </button>
+        )}
+      </div>
+      {/* The alias + status badge anchor relative to this wrapper so
+          the badge can sit at the alias's bottom-right corner, just
+          slightly over the text — same affordance as a small status
+          marker stuck onto a name plate. */}
+      <span className={styles.titleBlock}>
+        <h1 className={styles.title}>{name}</h1>
+        {isSelf ? (
+          <Pill tone="primary" className={styles.statusBadge}>
+            {t("players.you")}
+          </Pill>
+        ) : isLinked ? (
+          <Pill tone="success" className={styles.statusBadge}>
+            {t("players.linked")}
+          </Pill>
+        ) : (
+          <Pill tone="muted" className={styles.statusBadge}>
+            {t("players.unclaimed")}
+          </Pill>
+        )}
+      </span>
+    </div>
   );
 }
 
@@ -317,6 +417,10 @@ function LinkSection({
   const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [unlinkError, setUnlinkError] = useState<string | null>(null);
+  // Toggles the explainer paragraph open on click of the info icon.
+  // The HTML `title` tooltip alone only fires on hover (desktop) and
+  // does nothing on mobile tap, which is what the user hit.
+  const [explainerOpen, setExplainerOpen] = useState(false);
 
   // Self-profile carries no link UI under the new bilateral model —
   // the QR is anchored to a profile representing the *other* person.
@@ -341,7 +445,7 @@ function LinkSection({
   // signals success via `onDone`/`onLinked` → `closePanel()`.
   if (panel === "scan" && isOwner) {
     return (
-      <Group title={t("link.unclaimedTitle")}>
+      <section className={styles.linkSection}>
         <LinkScanner
           profile={profile}
           onDone={closePanel}
@@ -350,19 +454,19 @@ function LinkSection({
             onMergedTo(survivorId);
           }}
         />
-      </Group>
+      </section>
     );
   }
   if (panel === "show" && isOwner) {
     return (
-      <Group title={t("link.unclaimedTitle")}>
+      <section className={styles.linkSection}>
         <LinkCodeDisplay profile={profile} onLinked={closePanel} />
         <div className={styles.linkActions}>
           <Button type="button" variant="ghost" onClick={closePanel}>
             {t("common.cancel")}
           </Button>
         </div>
-      </Group>
+      </section>
     );
   }
 
@@ -393,7 +497,8 @@ function LinkSection({
       linked?.alias || linked?.name || profile.alias || t("link.linkedUnknown");
     return (
       <>
-        <Group title={t("link.linkedTitle")}>
+        <section className={styles.linkSection}>
+          <h4 className={styles.sectionLabel}>{t("link.linkedTitle")}</h4>
           <div className={styles.linkedCard}>
             {linked?.avatarUrl ? (
               <img
@@ -431,7 +536,7 @@ function LinkSection({
               {t("link.unlink")}
             </Button>
           </div>
-        </Group>
+        </section>
         {unlinkConfirmOpen && (
           <UnlinkConfirmDialog
             friendName={friendDisplay}
@@ -445,10 +550,35 @@ function LinkSection({
     );
   }
 
-  // Unclaimed + owner: two-button row + explainer.
+  // Unclaimed + owner: two-button row. The previous long-form
+  // explainer paragraph was demoted to a collapsible disclosure
+  // beside the title — tapping the info icon toggles the full
+  // sentence in/out, so the row stays tight on first paint and the
+  // context is still one tap away on every device (desktop and
+  // mobile alike — a `title=` tooltip alone wouldn't fire on tap).
   return (
-    <Group title={t("link.unclaimedTitle")}>
-      <p className={styles.linkHint}>{t("link.unclaimedExplainer")}</p>
+    <section className={styles.linkSection}>
+      <h4 className={styles.sectionLabel}>
+        <span className={styles.linkHeader}>
+          {t("link.unclaimedTitle")}
+          <button
+            type="button"
+            className={styles.linkInfoButton}
+            aria-label={t("link.unclaimedExplainer")}
+            aria-expanded={explainerOpen}
+            aria-controls="profile-link-explainer"
+            onClick={() => setExplainerOpen((open) => !open)}
+            data-testid="profile-link-info"
+          >
+            <Icon name="info" size={16} />
+          </button>
+        </span>
+      </h4>
+      {explainerOpen && (
+        <p id="profile-link-explainer" className={styles.linkExplainer}>
+          {t("link.unclaimedExplainer")}
+        </p>
+      )}
       <div className={styles.linkButtonRow}>
         <Button
           type="button"
@@ -469,7 +599,7 @@ function LinkSection({
           {t("link.showCta")}
         </Button>
       </div>
-    </Group>
+    </section>
   );
 }
 

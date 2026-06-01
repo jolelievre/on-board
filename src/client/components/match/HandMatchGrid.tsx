@@ -1,5 +1,7 @@
 import { useRef, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
+import type { PlayerProfile } from "../../types/match";
+import { Avatar } from "../ui/Avatar";
 import { SketchRect } from "../ui/SketchRect";
 import { SketchUnderline } from "../ui/SketchUnderline";
 import { SketchCheckbox } from "../ui/SketchCheckbox";
@@ -19,7 +21,14 @@ import {
 } from "../../../shared/scoring/7-wonders-duel";
 import styles from "./match-grid.module.css";
 
-export type ScoreGridPlayer = { id: string; name: string };
+export type ScoreGridPlayer = {
+  id: string;
+  name: string;
+  /** Phase 7: embedded profile projection. Optional so legacy callers
+   * still compile, but when present the player-name cell renders the
+   * Avatar (with the owner's stamp) + a crown badge for the leader. */
+  profile?: PlayerProfile;
+};
 
 export type ScoreGridValues = Record<
   string,
@@ -46,6 +55,12 @@ type Props = {
   disabled?: boolean;
   /** ID of the winning player (if completed). Highlights total cell. */
   winnerId?: string | null;
+  /** Signed-in user id — threaded into each `<Avatar>` so the
+   * viewer-aware resolver in `displayProfileAvatar` picks up the
+   * viewer's own profile when their `linkedUserId` matches a header
+   * row (otherwise a friend-created match would render the friend's
+   * snapshot of the viewer instead of the viewer's chosen stamp). */
+  viewerId?: string | null;
 };
 
 function rowTemplate(playerCount: number) {
@@ -66,6 +81,7 @@ export function HandMatchGrid({
   onSupremacyChange,
   disabled,
   winnerId,
+  viewerId,
 }: Props) {
   const { t } = useTranslation();
   const template = rowTemplate(players.length);
@@ -93,12 +109,23 @@ export function HandMatchGrid({
         <div aria-hidden />
         {players.map((p, i) => {
           const total = totals[i].total;
+          // Phase 7: crown the winner once the match is completed, the
+          // live leader during play. We never crown on a tie or when
+          // every total is zero (start of match) — that would feel
+          // arbitrary.
+          const leaderId = leaderIdFromTotals(totals);
+          const showCrown =
+            winnerId !== null && winnerId !== undefined
+              ? p.id === winnerId
+              : leaderId === p.id;
           return (
             <PlayerNameCell
               key={p.id}
               player={p}
               total={total}
               tilt={i === 0 ? -0.4 : 0.3}
+              showCrown={showCrown}
+              viewerId={viewerId ?? null}
             />
           );
         })}
@@ -201,10 +228,14 @@ function PlayerNameCell({
   player,
   total,
   tilt,
+  showCrown,
+  viewerId,
 }: {
   player: ScoreGridPlayer;
   total: number;
   tilt: number;
+  showCrown: boolean;
+  viewerId: string | null;
 }) {
   const seed = 10 + (player.id.charCodeAt(0) % 100);
   const cellRef = useRef<HTMLDivElement>(null);
@@ -226,6 +257,16 @@ function PlayerNameCell({
         />
       )}
       <div className={styles.playerNameInner}>
+        {player.profile && (
+          <span className={styles.playerAvatarWrap}>
+            <Avatar
+              profile={player.profile}
+              viewerId={viewerId}
+              size="sm"
+              winner={showCrown}
+            />
+          </span>
+        )}
         <div
           className={styles.playerName}
           data-testid={`score-grid-player-${player.id}`}
@@ -236,6 +277,31 @@ function PlayerNameCell({
       </div>
     </div>
   );
+}
+
+/**
+ * Returns the id of the live leader by total, or null if there's a tie
+ * at the top or every total is zero (start of match — no leader yet).
+ */
+function leaderIdFromTotals(
+  rows: { player: ScoreGridPlayer; total: number }[],
+): string | null {
+  let bestTotal = -Infinity;
+  let bestId: string | null = null;
+  let tied = false;
+  let allZero = true;
+  for (const r of rows) {
+    if (r.total !== 0) allZero = false;
+    if (r.total > bestTotal) {
+      bestTotal = r.total;
+      bestId = r.player.id;
+      tied = false;
+    } else if (r.total === bestTotal) {
+      tied = true;
+    }
+  }
+  if (allZero || tied) return null;
+  return bestId;
 }
 
 function CategoryIconCell({
