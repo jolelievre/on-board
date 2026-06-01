@@ -12,8 +12,7 @@
     "signIn": "Sign in",
     "signInWith": {
       "google": "Sign in with Google",
-      "facebook": "Sign in with Facebook",
-      "apple": "Sign in with Apple"
+      "facebook": "Sign in with Facebook"
     },
     "signOut": "Sign out",
     "name": "Name",

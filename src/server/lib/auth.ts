@@ -2,11 +2,10 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma.js";
 import { ensureSelfProfile, syncSelfProfileAlias } from "./profiles.js";
-import { generateAppleClientSecret } from "./apple-client-secret.js";
 
 const isTest = process.env.NODE_ENV === "test";
 
-export type SocialProviderId = "google" | "facebook" | "apple";
+export type SocialProviderId = "google" | "facebook";
 
 /**
  * Build the social-providers map. Each provider only enables when its
@@ -32,23 +31,6 @@ function buildSocialProviders() {
     providers.facebook = {
       clientId: process.env.FACEBOOK_CLIENT_ID,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
-    };
-  }
-
-  if (
-    process.env.APPLE_CLIENT_ID &&
-    process.env.APPLE_TEAM_ID &&
-    process.env.APPLE_KEY_ID &&
-    process.env.APPLE_PRIVATE_KEY
-  ) {
-    providers.apple = {
-      clientId: process.env.APPLE_CLIENT_ID,
-      clientSecret: generateAppleClientSecret({
-        teamId: process.env.APPLE_TEAM_ID,
-        keyId: process.env.APPLE_KEY_ID,
-        clientId: process.env.APPLE_CLIENT_ID,
-        privateKey: process.env.APPLE_PRIVATE_KEY,
-      }),
     };
   }
 
@@ -83,7 +65,7 @@ export const auth = betterAuth({
     // account + duplicate self-Profile + split history.
     accountLinking: {
       enabled: true,
-      trustedProviders: ["google", "facebook", "apple"],
+      trustedProviders: ["google", "facebook"],
     },
   },
   user: {

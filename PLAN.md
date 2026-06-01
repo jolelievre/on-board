@@ -1143,7 +1143,7 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 
 ## Phase 8: Polish + Distribution → v1.0.0
 
-**Goal**: close every loose end gating the first official release. Broaden the login surface beyond Google (Facebook + Apple Sign-In with account-linking), ship the public-facing pages needed for friend distribution (install help, privacy, terms), add a personal stats dashboard, fold in two creative additions (achievements, public match share-link), refresh the dev-facing artefacts (screenshot script + graphify graph), and tag `v1.0.0`.
+**Goal**: close every loose end gating the first official release. Broaden the login surface beyond Google (Facebook, with email-keyed account linking; Apple Sign-In deferred to v1.x because it requires the $99/yr Apple Developer Program), ship the public-facing pages needed for friend distribution (install help, privacy, terms), add a personal stats dashboard, fold in two creative additions (achievements, public match share-link), refresh the dev-facing artefacts (screenshot script + graphify graph), and tag `v1.0.0`.
 
 ### What's already there (acknowledged, not redone)
 
@@ -1173,48 +1173,47 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 
 #### PR 8-A — Multi-provider auth + account linking + Privacy/ToS (`feat/multi-provider-auth`, ~2 days)
 
-**Goal**: Facebook + Apple Sign-In alongside Google, with email-keyed account linking so one user has one `User` row regardless of which providers they've used. Public Privacy + ToS pages required by Facebook's app review.
+**Goal**: Facebook sign-in alongside Google, with email-keyed account linking so one user has one `User` row regardless of which provider they've used. Public Privacy + ToS pages required by Facebook's app review. (Apple Sign-In gated behind the $99/yr Apple Developer Program — deferred to v1.x. The provider config is intentionally env-keyed so adding Apple later is a small additive change, not a refactor.)
 
 **Server** (`src/server/lib/auth.ts`):
-- Extend `socialProviders` with `facebook` and `apple` entries reading `FACEBOOK_CLIENT_ID/SECRET` and `APPLE_CLIENT_ID/CLIENT_SECRET`. Apple's "client secret" is a signed JWT — better-auth generates it given a team id + key id + private key; document the env shape in `.env.example`.
-- Enable account linking: `account.accountLinking = { enabled: true, trustedProviders: ["google", "facebook", "apple"] }`. Email-keyed matching reuses the existing User when a second provider signs in.
+- Extend `socialProviders` with a `facebook` entry reading `FACEBOOK_CLIENT_ID/SECRET`. Each provider is env-gated so partial deploys hide unconfigured buttons.
+- Enable account linking: `account.accountLinking = { enabled: true, trustedProviders: ["google", "facebook"] }`. Email-keyed matching reuses the existing User when a second provider signs in.
 - `databaseHooks.user.create.after → ensureSelfProfile` is already provider-agnostic — no change.
 
 **Client login page** (`src/client/routes/index.tsx`):
 - Replace the hardcoded "Sign in with Google" block with an `OAUTH_PROVIDERS` config array (`[{ id, labelKey, GlyphComponent }, ...]`) and loop to render buttons.
-- Move the inline `<GoogleGlyph>` SVG + new Facebook/Apple glyphs into `src/client/components/auth/providerGlyphs.tsx`.
+- Move the inline `<GoogleGlyph>` SVG + new Facebook glyph into `src/client/components/auth/providerGlyphs.tsx`.
 
-**i18n** (`locales/{en,fr}/common.json`): restructure `auth.signInWithGoogle` → `auth.signInWith.{google,facebook,apple}`. Update the single call site.
+**i18n** (`locales/{en,fr}/common.json`): restructure `auth.signInWithGoogle` → `auth.signInWith.{google,facebook}`. Update the single call site.
 
 **Static legal pages** (public, no auth):
 - New unauthenticated routes `routes/privacy.tsx` and `routes/terms.tsx` (sibling of `routes/index.tsx`, OUTSIDE `_authenticated/`).
 - Content lives as plain React; FR + EN bilingual via existing `i18n` infra. Footer links from both `/` (login page) and `/_authenticated/settings.tsx`.
 
 **E2E** (`e2e/helpers/auth.ts` + new specs):
-- Add `loginWithFacebook()` / `loginWithApple()` paralleling the existing Google helper. Wire `FACEBOOK_TEST_EMAIL/PASSWORD`, `APPLE_TEST_EMAIL/PASSWORD` for `BASE_URL`-driven deployed runs. Test-mode email/password path unaffected.
+- Add `loginWithFacebook()` paralleling the existing Google helper. Wire `FACEBOOK_TEST_EMAIL/PASSWORD` for `BASE_URL`-driven deployed runs. Test-mode email/password path unaffected.
 - New `e2e/auth-linking.spec.ts`: sign in Google → sign out → sign in Facebook (same email) → assert single `User` row + single self-Profile.
 
 **Env / infra**:
-- `.env.example`: add `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`, `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (PEM, base64ed). Coolify env vars set manually on `onboard-prod` + `onboard-integration` (propagates to previews per the topology in `CLAUDE.md`).
-- Facebook app registration: production + integration redirect URIs; privacy URL points to `/privacy`.
-- Apple app registration: Services ID + signing key.
+- `.env.example`: add `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`. Coolify env vars set manually on `onboard-prod` + `onboard-integration` (propagates to previews per the topology in `CLAUDE.md`).
+- Facebook app registration: single Meta app with production + integration + preview redirect URIs in the Facebook Login allowlist; Privacy URL on App Settings → Basic points to `/privacy`. Localhost is auto-allowed in Dev mode and does not need to be listed.
 
 **Critical files**:
 
 | File | Action |
 |---|---|
-| `src/server/lib/auth.ts` | Add Facebook + Apple to `socialProviders`; enable `accountLinking` |
+| `src/server/lib/auth.ts` | Add Facebook to `socialProviders`; enable `accountLinking` |
 | `src/client/routes/index.tsx` | Refactor to `OAUTH_PROVIDERS` config + loop |
-| `src/client/components/auth/providerGlyphs.tsx` | New — Google/Facebook/Apple SVGs |
+| `src/client/components/auth/providerGlyphs.tsx` | New — Google + Facebook SVGs |
 | `src/client/locales/{en,fr}/common.json` | Restructure `auth.signInWith.*` |
 | `src/client/routes/privacy.tsx` | New — public Privacy Policy |
 | `src/client/routes/terms.tsx` | New — public Terms of Service |
 | `src/client/routes/_authenticated/settings.tsx` | Footer links to /privacy /terms |
-| `.env.example` | Add FB + Apple vars |
-| `e2e/helpers/auth.ts` | Add `loginWithFacebook`, `loginWithApple` |
+| `.env.example` | Add FB vars |
+| `e2e/helpers/auth.ts` | Add `loginWithFacebook` |
 | `e2e/auth-linking.spec.ts` | New |
 
-**Acceptance**: sign in via Google, Facebook, and Apple all land on `/games` with the right user. Cross-provider sign-in for an existing email merges to the same User. `/privacy` + `/terms` reachable without auth, both languages.
+**Acceptance**: sign in via Google and Facebook both land on `/games` with the right user. Cross-provider sign-in for an existing email merges to the same User. `/privacy` + `/terms` reachable without auth, both languages.
 
 #### PR 8-B — "Your stats" dashboard (`feat/stats-dashboard`, ~1.5 days)
 
@@ -1334,7 +1333,7 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 **Goal**: regenerate the dev artefacts now that everything in 8-A/B/C/D has landed, then cut the version and deploy to production.
 
 **Screenshot script refresh** (`scripts/capture-screenshots.ts`):
-- Audit current screen coverage against the post-Phase-8 surface. Add: Players tab (`/players`), profile detail (`/players/$id`), Avatar Capture Studio's 4 states, every Skull King screen (start, bidding, bid recap, round result, transition, complete, scoreboard), Stats dashboard, Install help page, public share-link page, login page with all three providers visible, Privacy + ToS pages.
+- Audit current screen coverage against the post-Phase-8 surface. Add: Players tab (`/players`), profile detail (`/players/$id`), Avatar Capture Studio's 4 states, every Skull King screen (start, bidding, bid recap, round result, transition, complete, scoreboard), Stats dashboard, Install help page, public share-link page, login page with both providers visible, Privacy + ToS pages.
 - Re-render `plan-assets/screenshots/` for every covered screen.
 
 **Manifest `screenshots[]`** (`vite.config.ts`):
@@ -1363,7 +1362,7 @@ The gap today: project description, data model, auth flow, game rules, public su
 - **README rewrite** — currently bootstrap-only. Replace with: what OnBoard is, who it's for, the offline-first stance, install instructions (link to the public `/install` page shipped in 8-C), link to the doc set below.
 - **`docs/architecture.md`** — companion to `docs/offline-architecture.md`, covering what offline doesn't:
   - **Data model**: Profile / Player / Match / Score / `MatchShareToken` relationships; single-Profile model; `ownerId` + `linkedUserId` semantics; the `avatarFrame` / `avatarRing` stamp model from Phase 7.
-  - **Auth flow**: better-auth with **three** providers (Google + Facebook + Apple, all wired in 8-A). Session cookie semantics. **Email-keyed account linking** — one `User` regardless of which provider signed in. Apple Sign-In's signed-JWT client-secret model. Link-token HMAC for profile-to-account binding (from 6-C).
+  - **Auth flow**: better-auth with Google + Facebook (wired in 8-A; Apple deferred to v1.x — see Out of scope). Session cookie semantics. **Email-keyed account linking** — one `User` regardless of which provider signed in. Link-token HMAC for profile-to-account binding (from 6-C).
   - **Profile-linking model**: bilateral QR scan, merge-on-collision, unlink propagation.
   - **Sync engine** internals at a higher level than `offline-architecture.md`'s deep dive: client-CUID idempotency, push/pull with `since=` cursor, LWW on `updatedAt`.
   - **Stats engine** (from 8-B): viewer-personal computation pattern (`useMyStats`, `useMyGameStats`, `useGameRankings`) — all derived from Dexie via `useLiveQuery`, no server endpoint.
@@ -1372,7 +1371,7 @@ The gap today: project description, data model, auth flow, game rules, public su
   - **Build-time version injection** (from 8-C): how `__APP_VERSION__` and `__GIT_SHA__` flow from `package.json` + Docker build arg into the Settings footer.
 - **`docs/games/{skull-king,7-wonders-duel}.md`** — per-game rules + scoring tables + variant matrix. Currently lives as comments next to the scoring functions; promoting it makes the rules legible without reading TypeScript and gives a home for screenshots.
 - **`docs/api.md`** — route reference (request / response shapes, auth requirements, error codes). Cover the post-Phase-8 surface in full:
-  - `/api/auth/*` (better-auth handlers for all three providers)
+  - `/api/auth/*` (better-auth handlers for Google + Facebook)
   - `/api/games`, `/api/matches`, `/api/profiles`, `/api/profile-groups` (legacy CRUD)
   - Profile link/unlink/merge + link-token endpoints (from 6-C)
   - Avatar upload/delete (from 6-B)
@@ -1406,7 +1405,8 @@ End-to-end gate before tagging v1.0.0:
 ### Out of scope (deferred to v1.x or Phase 9+)
 
 - Match history filters — existing per-game/per-profile navigation already scopes the lists; revisit at match-volume scale in v1.x.
-- Magic-link / email auth — Facebook + Apple covers the alternative-provider ask.
+- Magic-link / email auth — Facebook already covers the alternative-provider ask for v1.0.
+- **Apple Sign-In** — requires the $99/yr Apple Developer Program to register a Services ID + Sign in with Apple key. Decided during PR 8-A planning that the recurring cost wasn't worth it for a friend-circle PWA where every Apple-ID user can sign in via Google or Facebook instead. The provider config in `auth.ts` is intentionally env-gated so adding Apple later is a small additive change (re-add the provider block, the Apple glyph, the i18n key, and the `APPLE_*` env vars), not a refactor.
 - Per-match notes / match duration display — not enough weight to delay v1.0; revisit if friends ask for them.
 - Phase 9 (Skull King Rascal variant) ships post-v1.0 as v1.1.
 

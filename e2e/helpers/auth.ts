@@ -17,9 +17,8 @@ function uniqueTestUser() {
  * - If the email/password form is visible (test mode) → use it
  * - Otherwise → use Google OAuth (needs GOOGLE_TEST_EMAIL/PASSWORD in .env.test.local)
  *
- * `loginWithFacebook` / `loginWithApple` are separate helpers — call them
- * directly when a spec needs a non-Google provider; they're not part of
- * the auto-detect default.
+ * `loginWithFacebook` is a separate helper — call it directly when a spec
+ * needs the non-Google path; it's not part of the auto-detect default.
  *
  * After login, the page is on /games.
  */
@@ -159,49 +158,6 @@ export async function loginWithFacebook(page: Page) {
   }
 
   await page.waitForURL("**/games", { timeout: 30000 });
-}
-
-/**
- * Login via Apple OAuth.
- * Requires APPLE_TEST_EMAIL and APPLE_TEST_PASSWORD env vars (set in
- * .env.test.local) AND a deploy where the Apple provider is configured
- * (APPLE_CLIENT_ID / APPLE_TEAM_ID / APPLE_KEY_ID / APPLE_PRIVATE_KEY on
- * the server).
- *
- * Apple's web sign-in flow requires a real Apple ID with web sign-in
- * enabled and 2FA disabled or backed by a trusted device the test runner
- * can reach. In practice this is usually skipped in CI and run manually
- * against a deployed env.
- */
-export async function loginWithApple(page: Page) {
-  const email = process.env.APPLE_TEST_EMAIL;
-  const password = process.env.APPLE_TEST_PASSWORD;
-
-  if (!email || !password) {
-    throw new Error(
-      "Apple OAuth login requires APPLE_TEST_EMAIL and APPLE_TEST_PASSWORD env vars. " +
-        "Set them in .env.test.local",
-    );
-  }
-
-  await page.goto("/");
-  await page.waitForLoadState("domcontentloaded");
-  await page.click('[data-provider="apple"]');
-
-  await page.waitForURL(/appleid\.apple\.com/, { timeout: 15000 });
-
-  await page.fill('input[id="account_name_text_field"], input[type="email"]', email);
-  await page.click('button[id="sign-in"], button:has-text("Continue")');
-
-  await page.waitForSelector('input[id="password_text_field"], input[type="password"]', {
-    state: "visible",
-    timeout: 10000,
-  });
-
-  await page.fill('input[id="password_text_field"], input[type="password"]', password);
-  await page.click('button[id="sign-in"], button:has-text("Continue")');
-
-  await page.waitForURL("**/games", { timeout: 60000 });
 }
 
 /**

@@ -21,7 +21,7 @@ test.describe("Auth providers — config endpoint", () => {
     expect(Array.isArray(body.providers)).toBe(true);
     // All entries must be one of the supported provider ids; no junk.
     for (const id of body.providers) {
-      expect(["google", "facebook", "apple"]).toContain(id);
+      expect(["google", "facebook"]).toContain(id);
     }
   });
 
