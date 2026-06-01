@@ -1141,41 +1141,274 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 
 ---
 
-## Phase 8: Polish + Distribution
+## Phase 8: Polish + Distribution → v1.0.0
 
-**Goal**: Smooth experience, ready to share with friends.
+**Goal**: close every loose end gating the first official release. Broaden the login surface beyond Google (Facebook + Apple Sign-In with account-linking), ship the public-facing pages needed for friend distribution (install help, privacy, terms), add a personal stats dashboard, fold in two creative additions (achievements, public match share-link), refresh the dev-facing artefacts (screenshot script + graphify graph), and tag `v1.0.0`.
 
-- Real-time sync indicator in UI (synced / pending / error)
-- Match history filters (by game, profile, date)
-- Basic statistics (win rates, average scores per game) — aggregate dashboards beyond the per-profile stats already shipped in Phase 6
-- Lighthouse PWA audit (must pass all PWA criteria)
-- Installation help page (accessible without auth, explains how to install on Android/iOS)
-- v1.0.0 release → production deploy
+### What's already there (acknowledged, not redone)
 
-**Validation**: Lighthouse PWA score 100, friends can install and use the app.
+- **Real-time sync indicator** — shipped during the local-first refactor (`src/client/components/sync/SyncStatus.tsx`, mounted globally from `__root.tsx`).
+- **Rematch button** — fully implemented: `MatchCompleteScreen.tsx:146` (Skull King), `SevenWondersDuelScorer.tsx:277` (7WD), `?rematchOf=` search param + prefill logic in `games/$slug_.new.tsx`.
+- **Empty states** — every list screen already has concise prose: `players.empty`, `games.noMatches`, `players.stats.empty`, etc. No "polish" pass needed.
 
----
+### Status snapshot
 
-## Phase 8b: Documentation pass (post-1.0)
+| Item | Status | PR landing it |
+|---|---|---|
+| Real-time sync indicator | ✅ Shipped | (already in `__root.tsx`) |
+| Match history filters (game / profile / date) | ⛔ Dropped — existing per-game/per-profile navigation already scopes the lists; filters would duplicate it. Revisit in v1.x at scale. | — |
+| Personal stats dashboard | 🟡 Per-profile only (6-B) | PR 8-B |
+| Lighthouse PWA audit | 🟡 Infra ready, not run | PR 8-C |
+| Install help page (public) | ❌ Missing | PR 8-C |
+| v1.0.0 release tooling | ❌ Missing | PR 8-E |
+| **Multi-provider auth + account linking** | ❌ Missing | PR 8-A |
+| **Privacy + ToS pages** (Facebook prereq) | ❌ Missing | PR 8-A |
+| **Achievements / badges** | ❌ Missing | PR 8-D |
+| **Public read-only match share-link** | ❌ Missing | PR 8-D |
+| **App version footer in Settings** | ❌ Missing | PR 8-C |
+| **Screenshot-script refresh** (cover post-Phase-5 screens) | ❌ Stale | PR 8-E (end of phase so it captures everything) |
+| **Graphify refresh** | ❌ Stale | PR 8-E (end of phase so it captures everything) |
 
-**Goal**: Replace the bootstrap-era doc set with a stable reference, now that the architecture has settled. Triggered once v1.0 ships; PLAN.md itself converts into a CHANGELOG at this point because the phase-by-phase narrative is no longer load-bearing.
+### Phasing — 6 PRs
 
-The gap today: project description, data model, auth flow, game rules, and API surface are scattered across `CLAUDE.md`, `PLAN.md`, source comments, and one offline-specific doc. Everything still moves often enough that writing it earlier would mostly produce churn — this phase parks the work behind the v1 freeze.
+#### PR 8-A — Multi-provider auth + account linking + Privacy/ToS (`feat/multi-provider-auth`, ~2 days)
 
-### What to write
+**Goal**: Facebook + Apple Sign-In alongside Google, with email-keyed account linking so one user has one `User` row regardless of which providers they've used. Public Privacy + ToS pages required by Facebook's app review.
 
-- **README rewrite** — currently bootstrap-only. Replace with: what OnBoard is, who it's for, the offline-first stance, install instructions, link to the doc set below.
-- **`docs/architecture.md`** — companion to `docs/offline-architecture.md`, covering what offline doesn't: data model (Profile / Player / Match / Score relationships, single-Profile model, `ownerId` + `linkedUserId` semantics), auth flow (Google OAuth via better-auth, session cookie, link-token HMAC), profile-linking model (bilateral QR, merge-on-collision, unlink propagation), sync engine internals at a higher level than offline-architecture's deep dive.
+**Server** (`src/server/lib/auth.ts`):
+- Extend `socialProviders` with `facebook` and `apple` entries reading `FACEBOOK_CLIENT_ID/SECRET` and `APPLE_CLIENT_ID/CLIENT_SECRET`. Apple's "client secret" is a signed JWT — better-auth generates it given a team id + key id + private key; document the env shape in `.env.example`.
+- Enable account linking: `account.accountLinking = { enabled: true, trustedProviders: ["google", "facebook", "apple"] }`. Email-keyed matching reuses the existing User when a second provider signs in.
+- `databaseHooks.user.create.after → ensureSelfProfile` is already provider-agnostic — no change.
+
+**Client login page** (`src/client/routes/index.tsx`):
+- Replace the hardcoded "Sign in with Google" block with an `OAUTH_PROVIDERS` config array (`[{ id, labelKey, GlyphComponent }, ...]`) and loop to render buttons.
+- Move the inline `<GoogleGlyph>` SVG + new Facebook/Apple glyphs into `src/client/components/auth/providerGlyphs.tsx`.
+
+**i18n** (`locales/{en,fr}/common.json`): restructure `auth.signInWithGoogle` → `auth.signInWith.{google,facebook,apple}`. Update the single call site.
+
+**Static legal pages** (public, no auth):
+- New unauthenticated routes `routes/privacy.tsx` and `routes/terms.tsx` (sibling of `routes/index.tsx`, OUTSIDE `_authenticated/`).
+- Content lives as plain React; FR + EN bilingual via existing `i18n` infra. Footer links from both `/` (login page) and `/_authenticated/settings.tsx`.
+
+**E2E** (`e2e/helpers/auth.ts` + new specs):
+- Add `loginWithFacebook()` / `loginWithApple()` paralleling the existing Google helper. Wire `FACEBOOK_TEST_EMAIL/PASSWORD`, `APPLE_TEST_EMAIL/PASSWORD` for `BASE_URL`-driven deployed runs. Test-mode email/password path unaffected.
+- New `e2e/auth-linking.spec.ts`: sign in Google → sign out → sign in Facebook (same email) → assert single `User` row + single self-Profile.
+
+**Env / infra**:
+- `.env.example`: add `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`, `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (PEM, base64ed). Coolify env vars set manually on `onboard-prod` + `onboard-integration` (propagates to previews per the topology in `CLAUDE.md`).
+- Facebook app registration: production + integration redirect URIs; privacy URL points to `/privacy`.
+- Apple app registration: Services ID + signing key.
+
+**Critical files**:
+
+| File | Action |
+|---|---|
+| `src/server/lib/auth.ts` | Add Facebook + Apple to `socialProviders`; enable `accountLinking` |
+| `src/client/routes/index.tsx` | Refactor to `OAUTH_PROVIDERS` config + loop |
+| `src/client/components/auth/providerGlyphs.tsx` | New — Google/Facebook/Apple SVGs |
+| `src/client/locales/{en,fr}/common.json` | Restructure `auth.signInWith.*` |
+| `src/client/routes/privacy.tsx` | New — public Privacy Policy |
+| `src/client/routes/terms.tsx` | New — public Terms of Service |
+| `src/client/routes/_authenticated/settings.tsx` | Footer links to /privacy /terms |
+| `.env.example` | Add FB + Apple vars |
+| `e2e/helpers/auth.ts` | Add `loginWithFacebook`, `loginWithApple` |
+| `e2e/auth-linking.spec.ts` | New |
+
+**Acceptance**: sign in via Google, Facebook, and Apple all land on `/games` with the right user. Cross-provider sign-in for an existing email merges to the same User. `/privacy` + `/terms` reachable without auth, both languages.
+
+#### PR 8-B — "Your stats" dashboard (`feat/stats-dashboard`, ~1.5 days)
+
+**Goal**: viewer-personal dashboard — "your stats". Framed top-to-bottom as the signed-in user's own performance, with a single panel showing where they rank vs linked friends per game.
+
+**Why no match filters**: the existing per-game (`games/$slug.tsx`) and per-profile (`players/$profileId.tsx`) navigation already scopes the match lists end-to-end. Adding overlay filter chrome would duplicate the work the navigation already does, at a match volume (<50) where scrolling is fine. Revisit in v1.x if/when match volume makes the lists painful.
+
+**Layout** (`routes/_authenticated/stats/index.tsx`, all reads via `useLiveQuery` over Dexie — no server change):
+- **Hero strip** — your totals: matches played, matches completed, total wins, overall win-rate. Plus two "favourites" pills: most-played game, most-played opponent.
+- **Per-game cards** — one card per game you've played. Each card shows YOUR data for that game: win-rate, current win streak, longest streak, best single-match score, total matches at this game. Empty card with "play your first match" CTA if you haven't played that game.
+- **Friend rankings panel** — per game, a small top-N table of linked friends + you, ranked by win-rate (min 5-match gate so 1-of-1 doesn't dominate). Your row highlighted using the existing "me" treatment from Phase 7. If no friends are linked yet, shows a "link friends to compare" hint.
+- **Achievements row** — placeholder slot, populated by PR 8-D below.
+
+Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — add to `Icon.tsx` if not already present). i18n: `nav.stats`, `stats.*`.
+
+**Hooks** (`src/client/hooks/data/`):
+- `useMyStats()` — totals + favourites for the signed-in user.
+- `useMyGameStats(gameId)` — per-game personal numbers (rate, streak, best).
+- `useGameRankings(gameId)` — small ordered list (me + linked friends) for the friend rankings panel.
+
+**E2E** (`e2e/stats-dashboard.spec.ts`): seed matches with known outcomes; assert the user's totals + per-game numbers + ranking position match a hand-computed reference. UI-driven, no API shortcuts.
+
+**Critical files**:
+
+| File | Action |
+|---|---|
+| `src/client/routes/_authenticated/stats/index.tsx` | New — personal dashboard |
+| `src/client/hooks/data/useMyStats.ts` | New |
+| `src/client/hooks/data/useMyGameStats.ts` | New |
+| `src/client/hooks/data/useGameRankings.ts` | New |
+| `src/client/components/layout/BottomNav.tsx` | Add Stats tab |
+| `src/client/components/ui/Icon.tsx` | Add `bar-chart-2` if missing |
+| `src/client/locales/{en,fr}/common.json` | `stats.*`, `nav.stats` |
+
+**Acceptance**: stats numbers match a hand-computed reference for a seeded fixture; the dashboard updates within seconds of a new match completing (`useLiveQuery` reactivity); the friend-rankings panel shows the viewer's own row highlighted.
+
+#### PR 8-C — Public install help + Lighthouse audit + Settings version footer (`feat/install-help-and-lighthouse`, ~1 day)
+
+**Goal**: every loose-end gating a friend's "go install OnBoard" experience. Dev-asset refresh (screenshots + graphify) is deliberately deferred to PR 8-E so it captures the final state of everything, not a snapshot that gets invalidated by 8-D's UI work.
+
+**Public install-help page**:
+- New route `routes/install.tsx` (outside `_authenticated/`). Two collapsible sections: iOS (Safari → Share → Add to Home Screen) and Android (Chrome → menu → Install app). Detects platform via UA hints, expands the relevant section by default. Uses placeholder/existing screenshots from `plan-assets/` — refreshed assets land in 8-E.
+- Linked from the login page footer.
+- The authenticated install-prompt UI in `settings.tsx` stays — the new `/install` page is for friends arriving from a chat link who haven't signed in yet.
+
+**Lighthouse audit + manifest polish**:
+- Run Lighthouse against integration with mobile + desktop presets.
+- Manifest gaps to close in `vite.config.ts`: add `shortcuts[]` for "New match" + "Stats". Verify `purpose: "maskable"` icon has the recommended safe-area padding.
+- `screenshots[]` deferred to PR 8-E (depends on the asset refresh). Lighthouse installability + PWA-quality checks don't require `screenshots[]` for a passing score.
+- Fix any sub-100 finding the audit surfaces.
+
+**Settings additions** (`routes/_authenticated/settings.tsx`):
+- App version footer: `OnBoard v{packageVersion} • {gitSha.slice(0,7)}`. Inject `__APP_VERSION__` and `__GIT_SHA__` via Vite `define` in `vite.config.ts`. `gitSha` comes from a `GIT_SHA` build arg passed by the Dockerfile.
+- (No formal feedback link — the app's audience is friends who can reach the owner directly.)
+
+**Critical files**:
+
+| File | Action |
+|---|---|
+| `src/client/routes/install.tsx` | New — public install guide |
+| `src/client/routes/index.tsx` | Footer link to `/install` |
+| `vite.config.ts` | Add `shortcuts[]` to manifest; `define` for version+SHA |
+| `src/client/routes/_authenticated/settings.tsx` | Version footer |
+| `Dockerfile` | Pass `GIT_SHA` build arg |
+
+**Acceptance**: Lighthouse PWA criteria pass against integration (mobile + desktop). Logged-out visitor can reach `/install` from `/`. Settings shows `v0.x.y • abc1234`.
+
+#### PR 8-D — Achievements + public match share-link (`feat/achievements-and-share`, ~3 days)
+
+**Goal**: two creative additions chosen during planning. Independent of each other; bundled because each is small.
+
+**Achievements (client-only, no schema change)**:
+- Fixed set v1: `firstWin` (any game), `tenWins[gameId]` per game played, `winStreak5` (5 completed matches in a row won, same game), `biggestBlowout[gameId]` (largest winning margin recorded). All computed live in Dexie via a new `useAchievements(profileId)` hook over `matches` + `scores` joined to `players`. Takes any `profileId` so the same hook + component works for self and for friends.
+- `<AchievementsRow profileId>` mounted in TWO surfaces:
+  1. **Your stats** page (`routes/_authenticated/stats/index.tsx`) — fills the placeholder slot PR 8-B left open, passing the signed-in user's self-Profile id. Shows what you've unlocked.
+  2. **Profile detail** page (`routes/_authenticated/players/$profileId.tsx`) — below the existing stats panel, passing the visited profile id. Shows what your friend has unlocked.
+- Each stamp: `<Icon>` + i18n label + unlocked-date. Locked achievements not shown in v1 (no "0/10" teasers — keeps the surface clean for the small initial set).
+- `Icon` additions: `trophy`, `medal`, `flame`, plus a rotated/recoloured `crown` for `tenWins`.
+
+**Match share-link (server-backed, public route)**:
+- Schema (`prisma/schema.prisma`): new `MatchShareToken { id String @id @default(cuid()); matchId String @unique; createdById String; createdAt; matchRef Match @relation(...) }`. One token per match, owner-only creation. No expiry in v1 — owner can revoke.
+- Server:
+  - `POST /api/matches/:id/share-token` — owner creates a token (idempotent — returns existing if present). Returns `{ token, url }`.
+  - `DELETE /api/matches/:id/share-token` — owner revokes.
+  - `GET /api/share/:token` — public, no auth. Returns minimal payload: game name + slug, completedAt, players (alias + final score), winner, victoryType. No `profileIds`, no `createdById`, no extraneous metadata.
+- Client:
+  - Public route `routes/share.$token.tsx` (outside `_authenticated/`). Renders the summary using the same `MatchHistoryRow`-style layout for visual consistency, plus an "Install OnBoard to track your own matches" CTA linking to `/install` + the login page.
+  - Open-Graph meta tags rendered server-side via Hono's static-file branch for the `/share/:token` URL so chat-app unfurls show the matchup. (Single-purpose exception to the SPA-only stance; document the rationale next to the handler.)
+  - "Share match" action on `MatchCompleteScreen.tsx` (SK) and end-of-match state in `SevenWondersDuelScorer.tsx`: dialog with the `/share/:token` URL + copy button + revoke option. Uses Web Share API where available, fallback to clipboard.
+- E2E: owner shares match → unauthenticated context loads `/share/:token` and sees the right data → owner revokes → public route now 404. Verify OG meta tags via `page.evaluate` against `<head>`.
+
+**i18n**: `achievements.{firstWin, tenWins, winStreak5, biggestBlowout}` + `share.{cta, copyLink, revoke, installCta}` etc.
+
+**Critical files**:
+
+| File | Action |
+|---|---|
+| `prisma/schema.prisma` | Add `MatchShareToken` + migration |
+| `src/server/routes/matches.ts` | Add share-token endpoints |
+| `src/server/routes/share.ts` | New — public `GET /api/share/:token` |
+| `src/server/app.ts` | Public `/share/:token` HTML handler with OG meta SSR |
+| `src/client/routes/share.$token.tsx` | New public route |
+| `src/client/hooks/data/useAchievements.ts` | New |
+| `src/client/components/profiles/AchievementsRow.tsx` | New — takes `profileId` prop, used in both surfaces |
+| `src/client/routes/_authenticated/players/$profileId.tsx` | Mount achievements row for the visited profile |
+| `src/client/routes/_authenticated/stats/index.tsx` | Mount achievements row for the viewer's self-Profile |
+| `src/client/components/scoring/skull-king/MatchCompleteScreen.tsx` | Share dialog |
+| `src/client/components/scoring/SevenWondersDuelScorer.tsx` | Share dialog |
+| `src/client/components/ui/Icon.tsx` | Add achievement glyphs |
+| `src/client/locales/{en,fr}/common.json` | `achievements.*`, `share.*` |
+| `e2e/achievements.spec.ts` + `e2e/share-link.spec.ts` | New |
+
+**Acceptance**: a fresh user wins their first 7WD match → "First Win" stamp appears on their stats + profile within seconds (`useLiveQuery` reactivity). A completed match's share URL renders publicly with the right data, unfurls correctly in iMessage/Slack previews, revoke kills it on the next request.
+
+#### PR 8-E — Dev-asset refresh + v1.0.0 release (`release/v1.0.0`, ~1 day)
+
+**Goal**: regenerate the dev artefacts now that everything in 8-A/B/C/D has landed, then cut the version and deploy to production.
+
+**Screenshot script refresh** (`scripts/capture-screenshots.ts`):
+- Audit current screen coverage against the post-Phase-8 surface. Add: Players tab (`/players`), profile detail (`/players/$id`), Avatar Capture Studio's 4 states, every Skull King screen (start, bidding, bid recap, round result, transition, complete, scoreboard), Stats dashboard, Install help page, public share-link page, login page with all three providers visible, Privacy + ToS pages.
+- Re-render `plan-assets/screenshots/` for every covered screen.
+
+**Manifest `screenshots[]`** (`vite.config.ts`):
+- Add `screenshots[]` referencing a curated subset (login, games, scorer, profile detail, stats — 5 representative shots in mobile viewport).
+
+**Graphify refresh**:
+- Run `graphify update .` to ingest the post-Phase-8 code into `graphify-out/`. Commit as one `chore(graphify)` at HEAD; run `/squash-graphify` if multiple accumulate during the phase.
+
+**Release**:
+- Bump `package.json` to `"version": "1.0.0"`.
+- New `CHANGELOG.md` at repo root, with one entry per merged phase from this `PLAN.md` (Phase 0 through Phase 8, plus 5b/5c/8b notes). Keep `PLAN.md` present for now — Phase 8b's doc pass migrates it to a CHANGELOG-only model.
+- Tag `v1.0.0`, push tag. Coolify production deploy fires automatically per `.github/workflows/deploy-prod.yml`.
+- Smoke test on production: login via each provider, create a match in each game, install on a real phone, verify share-link unfurls.
+- Update this Phase 8 section to mark PRs 8-A through 8-E as ✅ DONE; PR 8-F (doc pass) begins once v1.0.0 is verified in production.
+
+#### PR 8-F — Documentation pass (`chore/docs-pass`, post-v1.0.0, ~1.5 days)
+
+**Goal**: Replace the bootstrap-era doc set with a stable reference, now that v1.0.0 is shipped and the architecture has settled. The final sub-PR of Phase 8. Runs AFTER PR 8-E has tagged v1.0.0 — no user-facing changes, no version bump (or a `1.0.1` docs-only bump if you prefer).
+
+PR 8-E creates an initial `CHANGELOG.md` seeded from Phase 0–8 entries; 8-F finishes the migration by promoting/expanding the doc set, then removes `PLAN.md` itself.
+
+The gap today: project description, data model, auth flow, game rules, public surfaces (install / privacy / terms / share-link), and API surface are scattered across `CLAUDE.md`, `PLAN.md`, source comments, and one offline-specific doc. Writing it earlier would have produced churn — this PR parks the work behind the v1 freeze.
+
+**What to write**:
+
+- **README rewrite** — currently bootstrap-only. Replace with: what OnBoard is, who it's for, the offline-first stance, install instructions (link to the public `/install` page shipped in 8-C), link to the doc set below.
+- **`docs/architecture.md`** — companion to `docs/offline-architecture.md`, covering what offline doesn't:
+  - **Data model**: Profile / Player / Match / Score / `MatchShareToken` relationships; single-Profile model; `ownerId` + `linkedUserId` semantics; the `avatarFrame` / `avatarRing` stamp model from Phase 7.
+  - **Auth flow**: better-auth with **three** providers (Google + Facebook + Apple, all wired in 8-A). Session cookie semantics. **Email-keyed account linking** — one `User` regardless of which provider signed in. Apple Sign-In's signed-JWT client-secret model. Link-token HMAC for profile-to-account binding (from 6-C).
+  - **Profile-linking model**: bilateral QR scan, merge-on-collision, unlink propagation.
+  - **Sync engine** internals at a higher level than `offline-architecture.md`'s deep dive: client-CUID idempotency, push/pull with `since=` cursor, LWW on `updatedAt`.
+  - **Stats engine** (from 8-B): viewer-personal computation pattern (`useMyStats`, `useMyGameStats`, `useGameRankings`) — all derived from Dexie via `useLiveQuery`, no server endpoint.
+  - **Achievements engine** (from 8-D): client-only computation over `matches` + `scores`, same `useLiveQuery` pattern; fixed v1 set; same `<AchievementsRow>` works for self and friends.
+  - **Match share-link** (from 8-D): `MatchShareToken` table, public unauthenticated `/share/:token` route, OG meta tags rendered server-side as a **deliberate exception** to the SPA-only stance — document why and where.
+  - **Build-time version injection** (from 8-C): how `__APP_VERSION__` and `__GIT_SHA__` flow from `package.json` + Docker build arg into the Settings footer.
 - **`docs/games/{skull-king,7-wonders-duel}.md`** — per-game rules + scoring tables + variant matrix. Currently lives as comments next to the scoring functions; promoting it makes the rules legible without reading TypeScript and gives a home for screenshots.
-- **`docs/api.md`** — route reference (request / response shapes, auth requirements, error codes). Generated from the Hono route handlers if practical; hand-written otherwise.
-- **`CONTRIBUTING.md`** — fold in the conventions that currently live in `CLAUDE.md` and aren't AI-instruction-specific (lint rules, test conventions, commit style, branch workflow). `CLAUDE.md` keeps its AI-targeted material.
+- **`docs/api.md`** — route reference (request / response shapes, auth requirements, error codes). Cover the post-Phase-8 surface in full:
+  - `/api/auth/*` (better-auth handlers for all three providers)
+  - `/api/games`, `/api/matches`, `/api/profiles`, `/api/profile-groups` (legacy CRUD)
+  - Profile link/unlink/merge + link-token endpoints (from 6-C)
+  - Avatar upload/delete (from 6-B)
+  - **Share-token endpoints** (`POST` / `DELETE /api/matches/:id/share-token`, `GET /api/share/:token`) from 8-D
+  - Generated from the Hono route handlers if practical; hand-written otherwise.
+- **`docs/public-surfaces.md`** (NEW) — short reference for the five unauthenticated routes that ship by v1.0: `/` (login), `/install` (PWA install guide), `/privacy`, `/terms`, `/share/:token`. What each is for, what it shows logged-out, how it integrates with auth.
+- **`CONTRIBUTING.md`** — fold in the conventions that currently live in `CLAUDE.md` and aren't AI-instruction-specific (lint rules, test conventions, commit style, branch workflow, the multi-provider env-var setup, Coolify topology). `CLAUDE.md` keeps its AI-targeted material.
 
-### What to retire
+**What to retire**:
 
-- **`PLAN.md`** → `CHANGELOG.md` (phase entries become release entries). PLAN.md is removed.
+- **`PLAN.md`** → fully migrated into `CHANGELOG.md` (the initial CHANGELOG.md from PR 8-E becomes the canonical history; remaining PLAN.md narrative is folded in). `PLAN.md` is then removed.
 - Scattered scoring rules in source comments → migrate to `docs/games/*.md`, leave a one-line pointer in the source.
 
-**Validation**: a new contributor can clone the repo, read `README.md` → `docs/architecture.md` → `docs/api.md`, and understand the system without reading any source code. CLAUDE.md no longer duplicates content that lives in `docs/`.
+**Acceptance**: a new contributor can clone the repo, read `README.md` → `docs/architecture.md` → `docs/public-surfaces.md` → `docs/api.md`, and understand the system without reading any source code. `CLAUDE.md` no longer duplicates content that lives in `docs/`. The doc set reflects the actual three-provider auth model, achievements + share-link surfaces, and the public-route SSR exception.
+
+### Validation
+
+End-to-end gate before tagging v1.0.0:
+
+- `npm run lint && npm run type-check && npm test` clean.
+- Lighthouse PWA criteria pass on integration (Mobile + Desktop).
+- All three OAuth providers verified manually on integration with real accounts.
+- Account-linking: sign in Google → log out → sign in Facebook (same email) → still one `User` row + one self-Profile + one match history.
+- Public surfaces work logged-out: `/`, `/install`, `/privacy`, `/terms`, `/share/<token>`.
+- Stats dashboard matches a hand-computed reference for a seeded fixture; achievements unlock live without reload after a winning match completes.
+- Share-link copy → paste in iMessage + Slack + WhatsApp → unfurl shows match summary; revoke → next request 404.
+- Screenshots refreshed in `plan-assets/screenshots/`, manifest `screenshots[]` references them, install on a real phone shows them in the OS install card.
+- `graphify-out/` matches HEAD.
+- Production deploy succeeds; v1.0.0 tag visible on GitHub; CHANGELOG entry for the release.
+
+### Out of scope (deferred to v1.x or Phase 9+)
+
+- Match history filters — existing per-game/per-profile navigation already scopes the lists; revisit at match-volume scale in v1.x.
+- Magic-link / email auth — Facebook + Apple covers the alternative-provider ask.
+- Per-match notes / match duration display — not enough weight to delay v1.0; revisit if friends ask for them.
+- Phase 9 (Skull King Rascal variant) ships post-v1.0 as v1.1.
 
 ---
 
