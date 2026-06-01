@@ -13,6 +13,8 @@ import {
 } from "../../../hooks/data/useProfiles";
 import { createMatch, createProfile } from "../../../lib/mutations";
 import { db, type LocalGame } from "../../../lib/db";
+import { isMatchVisible, loadVisibleProfileIds } from "../../../lib/visibility";
+import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { SKULL_KING_TOTAL_ROUNDS } from "../../../../shared/scoring/skull-king";
 import { Header } from "../../../components/layout/Header";
 import { Pill } from "../../../components/ui/Pill";
@@ -103,6 +105,7 @@ function NewMatchPage() {
 
   const { data: game, status: gameStatus } = useGame(slug);
   const { session } = useAuthSession();
+  const viewerId = useRequiredViewerId();
 
   const rematchSource = useLiveQuery<RematchSource | null>(
     async () => {
@@ -113,6 +116,16 @@ function NewMatchPage() {
         .where("matchId")
         .equals(rematchOf)
         .sortBy("position");
+      // Defense against rematching another user's match: a URL like
+      // `/games/<slug>/new?rematchOf=<id-of-someone-else's-match>` would
+      // otherwise prefill this form with that user's roster, because
+      // Dexie holds whatever the device ever pulled (including data
+      // from a prior signed-in account on a shared device). Mirror the
+      // same visibility predicate every other read hook now applies.
+      const visibleProfileIds = await loadVisibleProfileIds(viewerId);
+      if (!isMatchVisible(match, players, viewerId, visibleProfileIds)) {
+        return null;
+      }
       // Prefer the live alias from the owned-profile row (Dexie's
       // source of truth) over the embedded snapshot, so a rematch
       // surfaces the friend's *current* alias rather than whatever
@@ -134,7 +147,7 @@ function NewMatchPage() {
         metadata: (match.metadata ?? null) as Record<string, unknown> | null,
       };
     },
-    [rematchOf],
+    [rematchOf, viewerId],
   );
 
   const waitingForPrevious =

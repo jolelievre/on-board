@@ -5,7 +5,7 @@ import { Avatar } from "../../ui/Avatar";
 import { DealerChip } from "../../ui/sk/DealerChip";
 import { SkullGlyph } from "../../ui/sk/SkGlyphs";
 import { displayPlayerName } from "../../../../shared/players";
-import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
 
@@ -40,8 +40,7 @@ export function RoundTransitionScreen({
   onEditLastRound,
 }: Props) {
   const { t } = useTranslation();
-  const { session } = useAuthSession();
-  const viewerId = session?.user.id ?? null;
+  const viewerId = useRequiredViewerId();
   const ownedIndex = useOwnedProfileIndex(viewerId);
   // One card per round number, no cap — round 10 deals 10 cards. The stack
   // is centred horizontally regardless of count.

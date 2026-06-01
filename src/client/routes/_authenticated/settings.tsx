@@ -5,6 +5,7 @@ import { authClient, updateProfile } from "../../lib/auth-client";
 import { refreshLocalAliases } from "../../lib/pull-sync";
 import { useInstallPrompt } from "../../hooks/useInstallPrompt";
 import { clearSessionCache } from "../../hooks/useAuthSession";
+import { useRequiredViewerId } from "../../hooks/useRequiredViewerId";
 import { useSelfProfile } from "../../hooks/data/useProfiles";
 import { LanguageSelector } from "../../components/LanguageSelector";
 import { ThemeToggle } from "../../components/ui/ThemeToggle";
@@ -23,8 +24,9 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function SettingsPage() {
   const { t } = useTranslation();
   const { data: session } = authClient.useSession();
+  const viewerId = useRequiredViewerId();
   const { canInstall, install, showIOSHint } = useInstallPrompt();
-  const selfProfile = useSelfProfile(session?.user.id);
+  const selfProfile = useSelfProfile(viewerId);
 
   return (
     <>

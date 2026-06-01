@@ -5,7 +5,7 @@ import styles from "./MatchCompleteScreen.module.css";
 import { Avatar } from "../../ui/Avatar";
 import { SkullGlyph } from "../../ui/sk/SkGlyphs";
 import { displayPlayerName } from "../../../../shared/players";
-import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
 
@@ -38,8 +38,7 @@ export function MatchCompleteScreen({
   onOpenScoreboard,
 }: Props) {
   const { t } = useTranslation();
-  const { session } = useAuthSession();
-  const viewerId = session?.user.id ?? null;
+  const viewerId = useRequiredViewerId();
   const ownedIndex = useOwnedProfileIndex(viewerId);
   const ranked = [...players].sort(
     (a, b) => (totals[b.id] ?? 0) - (totals[a.id] ?? 0),

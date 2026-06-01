@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./MatchStartScreen.module.css";
 import { displayPlayerName } from "../../../../shared/players";
-import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
 import { Avatar } from "../../ui/Avatar";
@@ -32,8 +32,7 @@ export function MatchStartScreen({
   disabled,
 }: Props) {
   const { t } = useTranslation();
-  const { session } = useAuthSession();
-  const viewerId = session?.user.id ?? null;
+  const viewerId = useRequiredViewerId();
   const ownedIndex = useOwnedProfileIndex(viewerId);
   const dragIndexRef = useRef<number | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);

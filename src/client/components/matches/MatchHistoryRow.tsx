@@ -70,7 +70,7 @@ export function MatchHistoryRow({
    * history page where the surrounding context already tells the
    * viewer which game these matches belong to. */
   showGameGlyph?: boolean;
-  viewerId: string | null;
+  viewerId: string;
 }) {
   const { t } = useTranslation();
   const ownedIndex = useOwnedProfileIndex(viewerId);
@@ -88,7 +88,7 @@ export function MatchHistoryRow({
   const compact = match.players.length === 2;
 
   const isMe = (player: Player): boolean =>
-    viewerId !== null && player.profile.linkedUserId === viewerId;
+    player.profile.linkedUserId === viewerId;
 
   const orderedPlayers = compact
     ? match.players
@@ -178,7 +178,7 @@ type LayoutCommon = {
   /** Threaded into every `<Avatar>` so `displayProfileAvatar` can
    * route through the viewer's own profile when the row points at
    * them. */
-  viewerId: string | null;
+  viewerId: string;
 };
 
 function TwoPlayerLayout({
@@ -230,7 +230,7 @@ type SideProps = {
   isDim: boolean;
   isMe: boolean;
   ownedIndex: ReturnType<typeof useOwnedProfileIndex>;
-  viewerId: string | null;
+  viewerId: string;
   align?: "left" | "right";
 };
 

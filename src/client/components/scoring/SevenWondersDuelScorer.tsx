@@ -10,7 +10,7 @@ import type {
 } from "../match/HandMatchGrid";
 import { WinnerBanner } from "../match/WinnerBanner";
 import { displayPlayerName } from "../../../shared/players";
-import { useAuthSession } from "../../hooks/useAuthSession";
+import { useRequiredViewerId } from "../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../hooks/data/useOwnedProfileIndex";
 import { Button } from "../ui/Button";
 import buttonStyles from "../ui/Button.module.css";
@@ -48,8 +48,7 @@ type Props = {
 
 export function SevenWondersDuelScorer({ match }: Props) {
   const { t } = useTranslation();
-  const { session } = useAuthSession();
-  const viewerId = session?.user.id ?? null;
+  const viewerId = useRequiredViewerId();
   const ownedIndex = useOwnedProfileIndex(viewerId);
   const matchId = match.id;
 

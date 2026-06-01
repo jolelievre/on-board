@@ -3,7 +3,7 @@ import shared from "./shared.module.css";
 import styles from "./ScoreboardScreen.module.css";
 import { Avatar } from "../../ui/Avatar";
 import { displayPlayerName } from "../../../../shared/players";
-import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import {
   SKULL_KING_TOTAL_ROUNDS,
@@ -22,8 +22,7 @@ type Props = {
 
 export function ScoreboardScreen({ players, entries, currentRound }: Props) {
   const { t } = useTranslation();
-  const { session } = useAuthSession();
-  const viewerId = session?.user.id ?? null;
+  const viewerId = useRequiredViewerId();
   const ownedIndex = useOwnedProfileIndex(viewerId);
 
   // Per-cell: bid/tricks/total/bonus computed once.
@@ -276,8 +275,8 @@ function Sparkline({
   cumulative: Record<string, number[]>;
   roundsPlayed: number;
 }) {
-  const { session } = useAuthSession();
-  const ownedIndex = useOwnedProfileIndex(session?.user.id ?? null);
+  const viewerId = useRequiredViewerId();
+  const ownedIndex = useOwnedProfileIndex(viewerId);
   const W = 320;
   const H = 80;
 

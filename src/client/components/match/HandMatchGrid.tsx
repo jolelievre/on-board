@@ -55,12 +55,13 @@ type Props = {
   disabled?: boolean;
   /** ID of the winning player (if completed). Highlights total cell. */
   winnerId?: string | null;
-  /** Signed-in user id — threaded into each `<Avatar>` so the
-   * viewer-aware resolver in `displayProfileAvatar` picks up the
-   * viewer's own profile when their `linkedUserId` matches a header
-   * row (otherwise a friend-created match would render the friend's
-   * snapshot of the viewer instead of the viewer's chosen stamp). */
-  viewerId?: string | null;
+  /** Signed-in user id — required `string`, threaded into each
+   * `<Avatar>` so the viewer-aware resolver in `displayProfileAvatar`
+   * picks up the viewer's own profile when their `linkedUserId`
+   * matches a header row (otherwise a friend-created match would
+   * render the friend's snapshot of the viewer instead of the
+   * viewer's chosen stamp). */
+  viewerId: string;
 };
 
 function rowTemplate(playerCount: number) {
@@ -125,7 +126,7 @@ export function HandMatchGrid({
               total={total}
               tilt={i === 0 ? -0.4 : 0.3}
               showCrown={showCrown}
-              viewerId={viewerId ?? null}
+              viewerId={viewerId}
             />
           );
         })}
@@ -235,7 +236,7 @@ function PlayerNameCell({
   total: number;
   tilt: number;
   showCrown: boolean;
-  viewerId: string | null;
+  viewerId: string;
 }) {
   const seed = 10 + (player.id.charCodeAt(0) % 100);
   const cellRef = useRef<HTMLDivElement>(null);

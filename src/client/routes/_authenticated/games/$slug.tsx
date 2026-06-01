@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
-import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useGame } from "../../../hooks/data/useGame";
 import { useMatchList } from "../../../hooks/data/useMatchList";
 import { Header } from "../../../components/layout/Header";
@@ -20,11 +20,10 @@ function GameDetailPage() {
   const { slug } = Route.useParams();
   const { t, i18n } = useTranslation();
   const { isOnline } = useOnlineStatus();
-  const { session } = useAuthSession();
-  const viewerId = session?.user.id ?? null;
+  const viewerId = useRequiredViewerId();
 
   const { data: game, status: gameStatus } = useGame(slug);
-  const { data: matches } = useMatchList(game?.id);
+  const { data: matches } = useMatchList(viewerId, game?.id);
 
   if (gameStatus === "loading") {
     return (

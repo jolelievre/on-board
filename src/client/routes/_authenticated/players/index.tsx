@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { authClient } from "../../../lib/auth-client";
+import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useProfileList } from "../../../hooks/data/useProfiles";
 import { createProfile } from "../../../lib/mutations";
 import type { LocalProfile } from "../../../lib/db";
@@ -21,8 +21,7 @@ export const Route = createFileRoute("/_authenticated/players/")({
 
 function PlayersPage() {
   const { t } = useTranslation();
-  const { data: session } = authClient.useSession();
-  const viewerId = session?.user.id;
+  const viewerId = useRequiredViewerId();
   const { data: profiles, status } = useProfileList(viewerId);
 
   return (
@@ -34,7 +33,7 @@ function PlayersPage() {
             <h1 className={styles.title}>{t("players.title")}</h1>
             <p className={styles.subtitle}>{t("players.subtitle")}</p>
           </div>
-          {viewerId && <AddProfileTrigger viewerId={viewerId} />}
+          <AddProfileTrigger viewerId={viewerId} />
         </div>
 
         {status === "loading" && (
@@ -51,7 +50,7 @@ function PlayersPage() {
               <ProfileRow
                 key={profile.id}
                 profile={profile}
-                viewerId={viewerId ?? null}
+                viewerId={viewerId}
               />
             ))}
           </div>
@@ -158,7 +157,7 @@ function ProfileRow({
   viewerId,
 }: {
   profile: LocalProfile;
-  viewerId: string | null;
+  viewerId: string;
 }) {
   const { t } = useTranslation();
   // Self-Profile and profiles representing me are excluded upstream by

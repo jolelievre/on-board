@@ -12,7 +12,7 @@ import {
 } from "../../ui/sk/SkGlyphs";
 import { Avatar } from "../../ui/Avatar";
 import { displayPlayerName } from "../../../../shared/players";
-import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import {
   EMPTY_SK_ROUND,
@@ -60,8 +60,7 @@ export function RoundResultScreen({
   onSubmit,
 }: Props) {
   const { t } = useTranslation();
-  const { session } = useAuthSession();
-  const viewerId = session?.user.id ?? null;
+  const viewerId = useRequiredViewerId();
   const ownedIndex = useOwnedProfileIndex(viewerId);
   const active = players[activeIndex] as Player | undefined;
 
