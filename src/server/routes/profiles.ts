@@ -10,7 +10,7 @@ import {
   mergeProfiles,
   ProfileMergeError,
 } from "../lib/profile-merge.js";
-import { bumpMatchesForProfile } from "../lib/profiles.js";
+import { bumpMatchesForProfile, ensureSelfProfile } from "../lib/profiles.js";
 import {
   createLinkToken,
   LinkTokenError,
@@ -97,7 +97,7 @@ export const profilesRoutes = new Hono<AuthEnv>()
     // (the Player row embeds the Profile projection), never in my own
     // listing. The owner check covers both my self-Profile and every
     // friend I've added.
-    const profiles = await prisma.profile.findMany({
+    let profiles = await prisma.profile.findMany({
       where: {
         ownerId: user.id,
         ...(sinceDate ? { updatedAt: { gt: sinceDate } } : {}),
@@ -108,6 +108,33 @@ export const profilesRoutes = new Hono<AuthEnv>()
       // keeps the order deterministic in tests.
       orderBy: [{ usedAt: "desc" }, { alias: "asc" }],
     });
+
+    // Belt-and-braces: a viewer doing a full pull (`since` absent)
+    // must always receive their own self-Profile. If it's missing
+    // from the result — because the `user.create.after` hook never
+    // fired for this account (legacy signups, hook failure, manual
+    // DB insert) — provision it now and include it in the response.
+    // No-op for incremental pulls: the cursor would naturally
+    // exclude a self-Profile that pre-dates `sinceDate`, and the
+    // viewer-change reset in `_authenticated.tsx` clears the cursor
+    // exactly when a previously-missing self-Profile would matter.
+    if (!sinceDate) {
+      const hasSelf = profiles.some(
+        (p) => p.ownerId === user.id && p.linkedUserId === user.id,
+      );
+      if (!hasSelf) {
+        await ensureSelfProfile({
+          id: user.id,
+          name: user.name,
+          alias: user.alias,
+        });
+        profiles = await prisma.profile.findMany({
+          where: { ownerId: user.id },
+          select: profileSelect,
+          orderBy: [{ usedAt: "desc" }, { alias: "asc" }],
+        });
+      }
+    }
 
     return c.json(profiles);
   })

@@ -127,5 +127,22 @@ test.describe("Account switch on shared device — matches do not leak", () => {
     await expect(
       page.locator("[data-testid='new-match-player-1']"),
     ).toHaveValue("");
+
+    // ── Self-Profile must surface in B's new-match picker. Pre-fix,
+    // the `?since=<A's-cursor>` filter on `/api/profiles` excluded B's
+    // own self-Profile because its `updatedAt` predates A's session,
+    // leaving B without a "me" suggestion. `resetCursorsIfViewerChanged`
+    // drops the cursor when the viewer id changes between sessions,
+    // and the server-side defensive `ensureSelfProfile` covers any
+    // legacy account that never had the row created. The chip is
+    // keyed by the user's display name — read it from the session
+    // so the assertion follows whatever `signUpFresh` named B.
+    const sessionRes = await page.request.get("/api/auth/get-session");
+    const session = await sessionRes.json();
+    const userName = session.user.name as string;
+    await page.click("[data-testid='new-match-player-0']");
+    await expect(
+      page.locator(`[data-testid='new-match-suggestion-0-${userName}']`),
+    ).toBeVisible();
   });
 });

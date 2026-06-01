@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { usePullSyncBackground } from "../hooks/usePullSyncBackground";
-import { pullSync } from "../lib/pull-sync";
+import { pullSync, resetCursorsIfViewerChanged } from "../lib/pull-sync";
 import { syncEngine } from "../lib/sync";
 import { BottomNav } from "../components/layout/BottomNav";
 import { OfflineBanner } from "../components/layout/OfflineBanner";
@@ -44,12 +44,20 @@ function AuthenticatedLayout() {
   //   throttling, captive portal). flush() short-circuits when offline.
   useEffect(() => {
     if (isPending || !session) return;
-    void pullSync({ force: true }).catch(() => {
-      /* offline or transient — next online tick / flush retries */
-    });
-    void syncEngine.flush().catch(() => {
-      /* surfaced via syncQueue retries */
-    });
+    void (async () => {
+      // Drop the per-device `?since=` cursors when a different viewer
+      // signs in here. Without this the next pullSync would filter
+      // out any of the new viewer's rows that pre-date the prior
+      // viewer's last pull — most visibly their self-Profile, which
+      // is created once at signup and is then never updated again.
+      await resetCursorsIfViewerChanged(session.user.id);
+      await pullSync({ force: true }).catch(() => {
+        /* offline or transient — next online tick / flush retries */
+      });
+      await syncEngine.flush().catch(() => {
+        /* surfaced via syncQueue retries */
+      });
+    })();
   }, [session, isPending]);
 
   useEffect(() => {
