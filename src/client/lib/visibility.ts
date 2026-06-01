@@ -20,21 +20,63 @@ import { db, type LocalMatch, type LocalPlayer } from "./db";
  * original viewer's offline writes survive a sign-out / sign-in
  * cycle). The decision (per the PR 8-B design in PLAN.md): never
  * purge, always filter.
+ *
+ * Public surface: a single `loadMatchVisibility(viewerId)` factory
+ * that pre-loads the viewer-reachable profile set once and returns a
+ * synchronous predicate the caller can run inside a tight loop. The
+ * two-step shape (async fetch + sync check) is collapsed behind the
+ * closure so every read hook only imports / awaits one symbol.
  */
 
 /**
- * Loads the set of Profile ids the viewer can transitively reach. The
- * second half of the visibility predicate joins through Player → Profile;
- * pre-computing the set means `isMatchVisible` can run as a tight
- * synchronous check inside an existing read loop instead of issuing
- * a Dexie call per match.
- *
- * Includes profiles the viewer **owns** (`ownerId === viewerId` — the
- * self-Profile plus every friend-profile they created) and profiles
- * **linked to them** (`linkedUserId === viewerId` — a friend's row
- * representing the viewer after a bilateral QR link).
+ * Synchronous match-visibility predicate. Created by
+ * `loadMatchVisibility` — the prefetched profile-id set is captured
+ * in the closure so the caller can run this against every match in a
+ * batch without re-issuing a Dexie query.
  */
-export async function loadVisibleProfileIds(
+export type MatchVisibilityCheck = (
+  match: Pick<LocalMatch, "createdById">,
+  matchPlayers: Pick<LocalPlayer, "profileId" | "profileLinkedUserId">[],
+) => boolean;
+
+/**
+ * Build a viewer-scoped match-visibility predicate.
+ *
+ * Issues one Dexie query (against the small `profiles` table) to load
+ * the viewer's reachable profile ids, then returns a synchronous
+ * predicate that closes over both the viewer id and that set. Use the
+ * predicate in a loop / filter inside the same `useLiveQuery`
+ * callback so the Dexie cost is paid once per re-render, not once per
+ * match.
+ *
+ * Each read hook follows the same shape:
+ *
+ * ```ts
+ * const [matches, players, isVisible] = await Promise.all([
+ *   db.matches.where(...).toArray(),
+ *   db.players.where(...).toArray(),
+ *   loadMatchVisibility(viewerId),
+ * ]);
+ * const visible = matches.filter((m) => isVisible(m, playersByMatch.get(m.id) ?? []));
+ * ```
+ */
+export async function loadMatchVisibility(
+  viewerId: string,
+): Promise<MatchVisibilityCheck> {
+  const visibleProfileIds = await loadVisibleProfileIds(viewerId);
+  return (match, matchPlayers) =>
+    isMatchVisible(match, matchPlayers, viewerId, visibleProfileIds);
+}
+
+/**
+ * Profiles the viewer can transitively reach: ones they **own**
+ * (`ownerId === viewerId` — self-Profile + every friend-profile they
+ * created) plus profiles **linked** to them (`linkedUserId ===
+ * viewerId` — a friend's row representing the viewer after a
+ * bilateral QR link). Kept as a named helper for code clarity; only
+ * called from `loadMatchVisibility`.
+ */
+async function loadVisibleProfileIds(
   viewerId: string,
 ): Promise<Set<string>> {
   const [owned, linked] = await Promise.all([
@@ -48,18 +90,19 @@ export async function loadVisibleProfileIds(
 }
 
 /**
- * Synchronous match-visibility check. Caller pre-loads
- * `visibleProfileIds` once (via `loadVisibleProfileIds`) and re-uses
- * it across every match in the batch.
+ * Pure visibility check. Split out from `loadMatchVisibility` so the
+ * branch logic stays readable and is straightforward to unit-test if
+ * we ever add coverage. Not exported — callers use the predicate
+ * returned by `loadMatchVisibility`.
  *
- * The `match.createdById` field landed on `LocalMatch` in pull-sync
- * v6+; older rows pulled before the field was added may carry
- * `undefined` / `null`. We treat those as "creator unknown" → fall
- * back to the player-side check. This matches the server's `OR`
- * branch: a viewer who *participates* via any visible Profile still
- * sees the match even when we can't verify they created it.
+ * `match.createdById` landed on `LocalMatch` in pull-sync v6+; older
+ * rows pulled before the field was added may carry `undefined` /
+ * `null`. We treat those as "creator unknown" → fall back to the
+ * player-side check. This matches the server's `OR` branch: a viewer
+ * who *participates* via any visible Profile still sees the match
+ * even when we can't verify they created it.
  */
-export function isMatchVisible(
+function isMatchVisible(
   match: Pick<LocalMatch, "createdById">,
   matchPlayers: Pick<LocalPlayer, "profileId" | "profileLinkedUserId">[],
   viewerId: string,
@@ -69,13 +112,13 @@ export function isMatchVisible(
   for (const p of matchPlayers) {
     if (visibleProfileIds.has(p.profileId)) return true;
     // `profileLinkedUserId` is the denormalised mirror of
-    // `profile.linkedUserId` (the viewer might be linked to a Profile
-    // that hasn't been pulled into Dexie yet — for example a friend
-    // created a match on their device, my pull-sync hydrated the
-    // Player row including the link, but their Profile row itself is
-    // outside my visibility). Checking this field too keeps the
-    // client predicate honest on the "linked user as participant"
-    // case without requiring a parallel Profile pull.
+    // `profile.linkedUserId`: the viewer might be linked to a Profile
+    // that hasn't been pulled into Dexie yet (a friend created a
+    // match on their device, my pull-sync hydrated the Player row
+    // including the link, but their Profile row itself is outside my
+    // visibility). Checking this field too keeps the client
+    // predicate honest on the "linked user as participant" case
+    // without requiring a parallel Profile pull.
     if (p.profileLinkedUserId === viewerId) return true;
   }
   return false;

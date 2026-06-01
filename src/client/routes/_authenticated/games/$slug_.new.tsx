@@ -13,7 +13,7 @@ import {
 } from "../../../hooks/data/useProfiles";
 import { createMatch, createProfile } from "../../../lib/mutations";
 import { db, type LocalGame } from "../../../lib/db";
-import { isMatchVisible, loadVisibleProfileIds } from "../../../lib/visibility";
+import { loadMatchVisibility } from "../../../lib/visibility";
 import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { SKULL_KING_TOTAL_ROUNDS } from "../../../../shared/scoring/skull-king";
 import { Header } from "../../../components/layout/Header";
@@ -122,10 +122,8 @@ function NewMatchPage() {
       // Dexie holds whatever the device ever pulled (including data
       // from a prior signed-in account on a shared device). Mirror the
       // same visibility predicate every other read hook now applies.
-      const visibleProfileIds = await loadVisibleProfileIds(viewerId);
-      if (!isMatchVisible(match, players, viewerId, visibleProfileIds)) {
-        return null;
-      }
+      const isVisible = await loadMatchVisibility(viewerId);
+      if (!isVisible(match, players)) return null;
       // Prefer the live alias from the owned-profile row (Dexie's
       // source of truth) over the embedded snapshot, so a rematch
       // surfaces the friend's *current* alias rather than whatever

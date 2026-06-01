@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../../lib/db";
-import { isMatchVisible, loadVisibleProfileIds } from "../../lib/visibility";
+import { loadMatchVisibility } from "../../lib/visibility";
 import type { Player } from "../../types/match";
 import { projectPlayer } from "./hydratePlayer";
 
@@ -49,10 +49,10 @@ export function useMatchList(
       if (matches.length === 0) return [];
 
       const matchIds = matches.map((m) => m.id);
-      const [allPlayers, allScores, visibleProfileIds] = await Promise.all([
+      const [allPlayers, allScores, isVisible] = await Promise.all([
         db.players.where("matchId").anyOf(matchIds).toArray(),
         db.scores.where("matchId").anyOf(matchIds).toArray(),
-        loadVisibleProfileIds(viewerId),
+        loadMatchVisibility(viewerId),
       ]);
 
       const playersByMatch = new Map<string, Player[]>();
@@ -93,12 +93,7 @@ export function useMatchList(
       }
 
       const visible = matches.filter((m) =>
-        isMatchVisible(
-          m,
-          rawPlayersByMatch.get(m.id) ?? [],
-          viewerId,
-          visibleProfileIds,
-        ),
+        isVisible(m, rawPlayersByMatch.get(m.id) ?? []),
       );
 
       const out: MatchListItem[] = visible.map((m) => ({

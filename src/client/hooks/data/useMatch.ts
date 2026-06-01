@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../../lib/db";
-import { isMatchVisible, loadVisibleProfileIds } from "../../lib/visibility";
+import { loadMatchVisibility } from "../../lib/visibility";
 import type { Match } from "../../types/match";
 import { projectPlayer } from "./hydratePlayer";
 
@@ -29,16 +29,14 @@ export function useMatch(id: string, viewerId: string): UseMatchResult {
       const match = await db.matches.get(id);
       if (!match) return null;
 
-      const [game, players, scores, visibleProfileIds] = await Promise.all([
+      const [game, players, scores, isVisible] = await Promise.all([
         db.games.get(match.gameId),
         db.players.where("matchId").equals(id).sortBy("position"),
         db.scores.where("matchId").equals(id).toArray(),
-        loadVisibleProfileIds(viewerId),
+        loadMatchVisibility(viewerId),
       ]);
 
-      if (!isMatchVisible(match, players, viewerId, visibleProfileIds)) {
-        return null;
-      }
+      if (!isVisible(match, players)) return null;
 
       return {
         id: match.id,

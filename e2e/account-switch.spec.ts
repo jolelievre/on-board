@@ -117,7 +117,7 @@ test.describe("Account switch on shared device — matches do not leak", () => {
     // ── Rematch-URL leak: visiting `/games/7-wonders-duel/new?rematchOf=<A's id>`
     // as B used to prefill the form with A's player roster because the
     // rematch source read Dexie directly without a viewer gate. The fix
-    // in `$slug_.new.tsx` mirrors `isMatchVisible` so non-visible matches
+    // in `$slug_.new.tsx` uses `loadMatchVisibility` so non-visible matches
     // resolve to `null` and the form opens empty for B.
     await page.goto(`/games/7-wonders-duel/new?rematchOf=${aMatchId}`);
     await page.waitForLoadState("domcontentloaded");

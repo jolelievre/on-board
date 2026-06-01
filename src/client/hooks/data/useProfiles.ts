@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type LocalProfile } from "../../lib/db";
-import { isMatchVisible, loadVisibleProfileIds } from "../../lib/visibility";
+import { loadMatchVisibility } from "../../lib/visibility";
 import { projectPlayer } from "./hydratePlayer";
 import type { MatchListItem } from "./useMatchList";
 
@@ -214,10 +214,10 @@ export function useProfileStats(
       }
       const matchIds = [...playerIdsByMatch.keys()];
 
-      const [matchRows, allInMatch, visibleProfileIds] = await Promise.all([
+      const [matchRows, allInMatch, isVisible] = await Promise.all([
         db.matches.bulkGet(matchIds),
         db.players.where("matchId").anyOf(matchIds).toArray(),
-        loadVisibleProfileIds(viewerId),
+        loadMatchVisibility(viewerId),
       ]);
       const playersForVisibility = new Map<
         string,
@@ -244,16 +244,7 @@ export function useProfileStats(
       >();
       for (const m of matchRows) {
         if (!m) continue;
-        if (
-          !isMatchVisible(
-            m,
-            playersForVisibility.get(m.id) ?? [],
-            viewerId,
-            visibleProfileIds,
-          )
-        ) {
-          continue;
-        }
+        if (!isVisible(m, playersForVisibility.get(m.id) ?? [])) continue;
         matchesById.set(m.id, m);
       }
 
@@ -400,8 +391,9 @@ export type PlayedWithGroup = {
  * from a recency-sorted scan and keep the first occurrence, so the
  * stored seating reflects the latest match featuring that exact crew.
  *
- * Matches are filtered by `isMatchVisible(viewerId)` so chips from a
- * previous account on the same device never leak into the picker.
+ * Matches are filtered by `loadMatchVisibility(viewerId)` so chips
+ * from a previous account on the same device never leak into the
+ * picker.
  *
  * Returns `undefined` while Dexie reads are in flight. Returns `[]` when
  * the viewer has no matches for this game yet — the picker hides the
@@ -421,9 +413,9 @@ export function usePlayedWith(
       matches.sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
 
       const matchIds = matches.map((m) => m.id);
-      const [allInMatch, visibleProfileIds] = await Promise.all([
+      const [allInMatch, isVisible] = await Promise.all([
         db.players.where("matchId").anyOf(matchIds).toArray(),
-        loadVisibleProfileIds(viewerId),
+        loadMatchVisibility(viewerId),
       ]);
       const playersByMatch = new Map<string, typeof allInMatch>();
       for (const p of allInMatch) {
@@ -438,16 +430,7 @@ export function usePlayedWith(
 
       for (const m of matches) {
         const matchPlayers = playersByMatch.get(m.id) ?? [];
-        if (
-          !isMatchVisible(
-            m,
-            matchPlayers,
-            viewerId,
-            visibleProfileIds,
-          )
-        ) {
-          continue;
-        }
+        if (!isVisible(m, matchPlayers)) continue;
         const ordered = [...matchPlayers].sort(
           (a, b) => a.position - b.position,
         );
@@ -565,10 +548,10 @@ export function useHeadToHead(
       const matchIds = [...new Set(subjectPlayers.map((p) => p.matchId))];
       if (matchIds.length === 0) return empty;
 
-      const [matches, allInMatch, visibleProfileIds] = await Promise.all([
+      const [matches, allInMatch, isVisible] = await Promise.all([
         db.matches.bulkGet(matchIds),
         db.players.where("matchId").anyOf(matchIds).toArray(),
-        loadVisibleProfileIds(viewerId),
+        loadMatchVisibility(viewerId),
       ]);
       const playersByMatch = new Map<string, typeof allInMatch>();
       for (const p of allInMatch) {
@@ -591,9 +574,7 @@ export function useHeadToHead(
         if (!m) continue;
         if (m.status !== "COMPLETED") continue;
         const inMatch = playersByMatch.get(m.id) ?? [];
-        if (!isMatchVisible(m, inMatch, viewerId, visibleProfileIds)) {
-          continue;
-        }
+        if (!isVisible(m, inMatch)) continue;
         const subjectPlayer = inMatch.find((p) => subjectPlayerIds.has(p.id));
         const viewerPlayer = inMatch.find((p) => viewerPlayerIds.has(p.id));
         if (!subjectPlayer || !viewerPlayer) continue;
@@ -642,10 +623,10 @@ export function useProfileRecentMatches(
       if (players.length === 0) return [];
 
       const matchIds = [...new Set(players.map((p) => p.matchId))];
-      const [matchRows, allInMatch, visibleProfileIds] = await Promise.all([
+      const [matchRows, allInMatch, isVisible] = await Promise.all([
         db.matches.bulkGet(matchIds),
         db.players.where("matchId").anyOf(matchIds).toArray(),
-        loadVisibleProfileIds(viewerId),
+        loadMatchVisibility(viewerId),
       ]);
       const playersByMatchForVisibility = new Map<string, typeof allInMatch>();
       for (const p of allInMatch) {
@@ -657,12 +638,7 @@ export function useProfileRecentMatches(
       const validMatches = matchRows.filter(
         (m): m is NonNullable<typeof m> =>
           m !== undefined &&
-          isMatchVisible(
-            m,
-            playersByMatchForVisibility.get(m.id) ?? [],
-            viewerId,
-            visibleProfileIds,
-          ),
+          isVisible(m, playersByMatchForVisibility.get(m.id) ?? []),
       );
       validMatches.sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1));
 
