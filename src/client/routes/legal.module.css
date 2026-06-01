@@ -1,0 +1,85 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem 1.75rem 2.5rem;
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.backLink {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--color-ink-soft);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.backLink:hover {
+  color: var(--color-ink);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.85rem;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.5rem;
+  color: var(--color-ink);
+}
+
+.lastUpdated {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-ink-faint);
+  margin: 0 0 1.5rem;
+}
+
+.body {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--color-ink);
+}
+
+.body h2 {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 1.75rem 0 0.5rem;
+  color: var(--color-ink);
+}
+
+.body p,
+.body ul {
+  margin: 0 0 1rem;
+}
+
+.body ul {
+  padding-left: 1.5rem;
+}
+
+.body li {
+  margin-bottom: 0.35rem;
+}
+
+.body a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.bottom {
+  margin-top: 2rem;
+  display: flex;
+  justify-content: center;
+}

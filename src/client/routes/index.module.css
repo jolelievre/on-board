@@ -49,7 +49,7 @@
   margin: 0 auto;
 }
 
-.googleButton {
+.providerButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -66,7 +66,7 @@
   box-shadow: var(--shadow-soft);
 }
 
-.googleButton:hover {
+.providerButton:hover {
   background: var(--color-surface-alt);
 }
 
@@ -108,4 +108,23 @@
   font-family: var(--font-body);
   font-size: 0.85rem;
   color: var(--color-danger);
+}
+
+.legalFooter {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: var(--color-ink-faint);
+  text-align: center;
+  margin: 0.5rem auto 0;
+  max-width: 22rem;
+  line-height: 1.45;
+}
+
+.legalFooter a {
+  color: var(--color-ink-soft);
+  text-decoration: underline;
+}
+
+.legalFooter a:hover {
+  color: var(--color-ink);
 }

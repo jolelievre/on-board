@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { logger } from "hono/logger";
-import { auth } from "./lib/auth.js";
+import { auth, getEnabledSocialProviders } from "./lib/auth.js";
 import { requireAuth } from "./middleware/auth.js";
 import { gamesRoutes } from "./routes/games.js";
 import { matchesRoutes } from "./routes/matches.js";
@@ -11,6 +11,14 @@ import { uploadsRoutes } from "./routes/uploads.js";
 const app = new Hono().basePath("/api");
 
 app.use("*", logger());
+
+// Public — which OAuth providers actually have credentials configured.
+// The login page reads this to render only the buttons the server can
+// authenticate against. Mounted BEFORE the better-auth wildcard so it
+// short-circuits the catch-all.
+app.get("/auth/providers", (c) => {
+  return c.json({ providers: getEnabledSocialProviders() });
+});
 
 // better-auth handler: delegates all /api/auth/* to better-auth
 app.all("/auth/*", (c) => auth.handler(c.req.raw));

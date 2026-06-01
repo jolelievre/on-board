@@ -17,6 +17,9 @@ function uniqueTestUser() {
  * - If the email/password form is visible (test mode) → use it
  * - Otherwise → use Google OAuth (needs GOOGLE_TEST_EMAIL/PASSWORD in .env.test.local)
  *
+ * `loginWithFacebook` is a separate helper — call it directly when a spec
+ * needs the non-Google path; it's not part of the auto-detect default.
+ *
  * After login, the page is on /games.
  */
 export async function login(page: Page) {
@@ -110,6 +113,50 @@ async function loginWithGoogle(page: Page) {
   }
 
   // Wait for redirect back to the app
+  await page.waitForURL("**/games", { timeout: 30000 });
+}
+
+/**
+ * Login via Facebook OAuth.
+ * Requires FACEBOOK_TEST_EMAIL and FACEBOOK_TEST_PASSWORD env vars
+ * (set in .env.test.local) AND a deploy where the Facebook provider is
+ * configured (FACEBOOK_CLIENT_ID / FACEBOOK_CLIENT_SECRET on the server).
+ *
+ * Note: Meta's anti-automation defences are aggressive; the Facebook
+ * test user needs to be a real test account from the app's roster (see
+ * Meta App Dashboard → Roles → Test Users).
+ */
+export async function loginWithFacebook(page: Page) {
+  const email = process.env.FACEBOOK_TEST_EMAIL;
+  const password = process.env.FACEBOOK_TEST_PASSWORD;
+
+  if (!email || !password) {
+    throw new Error(
+      "Facebook OAuth login requires FACEBOOK_TEST_EMAIL and FACEBOOK_TEST_PASSWORD env vars. " +
+        "Set them in .env.test.local",
+    );
+  }
+
+  await page.goto("/");
+  await page.waitForLoadState("domcontentloaded");
+  await page.click('[data-provider="facebook"]');
+
+  await page.waitForURL(/facebook\.com|messenger\.com/, { timeout: 15000 });
+
+  await page.fill('input[name="email"], input[id="email"]', email);
+  await page.fill('input[name="pass"], input[id="pass"]', password);
+  await page.click('button[name="login"], button[id="loginbutton"]');
+
+  // Facebook may show a "Continue as <name>" consent screen on first OAuth
+  try {
+    const continueButton = page.locator(
+      'button:has-text("Continue"), button:has-text("Continuer")',
+    );
+    await continueButton.first().click({ timeout: 5000 });
+  } catch {
+    // No consent screen
+  }
+
   await page.waitForURL("**/games", { timeout: 30000 });
 }
 

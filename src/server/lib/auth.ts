@@ -5,22 +5,68 @@ import { ensureSelfProfile, syncSelfProfileAlias } from "./profiles.js";
 
 const isTest = process.env.NODE_ENV === "test";
 
+export type SocialProviderId = "google" | "facebook";
+
+/**
+ * Build the social-providers map. Each provider only enables when its
+ * credentials are present in the environment, so a partially configured
+ * deploy (e.g. production has Apple but integration doesn't) just hides
+ * the unconfigured buttons on the login page — better-auth never sees
+ * incomplete provider configs.
+ */
+function buildSocialProviders() {
+  if (isTest) return {};
+
+  const providers: Record<string, { clientId: string; clientSecret: string }> =
+    {};
+
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    providers.google = {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    };
+  }
+
+  if (process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET) {
+    providers.facebook = {
+      clientId: process.env.FACEBOOK_CLIENT_ID,
+      clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
+    };
+  }
+
+  return providers;
+}
+
+const socialProviders = buildSocialProviders();
+const enabledSocialProviders = Object.keys(socialProviders) as SocialProviderId[];
+
+/**
+ * The set of social providers that have credentials configured in the
+ * current process environment. The login page reads this through the
+ * public `/api/auth/providers` endpoint so it only renders buttons for
+ * providers the server can actually authenticate against.
+ */
+export function getEnabledSocialProviders(): SocialProviderId[] {
+  return enabledSocialProviders;
+}
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   baseURL: process.env.BETTER_AUTH_URL,
   secret: process.env.BETTER_AUTH_SECRET,
-  socialProviders: {
-    ...(isTest
-      ? {}
-      : {
-          google: {
-            clientId: process.env.GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-          },
-        }),
-  },
+  socialProviders,
   emailAndPassword: {
     enabled: isTest,
+  },
+  account: {
+    // Email-keyed account linking — a user who first signed in via Google
+    // and later clicks "Sign in with Facebook" (with the same verified
+    // email) lands on the same `User` row instead of getting a duplicate
+    // account + duplicate self-Profile + split history.
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["google", "facebook"],
+    },
   },
   user: {
     fields: {
