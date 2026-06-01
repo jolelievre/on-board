@@ -17,6 +17,10 @@ function uniqueTestUser() {
  * - If the email/password form is visible (test mode) → use it
  * - Otherwise → use Google OAuth (needs GOOGLE_TEST_EMAIL/PASSWORD in .env.test.local)
  *
+ * `loginWithFacebook` / `loginWithApple` are separate helpers — call them
+ * directly when a spec needs a non-Google provider; they're not part of
+ * the auto-detect default.
+ *
  * After login, the page is on /games.
  */
 export async function login(page: Page) {
@@ -111,6 +115,93 @@ async function loginWithGoogle(page: Page) {
 
   // Wait for redirect back to the app
   await page.waitForURL("**/games", { timeout: 30000 });
+}
+
+/**
+ * Login via Facebook OAuth.
+ * Requires FACEBOOK_TEST_EMAIL and FACEBOOK_TEST_PASSWORD env vars
+ * (set in .env.test.local) AND a deploy where the Facebook provider is
+ * configured (FACEBOOK_CLIENT_ID / FACEBOOK_CLIENT_SECRET on the server).
+ *
+ * Note: Meta's anti-automation defences are aggressive; the Facebook
+ * test user needs to be a real test account from the app's roster (see
+ * Meta App Dashboard → Roles → Test Users).
+ */
+export async function loginWithFacebook(page: Page) {
+  const email = process.env.FACEBOOK_TEST_EMAIL;
+  const password = process.env.FACEBOOK_TEST_PASSWORD;
+
+  if (!email || !password) {
+    throw new Error(
+      "Facebook OAuth login requires FACEBOOK_TEST_EMAIL and FACEBOOK_TEST_PASSWORD env vars. " +
+        "Set them in .env.test.local",
+    );
+  }
+
+  await page.goto("/");
+  await page.waitForLoadState("domcontentloaded");
+  await page.click('[data-provider="facebook"]');
+
+  await page.waitForURL(/facebook\.com|messenger\.com/, { timeout: 15000 });
+
+  await page.fill('input[name="email"], input[id="email"]', email);
+  await page.fill('input[name="pass"], input[id="pass"]', password);
+  await page.click('button[name="login"], button[id="loginbutton"]');
+
+  // Facebook may show a "Continue as <name>" consent screen on first OAuth
+  try {
+    const continueButton = page.locator(
+      'button:has-text("Continue"), button:has-text("Continuer")',
+    );
+    await continueButton.first().click({ timeout: 5000 });
+  } catch {
+    // No consent screen
+  }
+
+  await page.waitForURL("**/games", { timeout: 30000 });
+}
+
+/**
+ * Login via Apple OAuth.
+ * Requires APPLE_TEST_EMAIL and APPLE_TEST_PASSWORD env vars (set in
+ * .env.test.local) AND a deploy where the Apple provider is configured
+ * (APPLE_CLIENT_ID / APPLE_TEAM_ID / APPLE_KEY_ID / APPLE_PRIVATE_KEY on
+ * the server).
+ *
+ * Apple's web sign-in flow requires a real Apple ID with web sign-in
+ * enabled and 2FA disabled or backed by a trusted device the test runner
+ * can reach. In practice this is usually skipped in CI and run manually
+ * against a deployed env.
+ */
+export async function loginWithApple(page: Page) {
+  const email = process.env.APPLE_TEST_EMAIL;
+  const password = process.env.APPLE_TEST_PASSWORD;
+
+  if (!email || !password) {
+    throw new Error(
+      "Apple OAuth login requires APPLE_TEST_EMAIL and APPLE_TEST_PASSWORD env vars. " +
+        "Set them in .env.test.local",
+    );
+  }
+
+  await page.goto("/");
+  await page.waitForLoadState("domcontentloaded");
+  await page.click('[data-provider="apple"]');
+
+  await page.waitForURL(/appleid\.apple\.com/, { timeout: 15000 });
+
+  await page.fill('input[id="account_name_text_field"], input[type="email"]', email);
+  await page.click('button[id="sign-in"], button:has-text("Continue")');
+
+  await page.waitForSelector('input[id="password_text_field"], input[type="password"]', {
+    state: "visible",
+    timeout: 10000,
+  });
+
+  await page.fill('input[id="password_text_field"], input[type="password"]', password);
+  await page.click('button[id="sign-in"], button:has-text("Continue")');
+
+  await page.waitForURL("**/games", { timeout: 60000 });
 }
 
 /**
