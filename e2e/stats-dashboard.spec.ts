@@ -171,10 +171,10 @@ test.describe("/stats dashboard", () => {
     //   favourite game = "7 Wonders Duel", 3 matches
     //   favourite opponent = Alice (2 matches together) > Bob (1)
     //
-    // Rankings @ 7WD (3-match gate):
-    //   me — 3 completed, 2 wins → ranked, 67%
-    //   Alice — 2 completed, 1 win → gated ("2/3")
-    //   Bob — 1 completed, 0 wins → gated ("1/3")
+    // Rankings @ 7WD (sorted by wins desc → win-rate desc → matches → alias):
+    //   1. me     — 2W · 67% · 3m
+    //   2. Alice  — 1W · 50% · 2m
+    //   3. Bob    — 0W · 0%  · 1m
     const aliceName = `Alice-${stamp()}`;
     const bobName = `Bob-${stamp()}`;
     await play7WDMatch(page, {
@@ -265,19 +265,26 @@ test.describe("/stats dashboard", () => {
     const meRow = sevenWDRankings
       .locator("[data-testid='stats-ranking-row']")
       .filter({ hasText: /You|Vous/ });
-    await expect(meRow).toHaveAttribute("data-ranked", "true");
+    // Row format: "{wins}W · {rate}% · {matches}m" (en) — viewer
+    // landed 2 wins from 3 completed matches at 67%.
+    await expect(meRow).toContainText("2W");
     await expect(meRow).toContainText("67%");
 
     const aliceRow = sevenWDRankings
       .locator("[data-testid='stats-ranking-row']")
       .filter({ hasText: aliceName });
-    await expect(aliceRow).toHaveAttribute("data-ranked", "false");
-    await expect(aliceRow).toContainText("2/3");
+    await expect(aliceRow).toContainText("1W");
+    await expect(aliceRow).toContainText("50%");
 
     const bobRow = sevenWDRankings
       .locator("[data-testid='stats-ranking-row']")
       .filter({ hasText: bobName });
-    await expect(bobRow).toHaveAttribute("data-ranked", "false");
-    await expect(bobRow).toContainText("1/3");
+    await expect(bobRow).toContainText("0W");
+
+    // Order: viewer (2W) first, Alice (1W) second, Bob (0W) last.
+    const rows = sevenWDRankings.locator("[data-testid='stats-ranking-row']");
+    await expect(rows.nth(0)).toContainText(/You|Vous/);
+    await expect(rows.nth(1)).toContainText(aliceName);
+    await expect(rows.nth(2)).toContainText(bobName);
   });
 });

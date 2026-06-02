@@ -326,9 +326,7 @@
     "rankings": {
       "title": "Rankings",
       "you": "You",
-      "matchesShort_one": "{{count}} match",
-      "matchesShort_other": "{{count}} matches",
-      "gate": "{{count}}/{{min}} matches",
+      "row": "{{wins}}W · {{rate}}% · {{matches}}m",
       "empty": "No matches yet at this game."
     }
   },

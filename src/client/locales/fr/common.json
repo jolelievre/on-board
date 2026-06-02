@@ -326,9 +326,7 @@
     "rankings": {
       "title": "Classement",
       "you": "Vous",
-      "matchesShort_one": "{{count}} partie",
-      "matchesShort_other": "{{count}} parties",
-      "gate": "{{count}}/{{min}} parties",
+      "row": "{{wins}}V · {{rate}}% · {{matches}}p",
       "empty": "Aucune partie encore à ce jeu."
     }
   },

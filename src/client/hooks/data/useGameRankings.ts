@@ -6,12 +6,6 @@ import {
 } from "../../lib/db";
 import { loadMatchVisibility } from "../../lib/visibility";
 
-/** Minimum completed-match count for a participant's `winRate` to be
- * meaningful — a 100% rate from 1 match would otherwise dominate the
- * leaderboard. The UI displays unranked participants as `n/N` with the
- * raw count instead of a percentage. */
-export const RANKING_MIN_MATCHES = 3;
-
 export type GameRankingEntry = {
   /** Stable identity key — `linkedUserId` when set, otherwise
    * `profile:{profileId}`. Used by React keys and to compare entries. */
@@ -24,20 +18,16 @@ export type GameRankingEntry = {
   isMe: boolean;
   completedMatches: number;
   wins: number;
-  /** wins / completedMatches (0..1). Only display the percentage when
-   * `completedMatches >= RANKING_MIN_MATCHES`; below the gate the UI
-   * should show the match count instead. */
+  /** wins / completedMatches (0..1). Always meaningful since `wins` is
+   * the primary sort key — small samples can't dominate by hitting 100%
+   * from 1 match the way they could when the rate was primary. */
   winRate: number;
-  /** True iff `completedMatches >= RANKING_MIN_MATCHES`. Pre-computed
-   * so the page doesn't repeat the threshold check. */
-  ranked: boolean;
 };
 
 export type GameRankings = {
-  /** Sorted: ranked entries first (by winRate desc, then matches desc),
-   * then unranked entries (by matches desc), then alias as a tiebreak. */
+  /** Sorted: wins desc, then winRate desc (rewards efficiency among
+   * equal-wins entries), then completedMatches desc, then alias asc. */
   entries: GameRankingEntry[];
-  minMatchesForRate: number;
 };
 
 /** See `useMyStats.personKey` — duplicated here to keep these hooks
@@ -56,10 +46,13 @@ function personKey(p: Pick<LocalPlayer, "profile">): string {
  * unclaimed alias the viewer has shared a match with (their own
  * "Mum", a friend's "Mum" surfaced through a shared match, etc.).
  *
- * Each entry carries enough metadata to render without further Dexie
- * lookups. The 3-match gate is encoded as the `ranked` flag — the UI
- * is responsible for switching between the `n/N` placeholder and a
- * concrete win-rate based on that flag.
+ * Primary sort key is **raw wins** so playing more lifts you up the
+ * board regardless of efficiency. Equal-wins entries break by win-rate
+ * (rewards efficiency on top of the same trophy count), then by
+ * completed-match count, then alphabetically. This replaces the
+ * earlier "rate-as-primary + 3-match gate" model — with wins primary
+ * there is no small-sample blowout to guard against, so every
+ * participant gets a position number.
  *
  * Returns `undefined` while Dexie reads are in flight, or when `gameId`
  * is unset.
@@ -76,7 +69,7 @@ export function useGameRankings(
       loadMatchVisibility(viewerId),
     ]);
     if (matches.length === 0) {
-      return { entries: [], minMatchesForRate: RANKING_MIN_MATCHES };
+      return { entries: [] };
     }
 
     const matchIds = matches.map((m) => m.id);
@@ -138,32 +131,25 @@ export function useGameRankings(
       }
     }
 
-    const entries: GameRankingEntry[] = [...byKey.values()].map((b) => {
-      const winRate =
-        b.completedMatches > 0 ? b.wins / b.completedMatches : 0;
-      return {
-        key: b.key,
-        profile: b.profile,
-        isMe: b.isMe,
-        completedMatches: b.completedMatches,
-        wins: b.wins,
-        winRate,
-        ranked: b.completedMatches >= RANKING_MIN_MATCHES,
-      };
-    });
+    const entries: GameRankingEntry[] = [...byKey.values()].map((b) => ({
+      key: b.key,
+      profile: b.profile,
+      isMe: b.isMe,
+      completedMatches: b.completedMatches,
+      wins: b.wins,
+      winRate: b.completedMatches > 0 ? b.wins / b.completedMatches : 0,
+    }));
 
     entries.sort((a, b) => {
-      if (a.ranked !== b.ranked) return a.ranked ? -1 : 1;
-      if (a.ranked) {
-        if (b.winRate !== a.winRate) return b.winRate - a.winRate;
-      }
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      if (b.winRate !== a.winRate) return b.winRate - a.winRate;
       if (b.completedMatches !== a.completedMatches) {
         return b.completedMatches - a.completedMatches;
       }
       return a.profile.alias.localeCompare(b.profile.alias);
     });
 
-    return { entries, minMatchesForRate: RANKING_MIN_MATCHES };
+    return { entries };
   }, [viewerId, gameId]);
 
   return data ?? undefined;

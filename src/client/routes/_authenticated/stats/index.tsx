@@ -336,7 +336,6 @@ function RankingsSection({
             entry={entry}
             position={idx + 1}
             viewerId={viewerId}
-            minMatches={rankings.minMatchesForRate}
           />
         ))}
       </div>
@@ -348,19 +347,13 @@ function RankingRow({
   entry,
   position,
   viewerId,
-  minMatches,
 }: {
   entry: GameRankingEntry;
   position: number;
   viewerId: string;
-  minMatches: number;
 }) {
   const { t } = useTranslation();
-  const rowClass = [
-    styles.rankingRow,
-    entry.isMe ? styles.rankingRowMe : "",
-    !entry.ranked ? styles.rankingRowGated : "",
-  ]
+  const rowClass = [styles.rankingRow, entry.isMe ? styles.rankingRowMe : ""]
     .filter(Boolean)
     .join(" ");
   return (
@@ -368,23 +361,18 @@ function RankingRow({
       className={rowClass}
       data-testid="stats-ranking-row"
       data-profile-key={entry.key}
-      data-ranked={entry.ranked ? "true" : "false"}
     >
-      <span className={styles.rankingPosition}>{entry.ranked ? position : "·"}</span>
+      <span className={styles.rankingPosition}>{position}</span>
       <Avatar profile={entry.profile} viewerId={viewerId} size="sm" />
       <span className={styles.rankingName}>
         {entry.isMe ? t("stats.rankings.you") : entry.profile.alias}
       </span>
       <span className={styles.rankingMeta}>
-        {entry.ranked
-          ? `${Math.round(entry.winRate * 100)}% · ${t(
-              "stats.rankings.matchesShort",
-              { count: entry.completedMatches },
-            )}`
-          : t("stats.rankings.gate", {
-              count: entry.completedMatches,
-              min: minMatches,
-            })}
+        {t("stats.rankings.row", {
+          wins: entry.wins,
+          rate: Math.round(entry.winRate * 100),
+          matches: entry.completedMatches,
+        })}
       </span>
     </div>
   );

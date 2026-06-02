@@ -1291,7 +1291,7 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 **Layout** (`routes/_authenticated/stats/index.tsx`, all reads via `useLiveQuery` over Dexie — no server change):
 - **Hero strip** — your totals: matches played, matches completed, total wins, overall win-rate. Plus two "favourites" pills: most-played game, most-played opponent (any Profile co-played, including unlinked aliases — see _Definitions_ below).
 - **Per-game cards** — one card per game you've played. Each card shows YOUR data for that game: win-rate, current win streak, longest streak, best single-match score, total matches at this game. Empty card with "play your first match" CTA if you haven't played that game.
-- **Per-game rankings panel** — per game, a small ordered table of every Profile visible to the viewer that has played at this game (you + owned aliases + non-owned profiles surfaced through shared matches), ranked by win-rate. Per-participant 3-match gate: participants with <3 completed matches at this game render greyed with `n/3` instead of a rate, but the panel itself is always shown. Your row highlighted using the existing "me" treatment from Phase 7.
+- **Per-game rankings panel** — per game, a small ordered table of every Profile visible to the viewer that has played at this game (you + owned aliases + non-owned profiles surfaced through shared matches), ranked by **raw wins** (primary) → win-rate (tiebreaker, rewards efficiency at equal wins) → completed-match count → alias. Win-rate is still shown alongside the wins count to compensate the heavy-volume player whose absolute wins outpace a more efficient low-volume opponent. The earlier 3-match gate was dropped during 8-C testing: with wins as the primary key there's no small-sample blowout to guard against (a 100% rate from 1 match can't dominate a 50% rate from 20 anymore). Your row highlighted using the existing "me" treatment from Phase 7.
 - **(No achievements row in this PR.)** Deliberately not scaffolded — the row lands in PR 8-D (achievements + share-link) so this PR doesn't ship an empty placeholder.
 
 **Definitions** (pin down ahead of implementation so the hooks don't drift):
@@ -1301,7 +1301,7 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 - **Streak ordering** — completed matches are ordered by `completedAt` (the experience-time, not `playedAt`). A loss / tied-1st / non-1st result breaks the streak. Incomplete matches are ignored; if they're later completed as a loss, their `completedAt` slots them naturally into the order.
 - **Current streak** = consecutive wins ending at the most recent completed match. 0 if the latest completed match wasn't a win.
 - **Max streak** = longest run of consecutive wins in the viewer's full completed-match history.
-- **Rankings gate** = a participant needs ≥3 completed matches at that game to display a numeric win-rate. Below 3, they render with their match count (`1/3`, `2/3`) and no rate.
+- **Rankings sort** = `wins` desc → `winRate` desc → `completedMatches` desc → alias asc. Wins-as-primary makes a 3-match minimum unnecessary; row meta renders as `{wins}W · {rate}% · {matches}m` so the rate stays visible as context for high-volume comparisons.
 
 Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — add to `Icon.tsx` if not already present). i18n: `nav.stats`, `stats.*`.
 
