@@ -102,12 +102,16 @@ type ProfileSource = {
     | "avatarRing"
     | "linkedUser"
   >;
-  /** The viewer for resolution. The Avatar consults the
-   * `useOwnedProfileIndex` hook to identify rows that point at the
-   * viewer (via id or `linkedUserId`) and resolves through the
-   * viewer's own profile instead of the embedded snapshot — keeping
-   * the viewer's custom upload visible even on friend-created matches. */
-  viewerId?: string | null;
+  /** The viewer for resolution — required `string`. The Avatar
+   * consults the `useOwnedProfileIndex` hook to identify rows that
+   * point at the viewer (via id or `linkedUserId`) and resolves
+   * through the viewer's own profile instead of the embedded
+   * snapshot — keeping the viewer's custom upload visible even on
+   * friend-created matches. Components rendering a profile-source
+   * avatar always run under an authenticated mount, so callers
+   * obtain the viewerId via `useRequiredViewerId()` or a required
+   * prop. */
+  viewerId: string;
 };
 
 type FallbackSource = {
@@ -144,10 +148,12 @@ export function Avatar(props: Props) {
   const sizeClass = SIZE_CLASS[size];
 
   // Hook is called unconditionally so the rules-of-hooks stay happy
-  // across both render branches. Pass null when this Avatar isn't a
-  // profile-source — the hook short-circuits to the empty index.
-  const viewerForIndex =
-    "profile" in props ? (props.viewerId ?? null) : null;
+  // across both render branches. FallbackSource has no viewer to
+  // resolve against — pass an empty string so the hook short-circuits
+  // to an empty index (no `ownerId` will ever equal `""`). The empty
+  // string never leaks into Dexie because the only consumers of the
+  // index live in the ProfileSource branch.
+  const viewerForIndex = "profile" in props ? props.viewerId : "";
   const ownedIndex = useOwnedProfileIndex(viewerForIndex);
 
   // Stamp style (frame + ring): explicit props win; otherwise route

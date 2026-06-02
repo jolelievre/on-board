@@ -17,8 +17,9 @@ type DealerProfile = Pick<
 
 type Props = {
   profile: DealerProfile | LocalPlayerProfile;
-  /** The viewer for avatar resolution — see `Avatar` viewer-aware logic. */
-  viewerId?: string | null;
+  /** The viewer for avatar resolution — required `string`, see `Avatar`
+   * viewer-aware logic. */
+  viewerId: string;
   /** Label shown next to the avatar. Defaults to "{alias} deals" when
    * omitted. Pass an explicit string when the caller wants to localize
    * the verb. */

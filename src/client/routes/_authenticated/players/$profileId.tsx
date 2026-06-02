@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { authClient } from "../../../lib/auth-client";
+import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { patchProfile, unlinkProfile } from "../../../lib/mutations";
 import {
   useProfile,
@@ -34,10 +34,9 @@ export const Route = createFileRoute("/_authenticated/players/$profileId")({
 function ProfileDetailPage() {
   const { profileId } = Route.useParams();
   const { t } = useTranslation();
-  const { data: session } = authClient.useSession();
-  const viewerId = session?.user.id ?? null;
+  const viewerId = useRequiredViewerId();
 
-  const { data: profile, status } = useProfile(profileId);
+  const { data: profile, status } = useProfile(profileId, viewerId);
 
   if (status === "loading") {
     return (
@@ -71,7 +70,7 @@ function ProfileDetailBody({
   viewerId,
 }: {
   profile: LocalProfile;
-  viewerId: string | null;
+  viewerId: string;
 }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -82,7 +81,6 @@ function ProfileDetailBody({
   // back to the listing. Belt-and-braces guard — the same constraint
   // is enforced server-side on every mutation.
   useEffect(() => {
-    if (!viewerId) return;
     if (profile.ownerId !== viewerId) {
       navigate({ to: "/players", replace: true });
       return;
@@ -103,50 +101,49 @@ function ProfileDetailBody({
   const name = displayProfileName(profile, ownedIndex);
   const [mergeOpen, setMergeOpen] = useState(false);
 
-  const stats = useProfileStats(profile.id);
-  const recent = useProfileRecentMatches(profile.id, 10);
+  const stats = useProfileStats(profile.id, viewerId);
+  const recent = useProfileRecentMatches(profile.id, viewerId, 10);
 
   // Self-Profile id powers the head-to-head panel: only meaningful when
   // the subject is someone else AND the viewer has a self-Profile in
   // their local mirror. We pull from the visible-profiles list because
   // it's already memoised in the page tree above.
-  const { data: visibleProfiles } = useProfileList(viewerId ?? undefined);
+  const { data: visibleProfiles } = useProfileList(viewerId);
   const selfProfileId = visibleProfiles?.find(
     (p) => p.linkedUserId === viewerId && p.ownerId === viewerId,
   )?.id;
   const headToHead = useHeadToHead(
     isSelf ? undefined : profile.id,
     isSelf ? undefined : selfProfileId,
+    viewerId,
   );
 
   return (
     <>
       <Header back={{ to: "/players", label: t("nav.players") }} />
       <div className="px-5">
-        {viewerId && (
-          <ProfileEditPanel
-            // Key on profile id so a navigation to a different profile
-            // (e.g. after a merge → navigate to survivor) unmounts the
-            // panel and resets `editing` back to false. Without this,
-            // the previous page's edit state would persist and the
-            // survivor would land in edit mode instead of the default
-            // read-only hero.
-            key={profile.id}
-            profile={profile}
-            viewerId={viewerId}
-            isOwner={isOwner}
-            isSelf={isSelf}
-            isLinked={isLinked}
-            name={name}
-            onMergeOpen={() => setMergeOpen(true)}
-            onMergedTo={(survivorId) =>
-              void navigate({
-                to: "/players/$profileId",
-                params: { profileId: survivorId },
-              })
-            }
-          />
-        )}
+        <ProfileEditPanel
+          // Key on profile id so a navigation to a different profile
+          // (e.g. after a merge → navigate to survivor) unmounts the
+          // panel and resets `editing` back to false. Without this,
+          // the previous page's edit state would persist and the
+          // survivor would land in edit mode instead of the default
+          // read-only hero.
+          key={profile.id}
+          profile={profile}
+          viewerId={viewerId}
+          isOwner={isOwner}
+          isSelf={isSelf}
+          isLinked={isLinked}
+          name={name}
+          onMergeOpen={() => setMergeOpen(true)}
+          onMergedTo={(survivorId) =>
+            void navigate({
+              to: "/players/$profileId",
+              params: { profileId: survivorId },
+            })
+          }
+        />
 
         {!isSelf && headToHead && headToHead.matches > 0 && (
           <Group title={t("players.headToHead.title")}>
@@ -256,7 +253,7 @@ function ProfileDetailBody({
 
       </div>
 
-      {mergeOpen && viewerId && (
+      {mergeOpen && (
         <MergeDialog
           source={profile}
           viewerId={viewerId}
@@ -406,7 +403,7 @@ function LinkSection({
   onMergedTo,
 }: {
   profile: LocalProfile;
-  viewerId: string | null;
+  viewerId: string;
   isOwner: boolean;
   isSelf: boolean;
   isLinked: boolean;

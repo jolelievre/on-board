@@ -19,21 +19,19 @@ const EMPTY_INDEX: OwnedProfileIndex = {
  * profile edit (rename, link, unlink, merge) immediately propagates
  * to every consumer's next render with no manual write-through.
  *
- * The `viewerId` parameter is **required** (`string | null`) — callers
- * pass `null` when the session is still loading or genuinely absent
- * (rare under `_authenticated/*` routes). Forcing the parameter
- * prevents the silent "I forgot to thread the viewer through, so I
- * get an empty index and the snapshot fallback kicks in" bug class.
- * Mirrors the contract on `displayProfileName` /
- * `displayProfileAvatar`, both of which already require an
+ * The `viewerId` parameter is a **required `string`** — never null,
+ * never undefined. Callers under the `_authenticated/*` layout get one
+ * via `useRequiredViewerId()`; everything else takes the string from
+ * a parent that already has it. The hard requirement is what catches
+ * the "I forgot to thread the viewer through, so I get an empty index
+ * and the snapshot fallback kicks in" bug class at compile time
+ * instead of in production. Mirrors the contract on `displayProfileName`
+ * / `displayProfileAvatar`, both of which already require an
  * `OwnedProfileIndex`.
  */
-export function useOwnedProfileIndex(
-  viewerId: string | null,
-): OwnedProfileIndex {
+export function useOwnedProfileIndex(viewerId: string): OwnedProfileIndex {
   const data = useLiveQuery(
     async (): Promise<OwnedProfileIndex> => {
-      if (!viewerId) return EMPTY_INDEX;
       const rows = await db.profiles
         .where("ownerId")
         .equals(viewerId)

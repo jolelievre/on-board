@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useAuthSession } from "../hooks/useAuthSession";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { usePullSyncBackground } from "../hooks/usePullSyncBackground";
-import { pullSync } from "../lib/pull-sync";
+import { pullSync, resetPullCursors } from "../lib/pull-sync";
 import { syncEngine } from "../lib/sync";
 import { BottomNav } from "../components/layout/BottomNav";
 import { OfflineBanner } from "../components/layout/OfflineBanner";
@@ -44,12 +44,28 @@ function AuthenticatedLayout() {
   //   throttling, captive portal). flush() short-circuits when offline.
   useEffect(() => {
     if (isPending || !session) return;
-    void pullSync({ force: true }).catch(() => {
-      /* offline or transient — next online tick / flush retries */
-    });
-    void syncEngine.flush().catch(() => {
-      /* surfaced via syncQueue retries */
-    });
+    void (async () => {
+      // Drop the per-device `?since=` cursors on every authenticated
+      // mount so the boot pullSync re-fetches the viewer's full
+      // visible set. Without this, incremental pulls would silently
+      // omit any row whose `updatedAt` predates whatever cursor the
+      // device happens to hold — bites hardest when the cursor was
+      // written during a previous user's session on a shared device
+      // (the new viewer's self-Profile and old friend rows never
+      // arrive), but the failure mode also includes a same-user
+      // session whose Dexie cache lost an entry to browser storage
+      // eviction. For OnBoard's friend-circle data volume the cost
+      // of a full pull per page reload is negligible; incremental
+      // pulls still cover the in-session triggers (visibility,
+      // online, post-flush) for efficiency.
+      await resetPullCursors();
+      await pullSync({ force: true }).catch(() => {
+        /* offline or transient — next online tick / flush retries */
+      });
+      await syncEngine.flush().catch(() => {
+        /* surfaced via syncQueue retries */
+      });
+    })();
   }, [session, isPending]);
 
   useEffect(() => {

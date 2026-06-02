@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
+import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useMatch } from "../../../hooks/data/useMatch";
 import { SevenWondersDuelScorer } from "../../../components/scoring/SevenWondersDuelScorer";
 import { SkullKingScorer } from "../../../components/scoring/skull-king/SkullKingScorer";
@@ -19,8 +20,9 @@ function MatchPage() {
   const { t } = useTranslation();
   const { isOnline } = useOnlineStatus();
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
+  const viewerId = useRequiredViewerId();
 
-  const { data: match, status } = useMatch(id);
+  const { data: match, status } = useMatch(id, viewerId);
 
   if (status === "loading") {
     return (

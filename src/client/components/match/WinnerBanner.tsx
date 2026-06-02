@@ -20,8 +20,8 @@ type Props = {
    * legacy contexts where Player data isn't on hand). */
   winnerProfile?: PlayerProfile | null;
   runnerUpProfile?: PlayerProfile | null;
-  /** Viewer id for the Avatar's resolve logic. */
-  viewerId?: string | null;
+  /** Viewer id for the Avatar's resolve logic — required `string`. */
+  viewerId: string;
 };
 
 export function WinnerBanner({

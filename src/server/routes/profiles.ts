@@ -10,7 +10,7 @@ import {
   mergeProfiles,
   ProfileMergeError,
 } from "../lib/profile-merge.js";
-import { bumpMatchesForProfile } from "../lib/profiles.js";
+import { bumpMatchesForProfile, ensureSelfProfile } from "../lib/profiles.js";
 import {
   createLinkToken,
   LinkTokenError,
@@ -90,6 +90,18 @@ export const profilesRoutes = new Hono<AuthEnv>()
       }
       sinceDate = parsed;
     }
+
+    // Belt-and-braces: guarantee the caller's self-Profile exists in
+    // the DB before we query. Idempotent upsert keyed on
+    // (ownerId, linkedUserId). Covers any legacy account whose
+    // `user.create.after` hook never fired (pre-hook signups, hook
+    // failure, manual DB insert) — the missing-self failure mode is
+    // then closed independently of whatever cursor the client sent.
+    await ensureSelfProfile({
+      id: user.id,
+      name: user.name,
+      alias: user.alias,
+    });
 
     // Under the single-Profile model, only owned profiles are listed.
     // Friend-owned profiles linked to me are theirs to manage, not

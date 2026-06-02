@@ -4,7 +4,7 @@ import styles from "./BiddingScreen.module.css";
 import { Avatar } from "../../ui/Avatar";
 import { DigitGrid } from "../../ui/sk/DigitGrid";
 import { displayPlayerName } from "../../../../shared/players";
-import { useAuthSession } from "../../../hooks/useAuthSession";
+import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
 import type { Player } from "../../../types/match";
 
@@ -35,8 +35,7 @@ export function BiddingScreen({
   onReveal,
 }: Props) {
   const { t } = useTranslation();
-  const { session } = useAuthSession();
-  const viewerId = session?.user.id ?? null;
+  const viewerId = useRequiredViewerId();
   const ownedIndex = useOwnedProfileIndex(viewerId);
   const active = players[activeIndex];
   const bidCount = players.filter((p) => bids[p.id] != null).length;

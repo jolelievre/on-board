@@ -87,11 +87,17 @@ export async function setSyncMeta(key: string, value: string): Promise<void> {
 
 /**
  * Drop both pull cursors so the next `pullSync()` re-fetches every
- * server-visible match + profile without a `?since=` filter. Used when
- * a server-side visibility change can retroactively make older rows
- * visible (the bilateral link flow is the canonical case: linking
- * doesn't bump `Match.updatedAt`, so a `?since=` delta would miss the
- * friend's pre-link history entirely).
+ * server-visible match + profile without a `?since=` filter.
+ *
+ * Called from `_authenticated.tsx` on every authenticated mount so a
+ * page reload always rehydrates Dexie from the server's current
+ * truth — sidesteps every "cursor outlived the data it pointed past"
+ * failure mode: cross-account cursor on a shared device, lost local
+ * row from a previous session, server-side row deletion the
+ * incremental delta can't represent. Also invoked from the bilateral
+ * link flow, which is its original use case (linking doesn't bump
+ * `Match.updatedAt`, so a `?since=` delta would otherwise miss the
+ * friend's pre-link history).
  */
 export async function resetPullCursors(): Promise<void> {
   await db.syncMeta.bulkDelete([
