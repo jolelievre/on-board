@@ -1,0 +1,287 @@
+.titleRow {
+  margin-bottom: 1rem;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.85rem;
+  color: var(--color-ink);
+  margin: 0;
+  letter-spacing: -0.025em;
+}
+
+.subtitle {
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  color: var(--color-ink-faint);
+  margin: 0.25rem 0 0;
+  line-height: 1.4;
+}
+
+.empty {
+  font-family: var(--font-body);
+  color: var(--color-ink-faint);
+  text-align: center;
+  padding: 1.5rem 0;
+  margin: 0;
+}
+
+/* === Hero strip ===================================================== */
+
+.heroGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.heroStat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.65rem 0.35rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-soft);
+  text-align: center;
+}
+
+.heroValue {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.4rem;
+  color: var(--color-ink);
+  letter-spacing: -0.02em;
+}
+
+.heroLabel {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  text-align: center;
+}
+
+/* === Favourites ===================================================== */
+
+.favouritesRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.favouriteCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  text-decoration: none;
+  color: inherit;
+}
+
+.favouriteEyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+}
+
+.favouriteName {
+  font-family: var(--font-body);
+  font-weight: 700;
+  color: var(--color-ink);
+  word-break: break-word;
+}
+
+.favouriteMeta {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-ink-faint);
+}
+
+.favouriteOpponentRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* === Per-game cards ================================================= */
+
+.gameCardList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.gameCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-soft);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 100ms ease-out;
+}
+
+.gameCard:active {
+  transform: scale(0.99);
+}
+
+.gameCardName {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--color-ink);
+  letter-spacing: -0.015em;
+}
+
+.gameCardEmpty {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--color-ink-faint);
+  font-size: 0.875rem;
+}
+
+.gameCardEmptyState {
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-ink) 0%);
+  border-style: dashed;
+}
+
+.gameCardCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.gameStatGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.3rem;
+}
+
+.smallStat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  padding: 0.4rem 0.2rem;
+  border-radius: var(--radius-sm, 0.4rem);
+  background: var(--color-surface-alt, var(--color-bg));
+  border: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.smallStatValue {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-ink);
+}
+
+.smallStatLabel {
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  line-height: 1.15;
+}
+
+/* On narrow phones the 5-column small-stat grid wraps awkwardly. Drop to
+   a 3-column grid below ~360px so values stay legible without crowding. */
+@media (max-width: 380px) {
+  .gameStatGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* === Rankings ======================================================= */
+
+.rankingsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.rankingsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.rankingsSectionTitle {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.6875rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+  margin: 0;
+}
+
+.rankingTable {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.rankingRow {
+  display: grid;
+  grid-template-columns: 1.6rem auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.rankingRowMe {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+}
+
+.rankingPosition {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--color-ink-soft);
+  text-align: center;
+}
+
+.rankingName {
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--color-ink);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rankingMeta {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-ink-faint);
+  white-space: nowrap;
+}

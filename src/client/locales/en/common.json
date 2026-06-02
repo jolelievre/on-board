@@ -6,6 +6,7 @@
   "nav": {
     "games": "Games",
     "players": "Players",
+    "stats": "Stats",
     "settings": "Settings"
   },
   "auth": {
@@ -290,6 +291,43 @@
       "theirWins": "Them",
       "draws_one": "{{count}} draw",
       "draws_other": "{{count}} draws"
+    }
+  },
+  "stats": {
+    "title": "Your stats",
+    "subtitle": "How you're doing across every game",
+    "empty": "No matches yet — start a game and your stats land here.",
+    "hero": {
+      "matches": "Matches",
+      "completed": "Completed",
+      "wins": "Wins",
+      "winRate": "Win rate"
+    },
+    "favourites": {
+      "title": "Favourites",
+      "gameLabel": "Most played",
+      "opponentLabel": "Most-played opponent",
+      "gameCount_one": "{{count}} match",
+      "gameCount_other": "{{count}} matches",
+      "opponentCount_one": "{{count}} match together",
+      "opponentCount_other": "{{count}} matches together",
+      "empty": "Play a few matches and the highlights appear here."
+    },
+    "perGame": {
+      "title": "By game",
+      "matches": "Matches",
+      "winRate": "Win rate",
+      "currentStreak": "Current streak",
+      "maxStreak": "Best streak",
+      "bestScore": "Best score",
+      "noMatches": "No matches yet",
+      "play": "Play your first match"
+    },
+    "rankings": {
+      "title": "Rankings",
+      "you": "You",
+      "row": "{{wins}}W · {{rate}}% · {{matches}}m",
+      "empty": "No matches yet at this game."
     }
   },
   "common": {

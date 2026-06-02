@@ -27,7 +27,8 @@ export type IconName =
   | "merge"
   | "crown"
   | "skull-king"
-  | "info";
+  | "info"
+  | "bar-chart-2";
 
 type Props = {
   name: IconName;
@@ -292,6 +293,13 @@ export function Icon({ name, size = 20, stroke = 1.6, className, title }: Props)
           <circle cx="12" cy="12" r="9" />
           <circle cx="12" cy="8" r="1.1" fill="currentColor" stroke="none" />
           <path d="M12 11.5v5" />
+        </svg>
+      );
+    case "bar-chart-2":
+      return (
+        <svg {...props}>
+          {titleEl}
+          <path d="M6 20V10M12 20V4M18 20v-7" />
         </svg>
       );
     case "skull-king":
