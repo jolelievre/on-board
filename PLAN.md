@@ -1158,21 +1158,21 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 | Real-time sync indicator | ✅ Shipped | (already in `__root.tsx`) |
 | Match history filters (game / profile / date) | ⛔ Dropped — existing per-game/per-profile navigation already scopes the lists; filters would duplicate it. Revisit in v1.x at scale. | — |
 | Personal stats dashboard | 🟡 Per-profile only (6-B) | PR 8-C |
-| Lighthouse PWA audit | 🟡 Infra ready, not run | PR 8-D |
-| Install help page (public) | ❌ Missing | PR 8-D |
+| Lighthouse PWA audit | 🟡 Infra ready, not run | PR 8-E |
+| Install help page (public) | ❌ Missing | PR 8-E |
 | v1.0.0 release tooling | ❌ Missing | PR 8-F |
-| **Multi-provider auth + account linking** | ❌ Missing | PR 8-A |
-| **Privacy + ToS pages** (Facebook prereq) | ❌ Missing | PR 8-A |
-| **Account-switch leak** — same-device sign-in as different user sees prior user's matches (surfaced during 8-A testing) | ❌ Missing | PR 8-B |
-| **Achievements / badges** | ❌ Missing | PR 8-E |
-| **Public read-only match share-link** | ❌ Missing | PR 8-E |
-| **App version footer in Settings** | ❌ Missing | PR 8-D |
+| **Multi-provider auth + account linking** | ✅ Shipped (8-A, #27) | PR 8-A |
+| **Privacy + ToS pages** (Facebook prereq) | ✅ Shipped (8-A, #27) | PR 8-A |
+| **Account-switch leak** — same-device sign-in as different user sees prior user's matches (surfaced during 8-A testing) | ✅ Shipped (8-B, #28) | PR 8-B |
+| **Achievements / badges** | ❌ Missing | PR 8-D |
+| **Public read-only match share-link** | ❌ Missing | PR 8-D |
+| **App version footer in Settings** | ❌ Missing | PR 8-E |
 | **Screenshot-script refresh** (cover post-Phase-5 screens) | ❌ Stale | PR 8-F (end of phase so it captures everything) |
 | **Graphify refresh** | ❌ Stale | PR 8-F (end of phase so it captures everything) |
 
 ### Phasing — 7 PRs
 
-#### PR 8-A — Multi-provider auth + account linking + Privacy/ToS (`feat/multi-provider-auth`, ~2 days)
+#### PR 8-A — Multi-provider auth + account linking + Privacy/ToS (`feat/multi-provider-auth`, ~2 days) ✅ DONE (#27)
 
 **Goal**: Facebook sign-in alongside Google, with email-keyed account linking so one user has one `User` row regardless of which provider they've used. Public Privacy + ToS pages required by Facebook's app review. (Apple Sign-In gated behind the $99/yr Apple Developer Program — deferred to v1.x. The provider config is intentionally env-keyed so adding Apple later is a small additive change, not a refactor.)
 
@@ -1216,7 +1216,7 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 
 **Acceptance**: sign in via Google and Facebook both land on `/games` with the right user. Cross-provider sign-in for an existing email merges to the same User. `/privacy` + `/terms` reachable without auth, both languages.
 
-#### PR 8-B — Scope Dexie reads by viewer (`fix/scope-reads-by-viewer`, ~2 hours)
+#### PR 8-B — Scope Dexie reads by viewer (`fix/scope-reads-by-viewer`, ~2 hours) ✅ DONE (#28)
 
 **Goal**: fix the cross-account leak surfaced during PR 8-A testing. On mobile (and any device where a previous user's session was active), signing in as a different user shows the prior user's matches in `/games` because Dexie still carries A's rows and UI reads don't filter by current viewer.
 
@@ -1289,10 +1289,19 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 **Why no match filters**: the existing per-game (`games/$slug.tsx`) and per-profile (`players/$profileId.tsx`) navigation already scopes the match lists end-to-end. Adding overlay filter chrome would duplicate the work the navigation already does, at a match volume (<50) where scrolling is fine. Revisit in v1.x if/when match volume makes the lists painful.
 
 **Layout** (`routes/_authenticated/stats/index.tsx`, all reads via `useLiveQuery` over Dexie — no server change):
-- **Hero strip** — your totals: matches played, matches completed, total wins, overall win-rate. Plus two "favourites" pills: most-played game, most-played opponent.
+- **Hero strip** — your totals: matches played, matches completed, total wins, overall win-rate. Plus two "favourites" pills: most-played game, most-played opponent (any Profile co-played, including unlinked aliases — see _Definitions_ below).
 - **Per-game cards** — one card per game you've played. Each card shows YOUR data for that game: win-rate, current win streak, longest streak, best single-match score, total matches at this game. Empty card with "play your first match" CTA if you haven't played that game.
-- **Friend rankings panel** — per game, a small top-N table of linked friends + you, ranked by win-rate (min 5-match gate so 1-of-1 doesn't dominate). Your row highlighted using the existing "me" treatment from Phase 7. If no friends are linked yet, shows a "link friends to compare" hint.
-- **Achievements row** — placeholder slot, populated by PR 8-E below.
+- **Per-game rankings panel** — per game, a small ordered table of every Profile visible to the viewer that has played at this game (you + owned aliases + non-owned profiles surfaced through shared matches), ranked by win-rate. Per-participant 3-match gate: participants with <3 completed matches at this game render greyed with `n/3` instead of a rate, but the panel itself is always shown. Your row highlighted using the existing "me" treatment from Phase 7.
+- **(No achievements row in this PR.)** Deliberately not scaffolded — the row lands in PR 8-D (achievements + share-link) so this PR doesn't ship an empty placeholder.
+
+**Definitions** (pin down ahead of implementation so the hooks don't drift):
+- **Visible profiles** = whatever `loadVisibleProfileIds(viewerId)` from PR 8-B returns, i.e. profiles where `ownerId === viewerId OR linkedUserId === viewerId`, **plus** any other Profile that appears as a Player in a Match visible to the viewer (i.e. you've shared at least one match with that profile through any owner). The rankings panel iterates this set, not just linked friends.
+- **"Most-played opponent"** = any Profile other than the viewer's own self-Profile, counted by appearances in completed visible matches. Unlinked aliases ("Mum") and friends-of-friends-but-not-linked both count.
+- **Win** = the viewer's Profile placed 1st outright (no tie) in a completed match. Ties at 1st do NOT count as wins.
+- **Streak ordering** — completed matches are ordered by `completedAt` (the experience-time, not `playedAt`). A loss / tied-1st / non-1st result breaks the streak. Incomplete matches are ignored; if they're later completed as a loss, their `completedAt` slots them naturally into the order.
+- **Current streak** = consecutive wins ending at the most recent completed match. 0 if the latest completed match wasn't a win.
+- **Max streak** = longest run of consecutive wins in the viewer's full completed-match history.
+- **Rankings gate** = a participant needs ≥3 completed matches at that game to display a numeric win-rate. Below 3, they render with their match count (`1/3`, `2/3`) and no rate.
 
 Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — add to `Icon.tsx` if not already present). i18n: `nav.stats`, `stats.*`.
 
@@ -1317,45 +1326,14 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 
 **Acceptance**: stats numbers match a hand-computed reference for a seeded fixture; the dashboard updates within seconds of a new match completing (`useLiveQuery` reactivity); the friend-rankings panel shows the viewer's own row highlighted.
 
-#### PR 8-D — Public install help + Lighthouse audit + Settings version footer (`feat/install-help-and-lighthouse`, ~1 day)
+#### PR 8-D — Achievements + public match share-link (`feat/achievements-and-share`, ~3 days)
 
-**Goal**: every loose-end gating a friend's "go install OnBoard" experience. Dev-asset refresh (screenshots + graphify) is deliberately deferred to PR 8-F so it captures the final state of everything, not a snapshot that gets invalidated by 8-E's UI work.
-
-**Public install-help page**:
-- New route `routes/install.tsx` (outside `_authenticated/`). Two collapsible sections: iOS (Safari → Share → Add to Home Screen) and Android (Chrome → menu → Install app). Detects platform via UA hints, expands the relevant section by default. Uses placeholder/existing screenshots from `plan-assets/` — refreshed assets land in 8-F.
-- Linked from the login page footer.
-- The authenticated install-prompt UI in `settings.tsx` stays — the new `/install` page is for friends arriving from a chat link who haven't signed in yet.
-
-**Lighthouse audit + manifest polish**:
-- Run Lighthouse against integration with mobile + desktop presets.
-- Manifest gaps to close in `vite.config.ts`: add `shortcuts[]` for "New match" + "Stats". Verify `purpose: "maskable"` icon has the recommended safe-area padding.
-- `screenshots[]` deferred to PR 8-F (depends on the asset refresh). Lighthouse installability + PWA-quality checks don't require `screenshots[]` for a passing score.
-- Fix any sub-100 finding the audit surfaces.
-
-**Settings additions** (`routes/_authenticated/settings.tsx`):
-- App version footer: `OnBoard v{packageVersion} • {gitSha.slice(0,7)}`. Inject `__APP_VERSION__` and `__GIT_SHA__` via Vite `define` in `vite.config.ts`. `gitSha` comes from a `GIT_SHA` build arg passed by the Dockerfile.
-- (No formal feedback link — the app's audience is friends who can reach the owner directly.)
-
-**Critical files**:
-
-| File | Action |
-|---|---|
-| `src/client/routes/install.tsx` | New — public install guide |
-| `src/client/routes/index.tsx` | Footer link to `/install` |
-| `vite.config.ts` | Add `shortcuts[]` to manifest; `define` for version+SHA |
-| `src/client/routes/_authenticated/settings.tsx` | Version footer |
-| `Dockerfile` | Pass `GIT_SHA` build arg |
-
-**Acceptance**: Lighthouse PWA criteria pass against integration (mobile + desktop). Logged-out visitor can reach `/install` from `/`. Settings shows `v0.x.y • abc1234`.
-
-#### PR 8-E — Achievements + public match share-link (`feat/achievements-and-share`, ~3 days)
-
-**Goal**: two creative additions chosen during planning. Independent of each other; bundled because each is small.
+**Goal**: two creative additions chosen during planning. Independent of each other; bundled because each is small. Sequenced before the install/Lighthouse PR so the dashboard's achievements row lands while the stats work is still fresh and so the install-help/audit PR captures the final UI surface.
 
 **Achievements (client-only, no schema change)**:
 - Fixed set v1: `firstWin` (any game), `tenWins[gameId]` per game played, `winStreak5` (5 completed matches in a row won, same game), `biggestBlowout[gameId]` (largest winning margin recorded). All computed live in Dexie via a new `useAchievements(profileId)` hook over `matches` + `scores` joined to `players`. Takes any `profileId` so the same hook + component works for self and for friends.
 - `<AchievementsRow profileId>` mounted in TWO surfaces:
-  1. **Your stats** page (`routes/_authenticated/stats/index.tsx`) — fills the placeholder slot PR 8-C left open, passing the signed-in user's self-Profile id. Shows what you've unlocked.
+  1. **Your stats** page (`routes/_authenticated/stats/index.tsx`) — added below the per-game cards. PR 8-C deliberately did not scaffold a placeholder; this PR introduces the row itself.
   2. **Profile detail** page (`routes/_authenticated/players/$profileId.tsx`) — below the existing stats panel, passing the visited profile id. Shows what your friend has unlocked.
 - Each stamp: `<Icon>` + i18n label + unlocked-date. Locked achievements not shown in v1 (no "0/10" teasers — keeps the surface clean for the small initial set).
 - `Icon` additions: `trophy`, `medal`, `flame`, plus a rotated/recoloured `crown` for `tenWins`.
@@ -1367,7 +1345,7 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
   - `DELETE /api/matches/:id/share-token` — owner revokes.
   - `GET /api/share/:token` — public, no auth. Returns minimal payload: game name + slug, completedAt, players (alias + final score), winner, victoryType. No `profileIds`, no `createdById`, no extraneous metadata.
 - Client:
-  - Public route `routes/share.$token.tsx` (outside `_authenticated/`). Renders the summary using the same `MatchHistoryRow`-style layout for visual consistency, plus an "Install OnBoard to track your own matches" CTA linking to `/install` + the login page.
+  - Public route `routes/share.$token.tsx` (outside `_authenticated/`). Renders the summary using the same `MatchHistoryRow`-style layout for visual consistency, plus an "Install OnBoard to track your own matches" CTA linking to `/install` (added by PR 8-E) + the login page. Until 8-E lands, the CTA can point at `/` — the link target is swapped in 8-E without touching this PR.
   - Open-Graph meta tags rendered server-side via Hono's static-file branch for the `/share/:token` URL so chat-app unfurls show the matchup. (Single-purpose exception to the SPA-only stance; document the rationale next to the handler.)
   - "Share match" action on `MatchCompleteScreen.tsx` (SK) and end-of-match state in `SevenWondersDuelScorer.tsx`: dialog with the `/share/:token` URL + copy button + revoke option. Uses Web Share API where available, fallback to clipboard.
 - E2E: owner shares match → unauthenticated context loads `/share/:token` and sees the right data → owner revokes → public route now 404. Verify OG meta tags via `page.evaluate` against `<head>`.
@@ -1394,6 +1372,39 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 | `e2e/achievements.spec.ts` + `e2e/share-link.spec.ts` | New |
 
 **Acceptance**: a fresh user wins their first 7WD match → "First Win" stamp appears on their stats + profile within seconds (`useLiveQuery` reactivity). A completed match's share URL renders publicly with the right data, unfurls correctly in iMessage/Slack previews, revoke kills it on the next request.
+
+#### PR 8-E — Public install help + Lighthouse audit + Settings version footer (`feat/install-help-and-lighthouse`, ~1 day)
+
+**Goal**: every loose-end gating a friend's "go install OnBoard" experience. Dev-asset refresh (screenshots + graphify) is deliberately deferred to PR 8-F so it captures the final state of everything, not a snapshot that gets invalidated by 8-D's UI work.
+
+**Public install-help page**:
+- New route `routes/install.tsx` (outside `_authenticated/`). Two collapsible sections: iOS (Safari → Share → Add to Home Screen) and Android (Chrome → menu → Install app). Detects platform via UA hints, expands the relevant section by default. Uses placeholder/existing screenshots from `plan-assets/` — refreshed assets land in 8-F.
+- Linked from the login page footer.
+- Re-point the share-link page's install CTA (introduced in 8-D) at `/install`.
+- The authenticated install-prompt UI in `settings.tsx` stays — the new `/install` page is for friends arriving from a chat link who haven't signed in yet.
+
+**Lighthouse audit + manifest polish**:
+- Run Lighthouse against integration with mobile + desktop presets.
+- Manifest gaps to close in `vite.config.ts`: add `shortcuts[]` for "New match" + "Stats". Verify `purpose: "maskable"` icon has the recommended safe-area padding.
+- `screenshots[]` deferred to PR 8-F (depends on the asset refresh). Lighthouse installability + PWA-quality checks don't require `screenshots[]` for a passing score.
+- Fix any sub-100 finding the audit surfaces.
+
+**Settings additions** (`routes/_authenticated/settings.tsx`):
+- App version footer: `OnBoard v{packageVersion} • {gitSha.slice(0,7)}`. Inject `__APP_VERSION__` and `__GIT_SHA__` via Vite `define` in `vite.config.ts`. `gitSha` comes from a `GIT_SHA` build arg passed by the Dockerfile.
+- (No formal feedback link — the app's audience is friends who can reach the owner directly.)
+
+**Critical files**:
+
+| File | Action |
+|---|---|
+| `src/client/routes/install.tsx` | New — public install guide |
+| `src/client/routes/index.tsx` | Footer link to `/install` |
+| `src/client/routes/share.$token.tsx` | Re-point install CTA at `/install` |
+| `vite.config.ts` | Add `shortcuts[]` to manifest; `define` for version+SHA |
+| `src/client/routes/_authenticated/settings.tsx` | Version footer |
+| `Dockerfile` | Pass `GIT_SHA` build arg |
+
+**Acceptance**: Lighthouse PWA criteria pass against integration (mobile + desktop). Logged-out visitor can reach `/install` from `/`. Settings shows `v0.x.y • abc1234`.
 
 #### PR 8-F — Dev-asset refresh + v1.0.0 release (`release/v1.0.0`, ~1 day)
 
@@ -1426,23 +1437,23 @@ The gap today: project description, data model, auth flow, game rules, public su
 
 **What to write**:
 
-- **README rewrite** — currently bootstrap-only. Replace with: what OnBoard is, who it's for, the offline-first stance, install instructions (link to the public `/install` page shipped in 8-D), link to the doc set below.
+- **README rewrite** — currently bootstrap-only. Replace with: what OnBoard is, who it's for, the offline-first stance, install instructions (link to the public `/install` page shipped in 8-E), link to the doc set below.
 - **`docs/architecture.md`** — companion to `docs/offline-architecture.md`, covering what offline doesn't:
   - **Data model**: Profile / Player / Match / Score / `MatchShareToken` relationships; single-Profile model; `ownerId` + `linkedUserId` semantics; the `avatarFrame` / `avatarRing` stamp model from Phase 7.
   - **Auth flow**: better-auth with Google + Facebook (wired in 8-A; Apple deferred to v1.x — see Out of scope). Session cookie semantics. **Email-keyed account linking** — one `User` regardless of which provider signed in. Link-token HMAC for profile-to-account binding (from 6-C).
   - **Profile-linking model**: bilateral QR scan, merge-on-collision, unlink propagation.
   - **Sync engine** internals at a higher level than `offline-architecture.md`'s deep dive: client-CUID idempotency, push/pull with `since=` cursor, LWW on `updatedAt`.
   - **Stats engine** (from 8-C): viewer-personal computation pattern (`useMyStats`, `useMyGameStats`, `useGameRankings`) — all derived from Dexie via `useLiveQuery`, no server endpoint.
-  - **Achievements engine** (from 8-E): client-only computation over `matches` + `scores`, same `useLiveQuery` pattern; fixed v1 set; same `<AchievementsRow>` works for self and friends.
-  - **Match share-link** (from 8-E): `MatchShareToken` table, public unauthenticated `/share/:token` route, OG meta tags rendered server-side as a **deliberate exception** to the SPA-only stance — document why and where.
-  - **Build-time version injection** (from 8-D): how `__APP_VERSION__` and `__GIT_SHA__` flow from `package.json` + Docker build arg into the Settings footer.
+  - **Achievements engine** (from 8-D): client-only computation over `matches` + `scores`, same `useLiveQuery` pattern; fixed v1 set; same `<AchievementsRow>` works for self and friends.
+  - **Match share-link** (from 8-D): `MatchShareToken` table, public unauthenticated `/share/:token` route, OG meta tags rendered server-side as a **deliberate exception** to the SPA-only stance — document why and where.
+  - **Build-time version injection** (from 8-E): how `__APP_VERSION__` and `__GIT_SHA__` flow from `package.json` + Docker build arg into the Settings footer.
 - **`docs/games/{skull-king,7-wonders-duel}.md`** — per-game rules + scoring tables + variant matrix. Currently lives as comments next to the scoring functions; promoting it makes the rules legible without reading TypeScript and gives a home for screenshots.
 - **`docs/api.md`** — route reference (request / response shapes, auth requirements, error codes). Cover the post-Phase-8 surface in full:
   - `/api/auth/*` (better-auth handlers for Google + Facebook)
   - `/api/games`, `/api/matches`, `/api/profiles`, `/api/profile-groups` (legacy CRUD)
   - Profile link/unlink/merge + link-token endpoints (from 6-C)
   - Avatar upload/delete (from 6-B)
-  - **Share-token endpoints** (`POST` / `DELETE /api/matches/:id/share-token`, `GET /api/share/:token`) from 8-E
+  - **Share-token endpoints** (`POST` / `DELETE /api/matches/:id/share-token`, `GET /api/share/:token`) from 8-D
   - Generated from the Hono route handlers if practical; hand-written otherwise.
 - **`docs/public-surfaces.md`** (NEW) — short reference for the five unauthenticated routes that ship by v1.0: `/` (login), `/install` (PWA install guide), `/privacy`, `/terms`, `/share/:token`. What each is for, what it shows logged-out, how it integrates with auth.
 - **`CONTRIBUTING.md`** — fold in the conventions that currently live in `CLAUDE.md` and aren't AI-instruction-specific (lint rules, test conventions, commit style, branch workflow, the multi-provider env-var setup, Coolify topology). `CLAUDE.md` keeps its AI-targeted material.

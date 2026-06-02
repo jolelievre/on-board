@@ -6,6 +6,7 @@
   "nav": {
     "games": "Jeux",
     "players": "Joueurs",
+    "stats": "Stats",
     "settings": "Paramètres"
   },
   "auth": {
@@ -290,6 +291,45 @@
       "theirWins": "Eux",
       "draws_one": "{{count}} égalité",
       "draws_other": "{{count}} égalités"
+    }
+  },
+  "stats": {
+    "title": "Vos stats",
+    "subtitle": "Votre parcours sur tous les jeux",
+    "empty": "Aucune partie encore — lancez-en une et vos stats apparaîtront ici.",
+    "hero": {
+      "matches": "Parties",
+      "completed": "Terminées",
+      "wins": "Victoires",
+      "winRate": "Taux de victoire"
+    },
+    "favourites": {
+      "title": "Préférences",
+      "gameLabel": "Plus joué",
+      "opponentLabel": "Adversaire le plus joué",
+      "gameCount_one": "{{count}} partie",
+      "gameCount_other": "{{count}} parties",
+      "opponentCount_one": "{{count}} partie ensemble",
+      "opponentCount_other": "{{count}} parties ensemble",
+      "empty": "Encore quelques parties et les favoris s'afficheront ici."
+    },
+    "perGame": {
+      "title": "Par jeu",
+      "matches": "Parties",
+      "winRate": "Taux de victoire",
+      "currentStreak": "Série en cours",
+      "maxStreak": "Meilleure série",
+      "bestScore": "Meilleur score",
+      "noMatches": "Aucune partie",
+      "play": "Lancez votre première partie"
+    },
+    "rankings": {
+      "title": "Classement",
+      "you": "Vous",
+      "matchesShort_one": "{{count}} partie",
+      "matchesShort_other": "{{count}} parties",
+      "gate": "{{count}}/{{min}} parties",
+      "empty": "Aucune partie encore à ce jeu."
     }
   },
   "common": {
