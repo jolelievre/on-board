@@ -12,11 +12,6 @@ import { resolveSelfAlias } from "../../shared/players";
 
 const SYNC_META_LAST_PULL = "lastPullAt";
 const SYNC_META_LAST_PROFILE_PULL = "lastProfilePullAt";
-/** Last viewer id observed on this device. Compared against the
- * current session at every authenticated mount so we can drop the
- * pull cursors when a different account signs in on a shared
- * device — see `resetCursorsIfViewerChanged` below. */
-const SYNC_META_LAST_VIEWER_ID = "lastViewerId";
 
 /** Minimum interval between successive `pullSync()` attempts (forceable
  * via `{ force: true }`). Without throttling, the post-flush pullSync
@@ -92,45 +87,23 @@ export async function setSyncMeta(key: string, value: string): Promise<void> {
 
 /**
  * Drop both pull cursors so the next `pullSync()` re-fetches every
- * server-visible match + profile without a `?since=` filter. Used when
- * a server-side visibility change can retroactively make older rows
- * visible (the bilateral link flow is the canonical case: linking
- * doesn't bump `Match.updatedAt`, so a `?since=` delta would miss the
- * friend's pre-link history entirely).
+ * server-visible match + profile without a `?since=` filter.
+ *
+ * Called from `_authenticated.tsx` on every authenticated mount so a
+ * page reload always rehydrates Dexie from the server's current
+ * truth — sidesteps every "cursor outlived the data it pointed past"
+ * failure mode: cross-account cursor on a shared device, lost local
+ * row from a previous session, server-side row deletion the
+ * incremental delta can't represent. Also invoked from the bilateral
+ * link flow, which is its original use case (linking doesn't bump
+ * `Match.updatedAt`, so a `?since=` delta would otherwise miss the
+ * friend's pre-link history).
  */
 export async function resetPullCursors(): Promise<void> {
   await db.syncMeta.bulkDelete([
     SYNC_META_LAST_PULL,
     SYNC_META_LAST_PROFILE_PULL,
   ]);
-}
-
-/**
- * Reset the pull cursors when the signed-in viewer changes on this
- * device. Must run before `pullSync()` at every authenticated mount.
- *
- * Why: the `?since=` cursors are stored per-device in `syncMeta`, not
- * per-user. Without this, signing in as a different user on a shared
- * device sends `?since=<previous-viewer's-timestamp>` to the server,
- * which then filters `updatedAt > since` — silently excluding any
- * row the new viewer owns that pre-dates the prior session. The
- * canonical break is the new viewer's self-Profile (created at signup
- * time, often long ago) disappearing from `/api/profiles` because its
- * `updatedAt` is older than the cursor — leaving the new-match
- * picker without a "me" suggestion.
- *
- * Returns `true` when a reset happened, so callers can log /
- * conditionally bypass throttles if they care. The new viewer id is
- * written to `syncMeta` either way so the next mount sees a match.
- */
-export async function resetCursorsIfViewerChanged(
-  viewerId: string,
-): Promise<boolean> {
-  const previous = await getSyncMeta(SYNC_META_LAST_VIEWER_ID);
-  if (previous === viewerId) return false;
-  await resetPullCursors();
-  await setSyncMeta(SYNC_META_LAST_VIEWER_ID, viewerId);
-  return true;
 }
 
 /**
