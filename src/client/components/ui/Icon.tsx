@@ -28,7 +28,14 @@ export type IconName =
   | "crown"
   | "skull-king"
   | "info"
-  | "bar-chart-2";
+  | "bar-chart-2"
+  | "medal"
+  | "flame"
+  | "shield"
+  | "cards-check"
+  | "flag"
+  | "zero"
+  | "calendar-check";
 
 type Props = {
   name: IconName;
@@ -300,6 +307,114 @@ export function Icon({ name, size = 20, stroke = 1.6, className, title }: Props)
         <svg {...props}>
           {titleEl}
           <path d="M6 20V10M12 20V4M18 20v-7" />
+        </svg>
+      );
+    case "medal":
+      // Phase 8 — achievement stamp: rosette + ribbon. Filled disc for
+      // the medal body, two ribbon tails behind, so the silhouette
+      // reads at small sizes (achievements list cells, ~32px).
+      return (
+        <svg {...props}>
+          {titleEl}
+          <path d="M8 3l-3 9 4 1M16 3l3 9-4 1" />
+          <circle cx="12" cy="16" r="5" fill="currentColor" stroke="currentColor" />
+          <path
+            d="M12 13.5l1 2 2 .3-1.5 1.4.4 2.1-1.9-1-1.9 1 .4-2.1L9 15.8l2-.3z"
+            fill="var(--color-surface)"
+            stroke="none"
+          />
+        </svg>
+      );
+    case "flame":
+      // Phase 8 — streak achievement glyph. Single-tone flame, filled
+      // with currentColor so the parent's CSS theme drives the colour.
+      return (
+        <svg {...props} fill="currentColor" stroke="currentColor">
+          {titleEl}
+          <path
+            d="M12 2.5c1 2.6.3 4.2-.8 5.6-1.4 1.7-3.5 3.4-3.5 6.3a4.8 4.8 0 008.6 2.9c1.3-1.7 1.4-3.9.4-5.9-.7-1.4-1.7-2.4-1.5-3.7.7.4 1.6 1.3 2 2.3.3-3.4-1.7-6.3-5.2-7.5z"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M12 13.5c.6 1 .3 1.9-.4 2.6-.7.7-1.5 1.4-1.5 2.6a2.4 2.4 0 004.5.7c.5-1.3 0-2.6-.9-3.7"
+            fill="var(--color-surface)"
+            stroke="none"
+          />
+        </svg>
+      );
+    case "shield":
+      // Heraldic shield — used for "Veteran" / endurance stamps.
+      return (
+        <svg {...props}>
+          {titleEl}
+          <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
+        </svg>
+      );
+    case "cards-check":
+      // Playing card with a check overlay — used for "Perfect call".
+      // Card silhouette mirrors the existing `cards` glyph so the
+      // family relationship reads clearly.
+      return (
+        <svg {...props}>
+          {titleEl}
+          <rect x="4" y="4" width="13" height="16" rx="2" />
+          <path d="M9 9l8 3-3 8" />
+          <path d="M14 14l2 2 4-4" strokeWidth={stroke + 0.8} />
+        </svg>
+      );
+    case "flag":
+      // Checkered finish-line flag — used for "Wire to wire".
+      // Two rows of alternating filled squares give the racing pattern
+      // at the small icon size; pole anchors the silhouette on the
+      // left so the glyph reads as a flag even without colour.
+      return (
+        <svg {...props}>
+          {titleEl}
+          <path d="M5 21V3" />
+          <rect x="5" y="4" width="13" height="10" fill="none" />
+          <rect x="5" y="4" width="3" height="3" fill="currentColor" stroke="none" />
+          <rect x="11" y="4" width="3" height="3" fill="currentColor" stroke="none" />
+          <rect x="8" y="7" width="3" height="3" fill="currentColor" stroke="none" />
+          <rect x="14" y="7" width="3" height="3" fill="currentColor" stroke="none" />
+          <rect x="5" y="10" width="3" height="3" fill="currentColor" stroke="none" />
+          <rect x="11" y="10" width="3" height="3" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "zero":
+      // Numeric "0" inside a stamp ring — used for "Sealed lips"
+      // (Skull King 0-bid). Text-based glyph reads cleaner at small
+      // sizes than a thick elliptical outline alone.
+      return (
+        <svg {...props}>
+          {titleEl}
+          <circle cx="12" cy="12" r="9" />
+          <text
+            x="12"
+            y="16.5"
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="700"
+            fontFamily="var(--font-display, serif)"
+            fill="currentColor"
+            stroke="none"
+          >
+            0
+          </text>
+        </svg>
+      );
+    case "calendar-check":
+      // Calendar grid with five dots — one per consecutive day —
+      // matches the "Habit" 5-day streak threshold visually.
+      return (
+        <svg {...props}>
+          {titleEl}
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M3 10h18M8 3v4M16 3v4" />
+          <circle cx="7" cy="14" r="1" fill="currentColor" stroke="none" />
+          <circle cx="10" cy="14" r="1" fill="currentColor" stroke="none" />
+          <circle cx="13" cy="14" r="1" fill="currentColor" stroke="none" />
+          <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none" />
+          <circle cx="7" cy="17.5" r="1" fill="currentColor" stroke="none" />
         </svg>
       );
     case "skull-king":

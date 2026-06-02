@@ -297,6 +297,10 @@
     "title": "Vos stats",
     "subtitle": "Votre parcours sur tous les jeux",
     "empty": "Aucune partie encore — lancez-en une et vos stats apparaîtront ici.",
+    "tabs": {
+      "stats": "Stats",
+      "achievements": "Trophées"
+    },
     "hero": {
       "matches": "Parties",
       "completed": "Terminées",
@@ -329,6 +333,62 @@
       "row": "{{wins}}V · {{rate}}% · {{matches}}p",
       "empty": "Aucune partie encore à ce jeu."
     }
+  },
+  "achievements": {
+    "sectionTitle": "Trophées",
+    "emptySelf": "Gagne une partie pour décrocher tes premiers trophées.",
+    "emptyFriend": "Aucun trophée encore débloqué.",
+    "labels": {
+      "firstWin": "Première victoire",
+      "tenWins": "10 victoires",
+      "winStreak5": "Série de 5",
+      "biggestBlowout": "Plus gros écart",
+      "veteran": "Vétéran",
+      "marathon": "Marathon",
+      "acrossTheBoard": "Tous fronts",
+      "photoFinish": "Au sprint",
+      "comebackSK": "Remontée",
+      "wireToWireSK": "En tête du début à la fin",
+      "sealedLips": "Pari muet",
+      "piratesHaul": "Butin de pirate",
+      "perfectCall": "Sans-faute",
+      "scientist": "Scientifique",
+      "general": "Général",
+      "builder": "Bâtisseur",
+      "roundabout": "Tournée",
+      "sidekick": "Acolyte",
+      "theLink": "Compère",
+      "habit": "Habitude"
+    },
+    "descriptions": {
+      "firstWin": "Gagne n'importe quelle partie.",
+      "tenWins": "Atteins 10 victoires sur le même jeu.",
+      "winStreak5": "Enchaîne 5 victoires de suite sur le même jeu.",
+      "biggestBlowout": "Gagne sur ce jeu. Le chiffre indique ton plus gros écart de victoire.",
+      "veteran": "Complète 50 parties tous jeux confondus.",
+      "marathon": "Complète 3 parties dans la même journée.",
+      "acrossTheBoard": "Gagne au moins une partie sur chaque jeu.",
+      "photoFinish": "Remporte une partie avec exactement 1 point d'avance.",
+      "comebackSK": "Gagne une partie de Skull King sans être en tête à l'avant-dernier round.",
+      "wireToWireSK": "Gagne une partie de Skull King en menant après chaque round.",
+      "sealedLips": "Gagne une partie de Skull King avec une mise zéro réussie.",
+      "piratesHaul": "Marque 300+ points dans une seule partie de Skull King.",
+      "perfectCall": "Gagne une partie de Skull King en réussissant chaque mise au pli près.",
+      "scientist": "Gagne une partie de 7 Wonders Duel par suprématie scientifique.",
+      "general": "Gagne une partie de 7 Wonders Duel par suprématie militaire.",
+      "builder": "Gagne une partie de 7 Wonders Duel au score avec les bâtiments civils comme catégorie principale.",
+      "roundabout": "Joue avec 5 adversaires différents.",
+      "sidekick": "Joue 10 parties avec le même adversaire.",
+      "theLink": "Lie le compte d'un ami via QR code.",
+      "habit": "Joue au moins une fois sur 5 jours consécutifs."
+    },
+    "marginValue_one": "{{count}} pt d'écart",
+    "marginValue_other": "{{count}} pts d'écart",
+    "pointsValue_one": "{{count}} pt",
+    "pointsValue_other": "{{count}} pts",
+    "countValue_one": "{{count}}",
+    "countValue_other": "{{count}}",
+    "unlockedOn": "Débloqué le {{date}}"
   },
   "common": {
     "loading": "Chargement…",

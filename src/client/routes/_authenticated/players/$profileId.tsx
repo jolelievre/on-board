@@ -22,6 +22,7 @@ import { AvatarUploader } from "../../../components/profiles/AvatarUploader";
 import { MergeDialog } from "../../../components/profiles/MergeDialog";
 import { LinkScanner } from "../../../components/profiles/LinkScanner";
 import { LinkCodeDisplay } from "../../../components/profiles/LinkCodeDisplay";
+import { AchievementsRow } from "../../../components/profiles/AchievementsRow";
 import { MatchHistoryRow } from "../../../components/matches/MatchHistoryRow";
 import { displayProfileName } from "../../../../shared/players";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
@@ -220,6 +221,14 @@ function ProfileDetailBody({
               )}
             </>
           )}
+        </Group>
+
+        <Group title={t("achievements.sectionTitle")}>
+          <AchievementsRow
+            profileId={profile.id}
+            viewerId={viewerId}
+            emptyMessage={t("achievements.emptyFriend")}
+          />
         </Group>
 
         {recent && recent.length > 0 && (
