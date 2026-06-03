@@ -408,4 +408,83 @@ export const matchesRoutes = new Hono<AuthEnv>()
     });
 
     return c.json(result);
+  })
+  // ─── Share token (PR 8-D) ──────────────────────────────────────────
+  //
+  // Any participant in a completed match can mint, hydrate, or revoke
+  // the public share link. The token is idempotent — re-POSTing returns
+  // the existing one — and gated on `status === COMPLETED`. The first
+  // user to mint owns the `createdById` audit field on the token row;
+  // any later participant can still re-use or revoke it. Visibility
+  // mirrors the rest of the `/matches` surface (PR 8-B
+  // `matchVisibilityWhere`), so non-participants get 404 — same shape
+  // as a viewer who can't see the match at all.
+  .post("/:id/share-token", async (c) => {
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    const match = await prisma.match.findFirst({
+      where: { AND: [{ id }, matchVisibilityWhere(user.id)] },
+      select: { id: true, status: true },
+    });
+    if (!match) {
+      return c.json({ error: "Match not found" }, 404);
+    }
+    if (match.status !== "COMPLETED") {
+      return c.json(
+        { error: "Only completed matches can be shared" },
+        400,
+      );
+    }
+
+    const existing = await prisma.matchShareToken.findUnique({
+      where: { matchId: id },
+    });
+    const token =
+      existing ??
+      (await prisma.matchShareToken.create({
+        data: { matchId: id, createdById: user.id },
+      }));
+
+    return c.json(
+      { token: token.id, createdAt: token.createdAt.toISOString() },
+      existing ? 200 : 201,
+    );
+  })
+  .delete("/:id/share-token", async (c) => {
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    const match = await prisma.match.findFirst({
+      where: { AND: [{ id }, matchVisibilityWhere(user.id)] },
+      select: { id: true },
+    });
+    if (!match) {
+      return c.json({ error: "Match not found" }, 404);
+    }
+
+    await prisma.matchShareToken.deleteMany({ where: { matchId: id } });
+    return c.body(null, 204);
+  })
+  .get("/:id/share-token", async (c) => {
+    // Hydrate the existing token (no auto-mint) so the dialog can
+    // populate without bumping createdAt on every open.
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    const match = await prisma.match.findFirst({
+      where: { AND: [{ id }, matchVisibilityWhere(user.id)] },
+      select: { id: true },
+    });
+    if (!match) {
+      return c.json({ error: "Match not found" }, 404);
+    }
+
+    const token = await prisma.matchShareToken.findUnique({
+      where: { matchId: id },
+    });
+    if (!token) {
+      return c.body(null, 204);
+    }
+    return c.json({ token: token.id, createdAt: token.createdAt.toISOString() });
   });

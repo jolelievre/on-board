@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Header } from "../../../components/layout/Header";
 import { Group } from "../../../components/ui/Group";
@@ -12,6 +13,8 @@ import {
   useGameRankings,
   type GameRankingEntry,
 } from "../../../hooks/data/useGameRankings";
+import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
+import { AchievementsRow } from "../../../components/profiles/AchievementsRow";
 import type { LocalGame } from "../../../lib/db";
 import styles from "./index.module.css";
 
@@ -19,11 +22,21 @@ export const Route = createFileRoute("/_authenticated/stats/")({
   component: StatsPage,
 });
 
+type TabKey = "stats" | "achievements";
+
 function StatsPage() {
   const { t } = useTranslation();
   const viewerId = useRequiredViewerId();
   const stats = useMyStats(viewerId);
   const { data: games } = useGames();
+  // Self-Profile lookup: `useProfileList` deliberately *excludes* the
+  // self row (Players-tab filter), so we go through the owned-profile
+  // index instead — keyed by linkedUserId, the viewer's own row is the
+  // entry where linkedUserId === viewerId.
+  const ownedIndex = useOwnedProfileIndex(viewerId);
+  const selfProfileId = ownedIndex.byLinkedUserId.get(viewerId)?.id;
+
+  const [tab, setTab] = useState<TabKey>("stats");
 
   return (
     <>
@@ -34,44 +47,101 @@ function StatsPage() {
           <p className={styles.subtitle}>{t("stats.subtitle")}</p>
         </header>
 
-        {/* Hero strip — always rendered; reads `undefined` while loading. */}
-        <HeroStrip stats={stats} />
+        <div
+          role="tablist"
+          aria-label={t("stats.title")}
+          className={styles.tabs}
+          data-testid="stats-tabs"
+        >
+          <TabButton
+            label={t("stats.tabs.stats")}
+            active={tab === "stats"}
+            onClick={() => setTab("stats")}
+            testid="stats-tab-stats"
+          />
+          <TabButton
+            label={t("stats.tabs.achievements")}
+            active={tab === "achievements"}
+            onClick={() => setTab("achievements")}
+            testid="stats-tab-achievements"
+          />
+        </div>
 
-        {/* Favourites pills (most-played game + opponent). */}
-        <FavouritesPanel stats={stats} viewerId={viewerId} />
+        {tab === "stats" ? (
+          <div role="tabpanel" data-testid="stats-panel">
+            {/* Hero strip — always rendered; reads `undefined` while loading. */}
+            <HeroStrip stats={stats} />
 
-        {/* Per-game cards — one card per known game. Empty card with a
-            CTA renders for games the viewer hasn't played yet. */}
-        {games && games.length > 0 && (
-          <Group title={t("stats.perGame.title")}>
-            <div className={styles.gameCardList} data-testid="stats-per-game">
-              {games.map((game) => (
-                <PerGameCard
-                  key={game.id}
-                  game={game}
-                  viewerId={viewerId}
-                />
-              ))}
-            </div>
-          </Group>
-        )}
+            {/* Favourites pills (most-played game + opponent). */}
+            <FavouritesPanel stats={stats} viewerId={viewerId} />
 
-        {/* Rankings panel — one section per game. */}
-        {games && games.length > 0 && (
-          <Group title={t("stats.rankings.title")}>
-            <div className={styles.rankingsList}>
-              {games.map((game) => (
-                <RankingsSection
-                  key={game.id}
-                  game={game}
-                  viewerId={viewerId}
-                />
-              ))}
-            </div>
-          </Group>
+            {/* Per-game cards — one card per known game. Empty card with a
+                CTA renders for games the viewer hasn't played yet. */}
+            {games && games.length > 0 && (
+              <Group title={t("stats.perGame.title")}>
+                <div className={styles.gameCardList} data-testid="stats-per-game">
+                  {games.map((game) => (
+                    <PerGameCard
+                      key={game.id}
+                      game={game}
+                      viewerId={viewerId}
+                    />
+                  ))}
+                </div>
+              </Group>
+            )}
+
+            {/* Rankings panel — one section per game. */}
+            {games && games.length > 0 && (
+              <Group title={t("stats.rankings.title")}>
+                <div className={styles.rankingsList}>
+                  {games.map((game) => (
+                    <RankingsSection
+                      key={game.id}
+                      game={game}
+                      viewerId={viewerId}
+                    />
+                  ))}
+                </div>
+              </Group>
+            )}
+          </div>
+        ) : (
+          <div role="tabpanel" data-testid="achievements-panel">
+            <AchievementsRow
+              profileId={selfProfileId}
+              viewerId={viewerId}
+              emptyMessage={t("achievements.emptySelf")}
+            />
+          </div>
         )}
       </div>
     </>
+  );
+}
+
+function TabButton({
+  label,
+  active,
+  onClick,
+  testid,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  testid?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={`${styles.tab} ${active ? styles.tabActive : ""}`}
+      onClick={onClick}
+      data-testid={testid}
+    >
+      {label}
+    </button>
   );
 }
 

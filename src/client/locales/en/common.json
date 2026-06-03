@@ -297,6 +297,10 @@
     "title": "Your stats",
     "subtitle": "How you're doing across every game",
     "empty": "No matches yet — start a game and your stats land here.",
+    "tabs": {
+      "stats": "Stats",
+      "achievements": "Achievements"
+    },
     "hero": {
       "matches": "Matches",
       "completed": "Completed",
@@ -329,6 +333,97 @@
       "row": "{{wins}}W · {{rate}}% · {{matches}}m",
       "empty": "No matches yet at this game."
     }
+  },
+  "share": {
+    "cta": "Share match",
+    "pending": "Syncing…",
+    "dialog": {
+      "title": "Share this match",
+      "body": "Anyone with the link can see the final scoreboard. Revoke any time.",
+      "urlLabel": "Share URL",
+      "copy": "Copy",
+      "copied": "Copied",
+      "shareCta": "Share via…",
+      "shareTitle": "Match on OnBoard",
+      "revoke": "Revoke link",
+      "error": "Could not load the share link",
+      "notSyncedYet": "This match hasn't synced to the server yet. Try again in a moment."
+    },
+    "summary": {
+      "eyebrow": "Match summary",
+      "winnerLine": "{{alias}} won with {{score}} points",
+      "victoryType": {
+        "score": "By score",
+        "military_supremacy": "Military supremacy",
+        "scientific_supremacy": "Scientific supremacy"
+      }
+    },
+    "install": {
+      "title": "Like what you see?",
+      "body": "Install OnBoard to track your own matches.",
+      "cta": "Get OnBoard"
+    },
+    "notFound": {
+      "title": "Link not found",
+      "body": "This share link doesn't exist or has been revoked."
+    },
+    "loadError": "Could not load this match. Try again later."
+  },
+  "achievements": {
+    "sectionTitle": "Achievements",
+    "emptySelf": "Win a match to start collecting stamps.",
+    "emptyFriend": "No achievements unlocked yet.",
+    "labels": {
+      "firstWin": "First win",
+      "tenWins": "10 wins",
+      "winStreak5": "5-win streak",
+      "biggestBlowout": "Biggest blowout",
+      "veteran": "Veteran",
+      "marathon": "Marathon",
+      "acrossTheBoard": "Across the board",
+      "photoFinish": "Photo finish",
+      "comebackSK": "Comeback",
+      "wireToWireSK": "Wire to wire",
+      "sealedLips": "Sealed lips",
+      "piratesHaul": "Pirate's haul",
+      "perfectCall": "Perfect call",
+      "scientist": "Scientist",
+      "general": "General",
+      "builder": "Builder",
+      "roundabout": "Roundabout",
+      "sidekick": "Sidekick",
+      "theLink": "The link",
+      "habit": "Habit"
+    },
+    "descriptions": {
+      "firstWin": "Win any match.",
+      "tenWins": "Reach 10 wins at the same game.",
+      "winStreak5": "Win 5 matches in a row at the same game.",
+      "biggestBlowout": "Win at this game. The body shows your biggest winning margin.",
+      "veteran": "Complete 50 matches across all games.",
+      "marathon": "Complete 3 matches in a single day.",
+      "acrossTheBoard": "Win at least one match at every game.",
+      "photoFinish": "Win a match by exactly 1 point.",
+      "comebackSK": "Win a Skull King match where you weren't leading at the last-but-one round.",
+      "wireToWireSK": "Win a Skull King match leading after every round.",
+      "sealedLips": "Win a Skull King match including a successful 0-bid round.",
+      "piratesHaul": "Score 300+ points in a single Skull King match.",
+      "perfectCall": "Win a Skull King match nailing every round's bid exactly.",
+      "scientist": "Win a 7 Wonders Duel match by scientific supremacy.",
+      "general": "Win a 7 Wonders Duel match by military supremacy.",
+      "builder": "Win a 7 Wonders Duel match by score with civil buildings as your top category.",
+      "roundabout": "Play with 5 different opponents.",
+      "sidekick": "Play 10 matches with the same opponent.",
+      "theLink": "Link a friend's account via QR.",
+      "habit": "Play at least once on 5 consecutive days."
+    },
+    "marginValue_one": "{{count}} pt margin",
+    "marginValue_other": "{{count}} pts margin",
+    "pointsValue_one": "{{count}} pt",
+    "pointsValue_other": "{{count}} pts",
+    "countValue_one": "{{count}}",
+    "countValue_other": "{{count}}",
+    "unlockedOn": "Unlocked {{date}}"
   },
   "common": {
     "loading": "Loading…",

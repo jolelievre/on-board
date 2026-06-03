@@ -27,6 +27,45 @@
   margin: 0;
 }
 
+/* === Tabs ============================================================ */
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  margin-bottom: 1rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt, var(--color-bg));
+  border: 1px solid var(--color-border);
+}
+
+.tab {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: calc(var(--radius-md) - 0.25rem);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  cursor: pointer;
+  transition: background 100ms ease-out, color 100ms ease-out;
+}
+
+.tab:active {
+  transform: scale(0.99);
+}
+
+.tabActive {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-soft);
+}
+
 /* === Hero strip ===================================================== */
 
 .heroGrid {

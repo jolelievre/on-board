@@ -43,6 +43,7 @@ export function useMatch(id: string, viewerId: string): UseMatchResult {
         status: match.status,
         victoryType: match.victoryType,
         winnerId: match.winnerId,
+        createdById: match.createdById ?? null,
         metadata: match.metadata,
         game: game
           ? { id: game.id, slug: game.slug, name: game.name }

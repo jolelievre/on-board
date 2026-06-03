@@ -9,9 +9,12 @@ import type {
   SupremacySelection,
 } from "../match/HandMatchGrid";
 import { WinnerBanner } from "../match/WinnerBanner";
+import { ShareMatchDialog } from "../matches/ShareMatchDialog";
+import { Icon } from "../ui/Icon";
 import { displayPlayerName } from "../../../shared/players";
 import { useRequiredViewerId } from "../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../hooks/data/useOwnedProfileIndex";
+import { useMatchSyncStatus } from "../../hooks/data/useMatchSyncStatus";
 import { Button } from "../ui/Button";
 import buttonStyles from "../ui/Button.module.css";
 import {
@@ -154,6 +157,9 @@ export function SevenWondersDuelScorer({ match }: Props) {
   }));
 
   const [completing, setCompleting] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const syncStatus = useMatchSyncStatus(match.id);
+  const sharePending = syncStatus === "pending";
 
   const handleComplete = async () => {
     await flushPendingSave();
@@ -270,12 +276,26 @@ export function SevenWondersDuelScorer({ match }: Props) {
 
       {isCompleted && (
         <>
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            fullWidth
+            onClick={() => setShareOpen(true)}
+            iconBefore={<Icon name="share" size={18} />}
+            disabled={sharePending}
+            data-testid="swd-share-match"
+            data-share-pending={sharePending ? "true" : undefined}
+            className="mt-6"
+          >
+            {sharePending ? t("share.pending") : t("share.cta")}
+          </Button>
           <Link
             to="/games/$slug/new"
             params={{ slug: match.game.slug }}
             search={{ rematchOf: match.id }}
             data-testid="swd-rematch"
-            className={`mt-6 ${buttonStyles.base} ${buttonStyles.primary} ${buttonStyles.lg} ${buttonStyles.full}`}
+            className={`mt-3 ${buttonStyles.base} ${buttonStyles.primary} ${buttonStyles.lg} ${buttonStyles.full}`}
             style={{ textDecoration: "none" }}
           >
             {t("matches.rematch")}
@@ -290,6 +310,12 @@ export function SevenWondersDuelScorer({ match }: Props) {
             {t("matches.back")}
           </Link>
         </>
+      )}
+      {shareOpen && (
+        <ShareMatchDialog
+          matchId={match.id}
+          onClose={() => setShareOpen(false)}
+        />
       )}
     </>
   );

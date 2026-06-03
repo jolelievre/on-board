@@ -1,0 +1,278 @@
+.page {
+  min-height: 100dvh;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--color-ink);
+  text-decoration: none;
+  letter-spacing: -0.015em;
+}
+
+.main {
+  flex: 1;
+  max-width: 28rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.status {
+  font-family: var(--font-body);
+  color: var(--color-ink-faint);
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.statusBlock {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.notFoundTitle {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  margin: 0 0 0.5rem;
+  color: var(--color-ink);
+}
+
+.notFoundBody {
+  font-family: var(--font-body);
+  color: var(--color-ink-faint);
+  margin: 0;
+}
+
+/* === Summary card =================================================== */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+
+.coverWrap {
+  width: 100%;
+  /* CoverArt is a self-styled SVG with its own gradient background;
+     it slots flush against the top of the card. */
+}
+
+.cardHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem 1.25rem 0;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  margin: 0;
+}
+
+.gameName {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.6rem;
+  color: var(--color-ink);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.completedAt {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--color-ink-faint);
+  margin: 0;
+}
+
+.winnerLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-body);
+  font-weight: 700;
+  color: var(--color-ink);
+  margin: 0 1.25rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-sm, 0.4rem);
+  background: color-mix(
+    in srgb,
+    var(--color-warning, #b8731a) 14%,
+    var(--color-surface)
+  );
+  border: 1px solid color-mix(
+    in srgb,
+    var(--color-warning, #b8731a) 35%,
+    var(--color-border)
+  );
+  align-self: flex-start;
+}
+
+.winnerIcon {
+  color: var(--color-warning, #b8731a);
+}
+
+.playerList {
+  list-style: none;
+  padding: 0;
+  margin: 0 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.playerRow {
+  display: grid;
+  grid-template-columns: 1.5rem auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm, 0.4rem);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt, var(--color-bg));
+}
+
+.playerRowWinner {
+  border-color: var(--color-warning, #b8731a);
+  background: color-mix(
+    in srgb,
+    var(--color-warning, #b8731a) 10%,
+    var(--color-surface)
+  );
+}
+
+/* === Player stamp =================================================== */
+
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  overflow: hidden;
+  background: var(--color-surface);
+  color: var(--color-ink-soft);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.stampCircle {
+  border-radius: 999px;
+}
+
+.stampRounded {
+  border-radius: 0.45rem;
+}
+
+.stampTag {
+  border-radius: 0.85rem 0.25rem 0.85rem 0.25rem;
+}
+
+.stampImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.stampFallback {
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));
+  color: var(--color-primary);
+}
+
+.playerPos {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--color-ink-soft);
+  text-align: center;
+}
+
+.playerAlias {
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playerScore {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.victoryType {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-faint);
+  margin: 0 1.25rem 1rem;
+}
+
+/* === Install CTA ==================================================== */
+
+.installCta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  padding: 1.25rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  border: 1px dashed var(--color-primary);
+}
+
+.installTitle {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--color-ink);
+  margin: 0;
+}
+
+.installBody {
+  font-family: var(--font-body);
+  color: var(--color-ink-soft);
+  margin: 0;
+}
+
+.installButton {
+  margin-top: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  font-family: var(--font-body);
+  font-weight: 600;
+  text-decoration: none;
+}

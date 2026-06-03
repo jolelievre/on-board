@@ -1,0 +1,122 @@
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+}
+
+@media (min-width: 420px) {
+  .row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.stamp {
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.35rem;
+  padding: 0.75rem 0.55rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-soft);
+  position: relative;
+  transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.stamp:active {
+  transform: scale(0.99);
+}
+
+.stampOpen {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary) inset, var(--shadow-soft);
+}
+
+.description {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--color-ink-soft, var(--color-ink));
+  margin-top: 0.35rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--color-border);
+  width: 100%;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  color: var(--color-primary);
+}
+
+.iconStreak {
+  color: var(--color-warning, #c2410c);
+  background: color-mix(in srgb, var(--color-warning, #c2410c) 15%, var(--color-surface));
+}
+
+/* `--color-warning` adapts across parchment (`#b8731a` warm gold) and
+   candlelit (`#e5a24a` brighter amber) — keeps the blowout/haul stamp
+   readable in both themes, unlike the crown-ink token which is dark
+   in both by design (it's the ink color for the gold disc, not a
+   foreground color). */
+.iconBlowout {
+  color: var(--color-warning);
+  background: color-mix(
+    in srgb,
+    var(--color-warning) 18%,
+    var(--color-surface)
+  );
+}
+
+.label {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--color-ink);
+  line-height: 1.2;
+}
+
+.subLabel {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  line-height: 1.2;
+}
+
+.value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--color-ink);
+}
+
+.unlockedOn {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  color: var(--color-ink-faint);
+  margin-top: 0.1rem;
+}
+
+.empty {
+  font-family: var(--font-body);
+  color: var(--color-ink-faint);
+  text-align: center;
+  padding: 0.5rem 0;
+  margin: 0;
+  font-size: 0.875rem;
+}

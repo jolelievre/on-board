@@ -1,12 +1,16 @@
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./MatchCompleteScreen.module.css";
 import { Avatar } from "../../ui/Avatar";
+import { Icon } from "../../ui/Icon";
 import { SkullGlyph } from "../../ui/sk/SkGlyphs";
+import { ShareMatchDialog } from "../../matches/ShareMatchDialog";
 import { displayPlayerName } from "../../../../shared/players";
 import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
+import { useMatchSyncStatus } from "../../../hooks/data/useMatchSyncStatus";
 import type { Player } from "../../../types/match";
 
 type Props = {
@@ -40,6 +44,9 @@ export function MatchCompleteScreen({
   const { t } = useTranslation();
   const viewerId = useRequiredViewerId();
   const ownedIndex = useOwnedProfileIndex(viewerId);
+  const syncStatus = useMatchSyncStatus(matchId);
+  const sharePending = syncStatus === "pending";
+  const [shareOpen, setShareOpen] = useState(false);
   const ranked = [...players].sort(
     (a, b) => (totals[b.id] ?? 0) - (totals[a.id] ?? 0),
   );
@@ -129,6 +136,26 @@ export function MatchCompleteScreen({
         </button>
       )}
 
+      <button
+        type="button"
+        className={shared.btnSecondary}
+        onClick={() => setShareOpen(true)}
+        disabled={sharePending}
+        data-testid="sk-share-match"
+        data-share-pending={sharePending ? "true" : undefined}
+        style={{
+          width: "100%",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.4rem",
+          opacity: sharePending ? 0.6 : 1,
+        }}
+      >
+        <Icon name="share" size={18} />
+        {sharePending ? t("share.pending") : t("share.cta")}
+      </button>
+
       <div className={styles.actions}>
         <Link
           to="/games/$slug"
@@ -150,6 +177,13 @@ export function MatchCompleteScreen({
           {t("scoring.skullKing.complete.rematchCta")}
         </Link>
       </div>
+
+      {shareOpen && (
+        <ShareMatchDialog
+          matchId={matchId}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
     </div>
   );
 }
