@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import shared from "./shared.module.css";
 import styles from "./MatchCompleteScreen.module.css";
 import { Avatar } from "../../ui/Avatar";
+import { Icon } from "../../ui/Icon";
 import { SkullGlyph } from "../../ui/sk/SkGlyphs";
 import { ShareMatchDialog } from "../../matches/ShareMatchDialog";
 import { displayPlayerName } from "../../../../shared/players";
@@ -137,8 +138,15 @@ export function MatchCompleteScreen({
         className={shared.btnSecondary}
         onClick={() => setShareOpen(true)}
         data-testid="sk-share-match"
-        style={{ width: "100%" }}
+        style={{
+          width: "100%",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.4rem",
+        }}
       >
+        <Icon name="share" size={18} />
         {t("share.cta")}
       </button>
 

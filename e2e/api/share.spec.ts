@@ -87,13 +87,15 @@ test.describe("API: Share token (owner-only mutations)", () => {
     expect(b.token).toBe(a.token);
   });
 
-  test("POST refuses non-owner (404 — match not visible as creator)", async ({
+  test("POST refuses users with no visibility into the match (404)", async ({
     request,
   }) => {
+    // Visibility — not ownership — gates the share endpoints. A user
+    // who didn't participate (and who the creator never linked) has no
+    // claim on the match and gets the same shape as "match not found".
     await createAndSignIn(request);
     const { matchId } = await createCompletedMatch(request);
 
-    // Sign in as a different user — the previous user's match is invisible.
     await createAndSignIn(request);
     const res = await request.post(`/api/matches/${matchId}/share-token`);
     expect(res.status()).toBe(404);

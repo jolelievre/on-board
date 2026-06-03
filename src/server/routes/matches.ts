@@ -411,16 +411,20 @@ export const matchesRoutes = new Hono<AuthEnv>()
   })
   // ─── Share token (PR 8-D) ──────────────────────────────────────────
   //
-  // Only the match creator can mint or revoke the public share link.
-  // The token is idempotent — re-POSTing returns the existing token —
-  // and only minted on completed matches (an in-progress match has no
-  // shareable summary).
+  // Any participant in a completed match can mint, hydrate, or revoke
+  // the public share link. The token is idempotent — re-POSTing returns
+  // the existing one — and gated on `status === COMPLETED`. The first
+  // user to mint owns the `createdById` audit field on the token row;
+  // any later participant can still re-use or revoke it. Visibility
+  // mirrors the rest of the `/matches` surface (PR 8-B
+  // `matchVisibilityWhere`), so non-participants get 404 — same shape
+  // as a viewer who can't see the match at all.
   .post("/:id/share-token", async (c) => {
     const user = c.get("user");
     const id = c.req.param("id");
 
     const match = await prisma.match.findFirst({
-      where: { id, createdById: user.id },
+      where: { AND: [{ id }, matchVisibilityWhere(user.id)] },
       select: { id: true, status: true },
     });
     if (!match) {
@@ -433,8 +437,6 @@ export const matchesRoutes = new Hono<AuthEnv>()
       );
     }
 
-    // upsert via findFirst+create-or-return — simpler than @@unique race
-    // handling and the matchId already has @unique on the relation.
     const existing = await prisma.matchShareToken.findUnique({
       where: { matchId: id },
     });
@@ -454,7 +456,7 @@ export const matchesRoutes = new Hono<AuthEnv>()
     const id = c.req.param("id");
 
     const match = await prisma.match.findFirst({
-      where: { id, createdById: user.id },
+      where: { AND: [{ id }, matchVisibilityWhere(user.id)] },
       select: { id: true },
     });
     if (!match) {
@@ -465,14 +467,13 @@ export const matchesRoutes = new Hono<AuthEnv>()
     return c.body(null, 204);
   })
   .get("/:id/share-token", async (c) => {
-    // Owner-only read so the share dialog can hydrate the existing URL
-    // when the screen opens — no auto-creation, just "do I already have
-    // a token for this match?".
+    // Hydrate the existing token (no auto-mint) so the dialog can
+    // populate without bumping createdAt on every open.
     const user = c.get("user");
     const id = c.req.param("id");
 
     const match = await prisma.match.findFirst({
-      where: { id, createdById: user.id },
+      where: { AND: [{ id }, matchVisibilityWhere(user.id)] },
       select: { id: true },
     });
     if (!match) {

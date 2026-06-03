@@ -10,6 +10,7 @@ import type {
 } from "../match/HandMatchGrid";
 import { WinnerBanner } from "../match/WinnerBanner";
 import { ShareMatchDialog } from "../matches/ShareMatchDialog";
+import { Icon } from "../ui/Icon";
 import { displayPlayerName } from "../../../shared/players";
 import { useRequiredViewerId } from "../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../hooks/data/useOwnedProfileIndex";
@@ -278,6 +279,7 @@ export function SevenWondersDuelScorer({ match }: Props) {
             size="lg"
             fullWidth
             onClick={() => setShareOpen(true)}
+            iconBefore={<Icon name="share" size={18} />}
             data-testid="swd-share-match"
             className="mt-6"
           >

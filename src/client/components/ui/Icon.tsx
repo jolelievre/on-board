@@ -35,7 +35,8 @@ export type IconName =
   | "cards-check"
   | "flag"
   | "zero"
-  | "calendar-check";
+  | "calendar-check"
+  | "share";
 
 type Props = {
   name: IconName;
@@ -415,6 +416,16 @@ export function Icon({ name, size = 20, stroke = 1.6, className, title }: Props)
           <circle cx="13" cy="14" r="1" fill="currentColor" stroke="none" />
           <circle cx="16" cy="14" r="1" fill="currentColor" stroke="none" />
           <circle cx="7" cy="17.5" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "share":
+      // iOS-style share glyph: arrow rising out of a tray. Universal
+      // enough to read on every platform.
+      return (
+        <svg {...props}>
+          {titleEl}
+          <path d="M12 3v13M8 7l4-4 4 4" />
+          <path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
         </svg>
       );
     case "skull-king":

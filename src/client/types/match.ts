@@ -43,6 +43,10 @@ export type Match = {
   status: "IN_PROGRESS" | "COMPLETED";
   victoryType: string | null;
   winnerId: string | null;
+  /** Auth user who created the match. Used to gate owner-only
+   * surfaces (e.g. the share-link dialog). Nullable for legacy rows
+   * that predate the column. */
+  createdById: string | null;
   game: { id: string; slug: string; name: string };
   players: Player[];
   scores: ScoreRow[];
