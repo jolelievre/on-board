@@ -26,7 +26,8 @@ model User {
 
   accounts       Account[]
   sessions       Session[]
-  createdMatches Match[]   @relation("MatchCreator")
+  createdMatches      Match[]            @relation("MatchCreator")
+  createdShareTokens  MatchShareToken[]  @relation("ShareTokenCreator")
 
   // Profiles owned by this user (i.e. people they've added).
   ownedProfiles  Profile[]      @relation("ProfileOwner")
@@ -114,8 +115,25 @@ model Match {
   updatedAt   DateTime  @updatedAt /// Drives Last-Write-Wins merging during pull-sync
   completedAt DateTime?
 
-  players Player[]
-  scores  Score[]
+  players     Player[]
+  scores      Score[]
+  shareToken  MatchShareToken?
+}
+
+/// Public read-only share link for a completed match (PR 8-D).
+/// One token per Match; owner creates it from the match-complete
+/// screen, can revoke at any time. The token is the URL slug for
+/// `GET /api/share/:token` (public, no auth) and `/share/:token`
+/// (public client route + OG meta SSR for chat-app unfurls).
+model MatchShareToken {
+  id          String   @id @default(cuid()) /// Used as the URL token.
+  matchId     String   @unique
+  match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  createdById String   /// The User who minted the token (must own / have created the match).
+  createdBy   User     @relation("ShareTokenCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([createdById])
 }
 
 /// A participant in a match. Always points to a Profile (the domain

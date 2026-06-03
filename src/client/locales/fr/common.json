@@ -334,6 +334,39 @@
       "empty": "Aucune partie encore à ce jeu."
     }
   },
+  "share": {
+    "cta": "Partager la partie",
+    "dialog": {
+      "title": "Partager cette partie",
+      "body": "Toute personne avec ce lien peut voir le score final. Révocable à tout moment.",
+      "urlLabel": "URL de partage",
+      "copy": "Copier",
+      "copied": "Copié",
+      "shareCta": "Partager via…",
+      "shareTitle": "Partie sur OnBoard",
+      "revoke": "Révoquer le lien",
+      "error": "Impossible de charger le lien de partage"
+    },
+    "summary": {
+      "eyebrow": "Résumé de la partie",
+      "winnerLine": "{{alias}} l'emporte avec {{score}} points",
+      "victoryType": {
+        "score": "Au score",
+        "military_supremacy": "Suprématie militaire",
+        "scientific_supremacy": "Suprématie scientifique"
+      }
+    },
+    "install": {
+      "title": "Ça vous tente ?",
+      "body": "Installez OnBoard pour suivre vos parties.",
+      "cta": "Découvrir OnBoard"
+    },
+    "notFound": {
+      "title": "Lien introuvable",
+      "body": "Ce lien de partage n'existe pas ou a été révoqué."
+    },
+    "loadError": "Impossible de charger cette partie. Réessayez plus tard."
+  },
   "achievements": {
     "sectionTitle": "Trophées",
     "emptySelf": "Gagne une partie pour décrocher tes premiers trophées.",

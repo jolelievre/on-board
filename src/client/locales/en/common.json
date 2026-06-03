@@ -334,6 +334,39 @@
       "empty": "No matches yet at this game."
     }
   },
+  "share": {
+    "cta": "Share match",
+    "dialog": {
+      "title": "Share this match",
+      "body": "Anyone with the link can see the final scoreboard. Revoke any time.",
+      "urlLabel": "Share URL",
+      "copy": "Copy",
+      "copied": "Copied",
+      "shareCta": "Share via…",
+      "shareTitle": "Match on OnBoard",
+      "revoke": "Revoke link",
+      "error": "Could not load the share link"
+    },
+    "summary": {
+      "eyebrow": "Match summary",
+      "winnerLine": "{{alias}} won with {{score}} points",
+      "victoryType": {
+        "score": "By score",
+        "military_supremacy": "Military supremacy",
+        "scientific_supremacy": "Scientific supremacy"
+      }
+    },
+    "install": {
+      "title": "Like what you see?",
+      "body": "Install OnBoard to track your own matches.",
+      "cta": "Get OnBoard"
+    },
+    "notFound": {
+      "title": "Link not found",
+      "body": "This share link doesn't exist or has been revoked."
+    },
+    "loadError": "Could not load this match. Try again later."
+  },
   "achievements": {
     "sectionTitle": "Achievements",
     "emptySelf": "Win a match to start collecting stamps.",

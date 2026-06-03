@@ -3,6 +3,7 @@ import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import type { IncomingHttpHeaders } from "http";
+import { readFile } from "node:fs/promises";
 import path from "path";
 
 function toHeadersInit(raw: IncomingHttpHeaders): HeadersInit {
@@ -23,6 +24,47 @@ function honoDevServer(): Plugin {
     name: "hono-dev-server",
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
+        // Dev-side OG meta injection for /share/:token. The prod
+        // server (src/server/index.ts) does the same for chat-app
+        // unfurls; the dev hook exists so E2E can verify the tags
+        // were injected — and so a developer hitting the URL locally
+        // sees the same head shape they'd see deployed.
+        const shareMatch = req.url?.match(/^\/share\/([^/?#]+)(?:[?#]|$)/);
+        if (shareMatch && (req.method === "GET" || req.method === "HEAD")) {
+          try {
+            const token = shareMatch[1];
+            const og = (await server.ssrLoadModule(
+              "./src/server/lib/share-og.ts",
+            )) as typeof import("./src/server/lib/share-og.js");
+            const payload = await og.buildShareOgPayload(token);
+            // Use Vite's normal index.html pipeline so HMR client +
+            // module preload tags are still present.
+            const rawHtml = await readFile("./index.html", "utf-8");
+            const transformed = await server.transformIndexHtml(
+              req.url!,
+              rawHtml,
+            );
+            const host = req.headers.host ?? "localhost:5173";
+            const proto =
+              (req.headers["x-forwarded-proto"] as string | undefined) ??
+              "http";
+            const baseUrl = `${proto}://${host}`;
+            const finalHtml = og.injectShareOg(
+              transformed,
+              payload,
+              `${baseUrl}/share/${token}`,
+              `${baseUrl}/pwa-icon-512.png`,
+            );
+            res.setHeader("Content-Type", "text/html; charset=utf-8");
+            res.statusCode = 200;
+            res.end(finalHtml);
+            return;
+          } catch (err) {
+            console.error("[og-share dev]", err);
+            // Fall through to normal SPA serving on error.
+          }
+        }
+
         if (!req.url?.startsWith("/api")) return next();
 
         try {

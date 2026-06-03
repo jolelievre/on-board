@@ -408,4 +408,82 @@ export const matchesRoutes = new Hono<AuthEnv>()
     });
 
     return c.json(result);
+  })
+  // ─── Share token (PR 8-D) ──────────────────────────────────────────
+  //
+  // Only the match creator can mint or revoke the public share link.
+  // The token is idempotent — re-POSTing returns the existing token —
+  // and only minted on completed matches (an in-progress match has no
+  // shareable summary).
+  .post("/:id/share-token", async (c) => {
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    const match = await prisma.match.findFirst({
+      where: { id, createdById: user.id },
+      select: { id: true, status: true },
+    });
+    if (!match) {
+      return c.json({ error: "Match not found" }, 404);
+    }
+    if (match.status !== "COMPLETED") {
+      return c.json(
+        { error: "Only completed matches can be shared" },
+        400,
+      );
+    }
+
+    // upsert via findFirst+create-or-return — simpler than @@unique race
+    // handling and the matchId already has @unique on the relation.
+    const existing = await prisma.matchShareToken.findUnique({
+      where: { matchId: id },
+    });
+    const token =
+      existing ??
+      (await prisma.matchShareToken.create({
+        data: { matchId: id, createdById: user.id },
+      }));
+
+    return c.json(
+      { token: token.id, createdAt: token.createdAt.toISOString() },
+      existing ? 200 : 201,
+    );
+  })
+  .delete("/:id/share-token", async (c) => {
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    const match = await prisma.match.findFirst({
+      where: { id, createdById: user.id },
+      select: { id: true },
+    });
+    if (!match) {
+      return c.json({ error: "Match not found" }, 404);
+    }
+
+    await prisma.matchShareToken.deleteMany({ where: { matchId: id } });
+    return c.body(null, 204);
+  })
+  .get("/:id/share-token", async (c) => {
+    // Owner-only read so the share dialog can hydrate the existing URL
+    // when the screen opens — no auto-creation, just "do I already have
+    // a token for this match?".
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    const match = await prisma.match.findFirst({
+      where: { id, createdById: user.id },
+      select: { id: true },
+    });
+    if (!match) {
+      return c.json({ error: "Match not found" }, 404);
+    }
+
+    const token = await prisma.matchShareToken.findUnique({
+      where: { matchId: id },
+    });
+    if (!token) {
+      return c.body(null, 204);
+    }
+    return c.json({ token: token.id, createdAt: token.createdAt.toISOString() });
   });

@@ -7,6 +7,7 @@ import { matchesRoutes } from "./routes/matches.js";
 import { scoresRoutes } from "./routes/scores.js";
 import { profilesRoutes } from "./routes/profiles.js";
 import { uploadsRoutes } from "./routes/uploads.js";
+import { shareRoutes } from "./routes/share.js";
 
 const app = new Hono().basePath("/api");
 
@@ -39,6 +40,10 @@ app.route("/profiles", profilesRoutes);
 // the URL is the only way someone else can fetch the file (same
 // capability model as Google avatar URLs).
 app.route("/uploads", uploadsRoutes);
+
+// Public read-only match share — no auth, capability-on-URL model.
+// The token sits in the URL; revoking the token invalidates the link.
+app.route("/share", shareRoutes);
 
 app.get("/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
