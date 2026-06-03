@@ -216,3 +216,31 @@ model Score {
 
   @@unique([matchId, playerId, category])
 }
+
+/// Server-side telemetry for terminally-failed client sync queue entries
+/// (Phase 8-E). Each row is a single failed entry that a client reported
+/// after its retry budget was exhausted. Used to spot real-world stall
+/// patterns ahead of PR 8-F's recovery fix without waiting for users to
+/// open Settings → Sync on their own device.
+///
+/// Server-only — never exposed via a public API. The retention model is
+/// indefinite for now (volume is tiny: friend-circle scale). Drop the
+/// table during Phase 8-F clean-up once the recovery model lands.
+model SyncFailureLog {
+  id           String   @id @default(cuid())
+  userId       String?  /// May be null for an entry reported pre-auth.
+  method       String   /// HTTP method of the failed request (POST, PATCH, …).
+  url          String   /// Request URL (no querystring or PII).
+  status       Int?     /// HTTP status of the server response, if any.
+  errorMessage String?  /// `errorBody.error` from the server, or the local fallback.
+  errorField   String?  /// `errorBody.field`, if the server pointed at one.
+  errorHint    String?  /// `errorBody.hint`, if the server supplied one.
+  retries      Int      @default(0)
+  /// Wall-clock ISO timestamp captured by the *client* when it gave up.
+  /// Kept separately from `reportedAt` because the client may report a
+  /// batch of older failures on a reconnect.
+  clientFailedAt String?
+  reportedAt   DateTime @default(now())
+
+  @@index([reportedAt])
+}
