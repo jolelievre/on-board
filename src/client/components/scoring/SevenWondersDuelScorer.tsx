@@ -14,6 +14,7 @@ import { Icon } from "../ui/Icon";
 import { displayPlayerName } from "../../../shared/players";
 import { useRequiredViewerId } from "../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../hooks/data/useOwnedProfileIndex";
+import { useMatchSyncStatus } from "../../hooks/data/useMatchSyncStatus";
 import { Button } from "../ui/Button";
 import buttonStyles from "../ui/Button.module.css";
 import {
@@ -157,6 +158,8 @@ export function SevenWondersDuelScorer({ match }: Props) {
 
   const [completing, setCompleting] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const syncStatus = useMatchSyncStatus(match.id);
+  const sharePending = syncStatus === "pending";
 
   const handleComplete = async () => {
     await flushPendingSave();
@@ -280,10 +283,12 @@ export function SevenWondersDuelScorer({ match }: Props) {
             fullWidth
             onClick={() => setShareOpen(true)}
             iconBefore={<Icon name="share" size={18} />}
+            disabled={sharePending}
             data-testid="swd-share-match"
+            data-share-pending={sharePending ? "true" : undefined}
             className="mt-6"
           >
-            {t("share.cta")}
+            {sharePending ? t("share.pending") : t("share.cta")}
           </Button>
           <Link
             to="/games/$slug/new"

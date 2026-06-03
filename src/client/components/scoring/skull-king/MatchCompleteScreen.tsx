@@ -10,6 +10,7 @@ import { ShareMatchDialog } from "../../matches/ShareMatchDialog";
 import { displayPlayerName } from "../../../../shared/players";
 import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useOwnedProfileIndex } from "../../../hooks/data/useOwnedProfileIndex";
+import { useMatchSyncStatus } from "../../../hooks/data/useMatchSyncStatus";
 import type { Player } from "../../../types/match";
 
 type Props = {
@@ -43,6 +44,8 @@ export function MatchCompleteScreen({
   const { t } = useTranslation();
   const viewerId = useRequiredViewerId();
   const ownedIndex = useOwnedProfileIndex(viewerId);
+  const syncStatus = useMatchSyncStatus(matchId);
+  const sharePending = syncStatus === "pending";
   const [shareOpen, setShareOpen] = useState(false);
   const ranked = [...players].sort(
     (a, b) => (totals[b.id] ?? 0) - (totals[a.id] ?? 0),
@@ -137,17 +140,20 @@ export function MatchCompleteScreen({
         type="button"
         className={shared.btnSecondary}
         onClick={() => setShareOpen(true)}
+        disabled={sharePending}
         data-testid="sk-share-match"
+        data-share-pending={sharePending ? "true" : undefined}
         style={{
           width: "100%",
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
           gap: "0.4rem",
+          opacity: sharePending ? 0.6 : 1,
         }}
       >
         <Icon name="share" size={18} />
-        {t("share.cta")}
+        {sharePending ? t("share.pending") : t("share.cta")}
       </button>
 
       <div className={styles.actions}>

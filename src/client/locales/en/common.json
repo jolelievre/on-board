@@ -336,6 +336,7 @@
   },
   "share": {
     "cta": "Share match",
+    "pending": "Syncing…",
     "dialog": {
       "title": "Share this match",
       "body": "Anyone with the link can see the final scoreboard. Revoke any time.",
@@ -345,7 +346,8 @@
       "shareCta": "Share via…",
       "shareTitle": "Match on OnBoard",
       "revoke": "Revoke link",
-      "error": "Could not load the share link"
+      "error": "Could not load the share link",
+      "notSyncedYet": "This match hasn't synced to the server yet. Try again in a moment."
     },
     "summary": {
       "eyebrow": "Match summary",

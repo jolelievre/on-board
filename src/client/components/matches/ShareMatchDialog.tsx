@@ -51,8 +51,7 @@ export function ShareMatchDialog({ matchId, onClose }: Props) {
       );
       setState({ kind: "ready", token: created.token });
     } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : t("share.dialog.error");
+      const message = errorMessage(err, t);
       setState({ kind: "error", message });
     }
   }, [matchId, t]);
@@ -108,8 +107,7 @@ export function ShareMatchDialog({ matchId, onClose }: Props) {
       await api(`/api/matches/${matchId}/share-token`, { method: "DELETE" });
       onClose();
     } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : t("share.dialog.error");
+      const message = errorMessage(err, t);
       setState({ kind: "error", message });
     }
   }, [matchId, onClose, t]);
@@ -204,4 +202,20 @@ export function ShareMatchDialog({ matchId, onClose }: Props) {
       </div>
     </div>
   );
+}
+
+function errorMessage(
+  err: unknown,
+  t: (key: string) => string,
+): string {
+  if (err instanceof ApiError) {
+    // The server returns 404 with `error: "Match not found"` both
+    // when the match genuinely doesn't exist for the viewer AND when
+    // the viewer's local copy hasn't synced yet (offline-first race).
+    // Map that to a friendlier hint — the most likely cause for an
+    // active user is the queue is still draining.
+    if (err.status === 404) return t("share.dialog.notSyncedYet");
+    return err.message;
+  }
+  return t("share.dialog.error");
 }

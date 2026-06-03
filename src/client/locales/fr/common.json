@@ -336,6 +336,7 @@
   },
   "share": {
     "cta": "Partager la partie",
+    "pending": "Synchronisation…",
     "dialog": {
       "title": "Partager cette partie",
       "body": "Toute personne avec ce lien peut voir le score final. Révocable à tout moment.",
@@ -345,7 +346,8 @@
       "shareCta": "Partager via…",
       "shareTitle": "Partie sur OnBoard",
       "revoke": "Révoquer le lien",
-      "error": "Impossible de charger le lien de partage"
+      "error": "Impossible de charger le lien de partage",
+      "notSyncedYet": "Cette partie n'a pas encore été synchronisée avec le serveur. Réessaie dans un instant."
     },
     "summary": {
       "eyebrow": "Résumé de la partie",
