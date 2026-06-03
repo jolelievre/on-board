@@ -2,17 +2,28 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "../components/LanguageSelector";
+import { CoverArt } from "../components/games/CoverArt";
+import { Icon } from "../components/ui/Icon";
 import styles from "./share.$token.module.css";
 
 export const Route = createFileRoute("/share/$token")({
   component: SharePage,
 });
 
+type SharePayloadPlayer = {
+  alias: string;
+  avatarUrl: string | null;
+  avatarFrame: "circle" | "rounded" | "tag";
+  avatarRing: string | null;
+  score: number;
+  isWinner: boolean;
+};
+
 type SharePayload = {
   game: { name: string; slug: string };
   completedAt: string | null;
   victoryType: string | null;
-  players: { alias: string; score: number; isWinner: boolean }[];
+  players: SharePayloadPlayer[];
 };
 
 type LoadState =
@@ -117,14 +128,21 @@ function ShareSummary({
 
   return (
     <article className={styles.card} data-testid="share-summary">
-      <p className={styles.eyebrow}>{t("share.summary.eyebrow")}</p>
-      <h1 className={styles.gameName}>{data.game.name}</h1>
-      {completedLabel && (
-        <p className={styles.completedAt}>{completedLabel}</p>
-      )}
+      <div className={styles.coverWrap}>
+        <CoverArt slug={data.game.slug} width={300} height={140} fluid />
+      </div>
+
+      <header className={styles.cardHeader}>
+        <p className={styles.eyebrow}>{t("share.summary.eyebrow")}</p>
+        <h1 className={styles.gameName}>{data.game.name}</h1>
+        {completedLabel && (
+          <p className={styles.completedAt}>{completedLabel}</p>
+        )}
+      </header>
 
       {winner && (
         <p className={styles.winnerLine} data-testid="share-winner-line">
+          <Icon name="crown" size={18} className={styles.winnerIcon} />
           {t("share.summary.winnerLine", {
             alias: winner.alias,
             score: winner.score,
@@ -142,6 +160,7 @@ function ShareSummary({
             data-testid="share-player-row"
           >
             <span className={styles.playerPos}>{i + 1}</span>
+            <PlayerStamp player={p} />
             <span className={styles.playerAlias}>{p.alias}</span>
             <span className={styles.playerScore}>{p.score}</span>
           </li>
@@ -156,6 +175,56 @@ function ShareSummary({
         </p>
       )}
     </article>
+  );
+}
+
+const RING_COLOR_VAR: Record<string, string> = {
+  civil: "var(--cat-civil, #2563eb)",
+  scientific: "var(--cat-scientific, #16a34a)",
+  commercial: "var(--cat-commercial, #eab308)",
+  guilds: "var(--cat-guilds, #9333ea)",
+  wonders: "var(--cat-wonders, #9ca3af)",
+  progress: "var(--cat-progress, #84cc16)",
+  treasury: "var(--cat-treasury, #ca8a04)",
+  military: "var(--cat-military, #dc2626)",
+};
+
+function PlayerStamp({ player }: { player: SharePayloadPlayer }) {
+  const radiusClass =
+    player.avatarFrame === "tag"
+      ? styles.stampTag
+      : player.avatarFrame === "rounded"
+        ? styles.stampRounded
+        : styles.stampCircle;
+  const ringColor = player.avatarRing
+    ? RING_COLOR_VAR[player.avatarRing]
+    : undefined;
+  const ringStyle = ringColor
+    ? {
+        boxShadow: `0 0 0 2px ${ringColor}`,
+      }
+    : undefined;
+
+  if (player.avatarUrl) {
+    return (
+      <span
+        className={`${styles.stamp} ${radiusClass}`}
+        style={ringStyle}
+        aria-hidden="true"
+      >
+        <img src={player.avatarUrl} alt="" className={styles.stampImg} />
+      </span>
+    );
+  }
+  const initial = (player.alias || "·").slice(0, 1).toUpperCase();
+  return (
+    <span
+      className={`${styles.stamp} ${styles.stampFallback} ${radiusClass}`}
+      style={ringStyle}
+      aria-hidden="true"
+    >
+      {initial}
+    </span>
   );
 }
 

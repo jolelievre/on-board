@@ -84,15 +84,24 @@ export function buildShareOgTags(
   imageUrl: string,
 ): string {
   const e = escapeHtml;
+  // Most chat-app unfurls (Messenger, WhatsApp, iMessage, Signal,
+  // Slack) need explicit `og:image:width` / `og:image:height` to
+  // render the preview thumbnail consistently — without them the
+  // image is sometimes dropped silently. The pwa-icon is square 512.
   return [
     `<meta property="og:title" content="${e(payload.title)}" />`,
     `<meta property="og:description" content="${e(payload.description)}" />`,
     `<meta property="og:url" content="${e(url)}" />`,
     `<meta property="og:type" content="article" />`,
+    `<meta property="og:site_name" content="OnBoard" />`,
     `<meta property="og:image" content="${e(imageUrl)}" />`,
+    `<meta property="og:image:width" content="512" />`,
+    `<meta property="og:image:height" content="512" />`,
+    `<meta property="og:image:alt" content="OnBoard" />`,
     `<meta name="twitter:card" content="summary" />`,
     `<meta name="twitter:title" content="${e(payload.title)}" />`,
     `<meta name="twitter:description" content="${e(payload.description)}" />`,
+    `<meta name="twitter:image" content="${e(imageUrl)}" />`,
   ].join("\n    ");
 }
 

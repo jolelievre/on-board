@@ -30,7 +30,16 @@ export const shareRoutes = new Hono().get("/:token", async (c) => {
             select: {
               id: true,
               position: true,
-              profile: { select: { alias: true } },
+              profile: {
+                select: {
+                  alias: true,
+                  customAvatarUrl: true,
+                  useLinkedAvatar: true,
+                  avatarFrame: true,
+                  avatarRing: true,
+                  linkedUser: { select: { avatarUrl: true } },
+                },
+              },
             },
           },
           scores: { select: { playerId: true, value: true } },
@@ -50,11 +59,25 @@ export const shareRoutes = new Hono().get("/:token", async (c) => {
     );
   }
 
-  const players = row.match.players.map((p) => ({
-    alias: p.profile.alias,
-    score: totalByPlayer.get(p.id) ?? 0,
-    isWinner: p.id === row.match.winnerId,
-  }));
+  const players = row.match.players.map((p) => {
+    const { profile } = p;
+    // Avatar resolution mirrors the in-app rule: the linked user's
+    // avatar wins when `useLinkedAvatar` is true and a linked account
+    // exists. No identifier (profileId / userId) is exposed — only
+    // the visual properties needed to render a stamp.
+    const avatarUrl =
+      profile.useLinkedAvatar && profile.linkedUser?.avatarUrl
+        ? profile.linkedUser.avatarUrl
+        : profile.customAvatarUrl;
+    return {
+      alias: profile.alias,
+      avatarUrl: avatarUrl ?? null,
+      avatarFrame: profile.avatarFrame,
+      avatarRing: profile.avatarRing,
+      score: totalByPlayer.get(p.id) ?? 0,
+      isWinner: p.id === row.match.winnerId,
+    };
+  });
 
   return c.json({
     game: { name: row.match.game.name, slug: row.match.game.slug },
