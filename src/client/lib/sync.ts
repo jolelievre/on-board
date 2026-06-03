@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type SyncQueueEntry } from "./db";
+import type { SyncErrorBody } from "../../shared/sync-errors";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 
 const MAX_RETRIES = 3;
@@ -70,12 +71,30 @@ export const syncEngine = {
           anySuccess = true;
         } else if (res.status === 401 || res.status === 403) {
           // Auth or ownership failure — replaying won't change the outcome.
+          const errorBody = await readStructuredErrorBody(res);
           await db.syncQueue.update(entry.id!, {
             status: "failed",
-            error: `HTTP ${res.status}`,
+            error: errorBody?.error ?? `HTTP ${res.status}`,
+            errorBody: errorBody ?? undefined,
+            errorStatus: res.status,
+            failedAt: new Date().toISOString(),
+          });
+        } else if (res.status >= 400 && res.status < 500) {
+          // Other 4xx (validation, conflict, not-found) — replays won't fix
+          // these, so mark terminal immediately rather than burning the
+          // retry budget. The server's structured body lets the Sync
+          // panel render an actionable message for diagnosis (Phase 8-E).
+          const errorBody = await readStructuredErrorBody(res);
+          await db.syncQueue.update(entry.id!, {
+            status: "failed",
+            error: errorBody?.error ?? `HTTP ${res.status}`,
+            errorBody: errorBody ?? undefined,
+            errorStatus: res.status,
+            failedAt: new Date().toISOString(),
           });
         } else {
-          await incrementRetry(entry);
+          // 5xx — server-side glitch, retry per the budget.
+          await incrementRetry(entry, res);
         }
       } catch {
         // Network error mid-flush — stop; will retry on next reconnect.
@@ -157,15 +176,43 @@ export const syncEngine = {
   },
 };
 
-async function incrementRetry(entry: SyncQueueEntry) {
+async function incrementRetry(entry: SyncQueueEntry, res: Response) {
   const nextRetries = entry.retries + 1;
   if (nextRetries >= MAX_RETRIES) {
+    const errorBody = await readStructuredErrorBody(res);
     await db.syncQueue.update(entry.id!, {
       retries: nextRetries,
       status: "failed",
-      error: `Max retries reached`,
+      error: errorBody?.error ?? `Max retries reached`,
+      errorBody: errorBody ?? undefined,
+      errorStatus: res.status,
+      failedAt: new Date().toISOString(),
     });
   } else {
     await db.syncQueue.update(entry.id!, { retries: nextRetries });
   }
+}
+
+/** Read the response body as a `SyncErrorBody` if it looks like one. Returns
+ * `null` for responses that aren't JSON or whose JSON doesn't carry the
+ * expected `error` string — the caller falls back to a generic `HTTP N`
+ * label in that case. */
+async function readStructuredErrorBody(
+  res: Response,
+): Promise<SyncErrorBody | null> {
+  try {
+    const cloned = res.clone();
+    const parsed = (await cloned.json()) as unknown;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "error" in parsed &&
+      typeof (parsed as { error: unknown }).error === "string"
+    ) {
+      return parsed as SyncErrorBody;
+    }
+  } catch {
+    // not JSON, or stream already consumed — nothing structured to log.
+  }
+  return null;
 }

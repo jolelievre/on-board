@@ -8,10 +8,18 @@ import {
   type LocalProfile,
   type LocalScore,
 } from "./db";
+import { reportSyncFailures } from "./sync-failure-reporter";
 import { resolveSelfAlias } from "../../shared/players";
 
 const SYNC_META_LAST_PULL = "lastPullAt";
 const SYNC_META_LAST_PROFILE_PULL = "lastProfilePullAt";
+
+/** ISO timestamp of the most recent time the user opened the Settings →
+ * Sync panel. The app-shell `SyncFailedBanner` (Phase 8-E) stays sticky
+ * until this is at or above the queue's latest `failedAt` — opening
+ * Settings counts as "acknowledged"; new failures after the ack re-arm
+ * the banner. */
+export const SYNC_META_FAILED_BANNER_ACK = "failedBannerAcknowledgedAt";
 
 /** Minimum interval between successive `pullSync()` attempts (forceable
  * via `{ force: true }`). Without throttling, the post-flush pullSync
@@ -204,6 +212,12 @@ export async function pullSync(
   );
 
   await Promise.allSettled([games, matches, profiles]);
+
+  // Phase 8-E: best-effort telemetry on terminally-failed queue entries.
+  // Runs after the pull so it shares the connectivity window — we
+  // already know the network is reachable at this point. Failures here
+  // are silently swallowed inside the reporter.
+  void reportSyncFailures();
 
   if (linkTransitionDetected) {
     await resetPullCursors();
