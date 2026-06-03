@@ -21,25 +21,31 @@ export function SyncFailedBanner() {
 
   const needsBanner = useLiveQuery(
     async () => {
-      const failed = await db.syncQueue
+      const failedCount = await db.syncQueue
         .where("status")
         .equals("failed")
-        .toArray();
-      if (failed.length === 0) return false;
-
-      // The queue's most recent failure timestamp drives the ack
-      // comparison. Entries that predate Phase 8-E don't carry a
-      // `failedAt` — surface them anyway (treat as "needs ack").
-      const latestFailedAt = failed.reduce<string | null>((acc, entry) => {
-        if (!entry.failedAt) return acc;
-        if (acc === null || entry.failedAt > acc) return entry.failedAt;
-        return acc;
-      }, null);
+        .count();
+      if (failedCount === 0) return false;
 
       const ack = await db.syncMeta.get("failedBannerAcknowledgedAt");
-      if (latestFailedAt === null) return true;
+      // Never opened Settings → surface anything that's failed, including
+      // legacy entries from before Phase 8-E that lack `failedAt`.
       if (!ack) return true;
-      return ack.value < latestFailedAt;
+
+      // After ack: re-arm only on a *new* failure (one whose `failedAt`
+      // is strictly later than the ack). Legacy entries without
+      // `failedAt` count as acknowledged once Settings was opened —
+      // otherwise the user would have no way to dismiss the banner for
+      // entries that pre-date the failedAt instrumentation.
+      const newer = await db.syncQueue
+        .where("status")
+        .equals("failed")
+        .filter(
+          (entry) =>
+            entry.failedAt !== undefined && entry.failedAt > ack.value,
+        )
+        .count();
+      return newer > 0;
     },
     [],
     false,

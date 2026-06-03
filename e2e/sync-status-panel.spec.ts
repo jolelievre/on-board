@@ -122,4 +122,62 @@ test.describe("Sync queue visibility (Phase 8-E)", () => {
     await page.waitForLoadState("domcontentloaded");
     await expect(page.getByTestId("sync-failed-banner")).toHaveCount(0);
   });
+
+  test("legacy failed entry (no failedAt) is dismissable via Settings", async ({
+    page,
+  }) => {
+    // Reproduces the case that bit the maintainer on the deployed
+    // preview: an entry that failed *before* Phase 8-E added the
+    // `failedAt` instrumentation. Without the ack-honors-legacy fix in
+    // the banner, `latestFailedAt === null` short-circuits to "always
+    // show" and the user has no way to dismiss it.
+    await page.goto("/games");
+    await page.waitForLoadState("domcontentloaded");
+
+    await page.evaluate(async () => {
+      const openDb = () =>
+        new Promise<IDBDatabase>((resolve, reject) => {
+          const req = window.indexedDB.open("onboard");
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      const db = await openDb();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(["syncQueue", "syncMeta"], "readwrite");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.objectStore("syncQueue").add({
+          method: "POST",
+          url: "/api/profiles",
+          body: JSON.stringify({ id: "legacy", alias: "" }),
+          createdAt: new Date().toISOString(),
+          retries: 3,
+          status: "failed",
+          error: "Max retries reached",
+          reported: true,
+          // Intentional: no failedAt, no errorBody, no errorStatus —
+          // mirrors the pre-8-E shape of failed rows on real devices.
+        });
+        tx.objectStore("syncMeta").delete("failedBannerAcknowledgedAt");
+      });
+      db.close();
+    });
+
+    await page.reload();
+    await page.waitForLoadState("domcontentloaded");
+
+    await expect(page.getByTestId("sync-failed-banner")).toBeVisible();
+
+    await page.goto("/settings");
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByTestId("settings-sync-panel")).toBeVisible();
+
+    await page.goto("/games");
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByTestId("sync-failed-banner")).toHaveCount(0);
+
+    await page.reload();
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByTestId("sync-failed-banner")).toHaveCount(0);
+  });
 });
