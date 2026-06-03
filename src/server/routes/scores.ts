@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { structuredError } from "../lib/structured-errors.js";
 import type { AuthUser } from "../middleware/auth.js";
 
 type AuthEnv = {
@@ -26,7 +27,10 @@ export const scoresRoutes = new Hono<AuthEnv>().patch(
     };
 
     if (!scores || !Array.isArray(scores) || scores.length === 0) {
-      return c.json({ error: "scores array is required" }, 400);
+      return structuredError(c, 400, {
+        error: "scores array is required",
+        field: "scores",
+      });
     }
 
     // Validate match exists and belongs to user
@@ -36,7 +40,10 @@ export const scoresRoutes = new Hono<AuthEnv>().patch(
     });
 
     if (!match) {
-      return c.json({ error: "Match not found" }, 404);
+      return structuredError(c, 404, {
+        error: "Match not found",
+        hint: "The match was not synced or was deleted from the server.",
+      });
     }
 
     const playerIds = new Set(match.players.map((p) => p.id));
@@ -44,19 +51,23 @@ export const scoresRoutes = new Hono<AuthEnv>().patch(
     // Validate each score entry
     for (const score of scores) {
       if (!score.playerId || !score.category) {
-        return c.json(
-          { error: "Each score must have playerId and category" },
-          400,
-        );
+        return structuredError(c, 400, {
+          error: "Each score must have playerId and category",
+          field: "scores",
+        });
       }
       if (typeof score.value !== "number" || !Number.isInteger(score.value)) {
-        return c.json({ error: "Score value must be an integer" }, 400);
+        return structuredError(c, 400, {
+          error: "Score value must be an integer",
+          field: "scores",
+        });
       }
       if (!playerIds.has(score.playerId)) {
-        return c.json(
-          { error: `Player ${score.playerId} is not in this match` },
-          400,
-        );
+        return structuredError(c, 400, {
+          error: `Player ${score.playerId} is not in this match`,
+          field: "scores",
+          hint: "The match's player list on the server does not include this id — the create-match POST may still be queued or failed.",
+        });
       }
     }
 

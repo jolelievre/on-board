@@ -8,6 +8,7 @@ import { scoresRoutes } from "./routes/scores.js";
 import { profilesRoutes } from "./routes/profiles.js";
 import { uploadsRoutes } from "./routes/uploads.js";
 import { shareRoutes } from "./routes/share.js";
+import { syncRoutes } from "./routes/sync.js";
 
 const app = new Hono().basePath("/api");
 
@@ -34,6 +35,13 @@ app.route("/matches", scoresRoutes);
 
 app.use("/profiles/*", requireAuth);
 app.route("/profiles", profilesRoutes);
+
+// Server-side telemetry for terminally-failed client sync queue entries
+// (Phase 8-E). Auth-only — anonymous failures are ignored at the queue
+// reporter so the table only carries identified rows we can correlate
+// back to a user when diagnosing.
+app.use("/sync/*", requireAuth);
+app.route("/sync", syncRoutes);
 
 // Public static-serve for owner-uploaded avatars. No auth — the URL
 // embeds the profile id + a per-upload random version token so leaking

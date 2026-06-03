@@ -16,6 +16,7 @@ import {
   LinkTokenError,
   verifyLinkToken,
 } from "../lib/link-tokens.js";
+import { structuredError } from "../lib/structured-errors.js";
 import type { AuthUser } from "../middleware/auth.js";
 
 type AuthEnv = {
@@ -86,7 +87,10 @@ export const profilesRoutes = new Hono<AuthEnv>()
     if (since !== undefined) {
       const parsed = new Date(since);
       if (Number.isNaN(parsed.getTime())) {
-        return c.json({ error: "Invalid `since` timestamp" }, 400);
+        return structuredError(c, 400, {
+          error: "Invalid `since` timestamp",
+          field: "since",
+        });
       }
       sinceDate = parsed;
     }
@@ -133,11 +137,18 @@ export const profilesRoutes = new Hono<AuthEnv>()
     };
 
     if (id !== undefined && !CUID_RE.test(id)) {
-      return c.json({ error: "Invalid profile id format" }, 400);
+      return structuredError(c, 400, {
+        error: "Invalid profile id format",
+        field: "id",
+      });
     }
 
     if (!alias || typeof alias !== "string" || alias.trim().length === 0) {
-      return c.json({ error: "Alias is required" }, 400);
+      return structuredError(c, 400, {
+        error: "Alias is required",
+        field: "alias",
+        hint: "The profile alias was empty or missing when the create-profile POST replayed.",
+      });
     }
 
     const trimmedAlias = alias.trim();
@@ -152,7 +163,11 @@ export const profilesRoutes = new Hono<AuthEnv>()
       });
       if (existing) {
         if (existing.ownerId !== user.id) {
-          return c.json({ error: "Profile id is already in use" }, 403);
+          return structuredError(c, 403, {
+            error: "Profile id is already in use",
+            field: "id",
+            hint: "Another account already created a profile with this id — generate a fresh one.",
+          });
         }
         return c.json(existing, 200);
       }
@@ -206,30 +221,36 @@ export const profilesRoutes = new Hono<AuthEnv>()
 
     if (alias !== undefined) {
       if (typeof alias !== "string" || alias.trim().length === 0) {
-        return c.json({ error: "Alias must be a non-empty string" }, 400);
+        return structuredError(c, 400, {
+          error: "Alias must be a non-empty string",
+          field: "alias",
+        });
       }
     }
     if (useLinkedAvatar !== undefined && typeof useLinkedAvatar !== "boolean") {
-      return c.json({ error: "useLinkedAvatar must be a boolean" }, 400);
+      return structuredError(c, 400, {
+        error: "useLinkedAvatar must be a boolean",
+        field: "useLinkedAvatar",
+      });
     }
     if (
       avatarFrame !== undefined &&
       !AVATAR_FRAMES.includes(avatarFrame as AvatarFrame)
     ) {
-      return c.json(
-        { error: `avatarFrame must be one of: ${AVATAR_FRAMES.join(", ")}` },
-        400,
-      );
+      return structuredError(c, 400, {
+        error: `avatarFrame must be one of: ${AVATAR_FRAMES.join(", ")}`,
+        field: "avatarFrame",
+      });
     }
     if (
       avatarRing !== undefined &&
       avatarRing !== null &&
       !AVATAR_RINGS.includes(avatarRing as AvatarRing)
     ) {
-      return c.json(
-        { error: `avatarRing must be null or one of: ${AVATAR_RINGS.join(", ")}` },
-        400,
-      );
+      return structuredError(c, 400, {
+        error: `avatarRing must be null or one of: ${AVATAR_RINGS.join(", ")}`,
+        field: "avatarRing",
+      });
     }
     if (
       alias === undefined &&
@@ -237,7 +258,9 @@ export const profilesRoutes = new Hono<AuthEnv>()
       avatarFrame === undefined &&
       avatarRing === undefined
     ) {
-      return c.json({ error: "No editable field provided" }, 400);
+      return structuredError(c, 400, {
+        error: "No editable field provided",
+      });
     }
 
     const existing = await prisma.profile.findUnique({
@@ -245,13 +268,18 @@ export const profilesRoutes = new Hono<AuthEnv>()
       select: { ownerId: true, alias: true },
     });
     if (!existing) {
-      return c.json({ error: "Profile not found" }, 404);
+      return structuredError(c, 404, {
+        error: "Profile not found",
+        hint: "The create-profile POST may still be queued or failed for this profile id.",
+      });
     }
     // Editing display fields is always the owner's prerogative (the
     // linked user's own User.name / User.avatarUrl are untouchable from
     // here — those mutate via the auth user route).
     if (existing.ownerId !== user.id) {
-      return c.json({ error: "Only the owner can edit this profile" }, 403);
+      return structuredError(c, 403, {
+        error: "Only the owner can edit this profile",
+      });
     }
 
     const trimmedAlias = alias !== undefined ? alias.trim() : undefined;
@@ -294,13 +322,15 @@ export const profilesRoutes = new Hono<AuthEnv>()
       select: { ownerId: true },
     });
     if (!existing) {
-      return c.json({ error: "Profile not found" }, 404);
+      return structuredError(c, 404, { error: "Profile not found" });
     }
     // Only the owner can upload — even the linked user can't override
     // the canonical Google photo from this endpoint; they have to
     // change their own User.avatarUrl via the auth provider.
     if (existing.ownerId !== user.id) {
-      return c.json({ error: "Only the owner can upload an avatar" }, 403);
+      return structuredError(c, 403, {
+        error: "Only the owner can upload an avatar",
+      });
     }
 
     // Hono parses multipart bodies via the standard FormData spec. The
@@ -309,17 +339,26 @@ export const profilesRoutes = new Hono<AuthEnv>()
     try {
       form = await c.req.formData();
     } catch {
-      return c.json({ error: "Multipart body required" }, 400);
+      return structuredError(c, 400, { error: "Multipart body required" });
     }
     const file = form.get("avatar");
     if (!(file instanceof File)) {
-      return c.json({ error: "Missing `avatar` file part" }, 400);
+      return structuredError(c, 400, {
+        error: "Missing `avatar` file part",
+        field: "avatar",
+      });
     }
     if (file.size === 0) {
-      return c.json({ error: "Uploaded file is empty" }, 400);
+      return structuredError(c, 400, {
+        error: "Uploaded file is empty",
+        field: "avatar",
+      });
     }
     if (file.size > AVATAR_MAX_UPLOAD_BYTES) {
-      return c.json({ error: "File too large" }, 413);
+      return structuredError(c, 413, {
+        error: "File too large",
+        field: "avatar",
+      });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -328,7 +367,10 @@ export const profilesRoutes = new Hono<AuthEnv>()
       publicUrl = await writeAvatar(id, buffer);
     } catch (err) {
       console.error("[avatar upload] sharp/write failed", err);
-      return c.json({ error: "Could not process image" }, 400);
+      return structuredError(c, 400, {
+        error: "Could not process image",
+        field: "avatar",
+      });
     }
 
     const profile = await prisma.profile.update({
@@ -358,10 +400,12 @@ export const profilesRoutes = new Hono<AuthEnv>()
       select: { ownerId: true },
     });
     if (!existing) {
-      return c.json({ error: "Profile not found" }, 404);
+      return structuredError(c, 404, { error: "Profile not found" });
     }
     if (existing.ownerId !== user.id) {
-      return c.json({ error: "Only the owner can clear the avatar" }, 403);
+      return structuredError(c, 403, {
+        error: "Only the owner can clear the avatar",
+      });
     }
 
     // Best-effort filesystem cleanup; the DB row is the source of truth.
@@ -395,14 +439,20 @@ export const profilesRoutes = new Hono<AuthEnv>()
     try {
       body = (await c.req.json()) as { sourceProfileId?: string };
     } catch {
-      return c.json({ error: "JSON body required" }, 400);
+      return structuredError(c, 400, { error: "JSON body required" });
     }
     const sourceProfileId = body.sourceProfileId;
     if (!sourceProfileId || typeof sourceProfileId !== "string") {
-      return c.json({ error: "sourceProfileId is required" }, 400);
+      return structuredError(c, 400, {
+        error: "sourceProfileId is required",
+        field: "sourceProfileId",
+      });
     }
     if (!CUID_RE.test(sourceProfileId) || !CUID_RE.test(targetId)) {
-      return c.json({ error: "Invalid profile id format" }, 400);
+      return structuredError(c, 400, {
+        error: "Invalid profile id format",
+        field: !CUID_RE.test(targetId) ? "targetId" : "sourceProfileId",
+      });
     }
 
     try {
@@ -420,7 +470,7 @@ export const profilesRoutes = new Hono<AuthEnv>()
       return c.json({ status: "merged" as const, profile });
     } catch (err) {
       if (err instanceof ProfileMergeError) {
-        return c.json({ error: err.message }, err.status);
+        return structuredError(c, err.status, { error: err.message });
       }
       throw err;
     }
@@ -437,7 +487,10 @@ export const profilesRoutes = new Hono<AuthEnv>()
     const id = c.req.param("id");
 
     if (!CUID_RE.test(id)) {
-      return c.json({ error: "Invalid profile id format" }, 400);
+      return structuredError(c, 400, {
+        error: "Invalid profile id format",
+        field: "id",
+      });
     }
 
     const profile = await prisma.profile.findUnique({
@@ -445,13 +498,12 @@ export const profilesRoutes = new Hono<AuthEnv>()
       select: { ownerId: true, linkedUserId: true },
     });
     if (!profile) {
-      return c.json({ error: "Profile not found" }, 404);
+      return structuredError(c, 404, { error: "Profile not found" });
     }
     if (profile.ownerId !== user.id) {
-      return c.json(
-        { error: "Only the owner can check this profile's link status" },
-        403,
-      );
+      return structuredError(c, 403, {
+        error: "Only the owner can check this profile's link status",
+      });
     }
     return c.json({ linkedUserId: profile.linkedUserId });
   })
@@ -470,7 +522,10 @@ export const profilesRoutes = new Hono<AuthEnv>()
     const id = c.req.param("id");
 
     if (!CUID_RE.test(id)) {
-      return c.json({ error: "Invalid profile id format" }, 400);
+      return structuredError(c, 400, {
+        error: "Invalid profile id format",
+        field: "id",
+      });
     }
 
     const profile = await prisma.profile.findUnique({
@@ -478,19 +533,17 @@ export const profilesRoutes = new Hono<AuthEnv>()
       select: { ownerId: true, linkedUserId: true },
     });
     if (!profile) {
-      return c.json({ error: "Profile not found" }, 404);
+      return structuredError(c, 404, { error: "Profile not found" });
     }
     if (profile.ownerId !== user.id) {
-      return c.json(
-        { error: "Only the owner can mint a link code for this profile" },
-        403,
-      );
+      return structuredError(c, 403, {
+        error: "Only the owner can mint a link code for this profile",
+      });
     }
     if (profile.linkedUserId !== null) {
-      return c.json(
-        { error: "This profile is already linked" },
-        409,
-      );
+      return structuredError(c, 409, {
+        error: "This profile is already linked",
+      });
     }
 
     const { token, expiresAt } = createLinkToken({
@@ -512,10 +565,13 @@ export const profilesRoutes = new Hono<AuthEnv>()
     try {
       body = (await c.req.json()) as { token?: string };
     } catch {
-      return c.json({ error: "JSON body required" }, 400);
+      return structuredError(c, 400, { error: "JSON body required" });
     }
     if (typeof body.token !== "string" || body.token.length === 0) {
-      return c.json({ error: "token is required" }, 400);
+      return structuredError(c, 400, {
+        error: "token is required",
+        field: "token",
+      });
     }
 
     let showerUserId: string;
@@ -526,7 +582,10 @@ export const profilesRoutes = new Hono<AuthEnv>()
       sourceProfileId = payload.sourceProfileId;
     } catch (err) {
       if (err instanceof LinkTokenError) {
-        return c.json({ error: err.message }, 400);
+        return structuredError(c, 400, {
+          error: err.message,
+          field: "token",
+        });
       }
       throw err;
     }
@@ -536,7 +595,9 @@ export const profilesRoutes = new Hono<AuthEnv>()
       // source profile owned by the caller and we'd be linking it to
       // another of the caller's profiles, which violates the per-owner
       // unique constraint anyway.
-      return c.json({ error: "Cannot link a profile to your own account" }, 400);
+      return structuredError(c, 400, {
+        error: "Cannot link a profile to your own account",
+      });
     }
 
     // Load both sides up front so we can guard against the various
@@ -553,24 +614,32 @@ export const profilesRoutes = new Hono<AuthEnv>()
     ]);
 
     if (!target) {
-      return c.json({ error: "Profile not found" }, 404);
+      return structuredError(c, 404, { error: "Profile not found" });
     }
     if (target.ownerId !== user.id) {
-      return c.json({ error: "Only the owner can link this profile" }, 403);
+      return structuredError(c, 403, {
+        error: "Only the owner can link this profile",
+      });
     }
     if (!source) {
       // Token signature was valid but the source row is gone (deleted
       // between QR mint and scan). Treat as a stale token so the user
       // sees an actionable refresh prompt rather than a 404 inside a
       // link error.
-      return c.json({ error: "Link token has expired" }, 400);
+      return structuredError(c, 400, {
+        error: "Link token has expired",
+        field: "token",
+      });
     }
     if (source.ownerId !== showerUserId) {
       // The token is signed but the source profile no longer belongs
       // to the user it was minted for (e.g. transferred via merge).
       // Reject defensively — never silently bind to a row owned by a
       // third party.
-      return c.json({ error: "Invalid link token" }, 400);
+      return structuredError(c, 400, {
+        error: "Invalid link token",
+        field: "token",
+      });
     }
 
     // Both already pointing at each other → idempotent re-link.
@@ -688,13 +757,12 @@ export const profilesRoutes = new Hono<AuthEnv>()
       select: { id: true, ownerId: true, linkedUserId: true },
     });
     if (!target) {
-      return c.json({ error: "Profile not found" }, 404);
+      return structuredError(c, 404, { error: "Profile not found" });
     }
     if (target.ownerId !== user.id && target.linkedUserId !== user.id) {
-      return c.json(
-        { error: "Only the owner or the linked user can unlink this profile" },
-        403,
-      );
+      return structuredError(c, 403, {
+        error: "Only the owner or the linked user can unlink this profile",
+      });
     }
     if (target.linkedUserId === null) {
       // Idempotent — return the current row so a queued retry succeeds.
@@ -709,10 +777,9 @@ export const profilesRoutes = new Hono<AuthEnv>()
     // would orphan it from your auth account; reject explicitly so
     // the UI never offers it.
     if (target.ownerId === target.linkedUserId) {
-      return c.json(
-        { error: "Cannot unlink your own self-profile" },
-        409,
-      );
+      return structuredError(c, 409, {
+        error: "Cannot unlink your own self-profile",
+      });
     }
 
     // Find the counterpart profile (the other half of the bilateral

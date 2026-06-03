@@ -13,6 +13,7 @@ import { pullSync, resetPullCursors } from "../lib/pull-sync";
 import { syncEngine } from "../lib/sync";
 import { BottomNav } from "../components/layout/BottomNav";
 import { OfflineBanner } from "../components/layout/OfflineBanner";
+import { SyncFailedBanner } from "../components/layout/SyncFailedBanner";
 import { SyncStatus } from "../components/sync/SyncStatus";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -91,6 +92,7 @@ function AuthenticatedLayout() {
       className={`flex min-h-screen flex-col ${hideBottomNav ? "" : "pb-24"}`}
     >
       {!isOnline && <OfflineBanner />}
+      <SyncFailedBanner />
       <SyncStatus />
       <Outlet />
       {!hideBottomNav && <BottomNav />}

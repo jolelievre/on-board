@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
+import type { SyncErrorBody } from "../../shared/sync-errors";
 
 export type LocalProfileLinkedUser = {
   id: string;
@@ -64,8 +65,28 @@ export type SyncQueueEntry = {
   createdAt: string;
   retries: number;
   status: "pending" | "failed";
-  /** Set when the entry has failed permanently (retries exhausted). */
+  /** Free-form short summary (e.g. `HTTP 400`, `Max retries reached`).
+   * Kept for backwards-compat with v2-era rows that didn't have
+   * `errorBody`. The Sync panel falls back to this when `errorBody`
+   * is absent. */
   error?: string;
+  /** Structured server error body — `{ error, field?, hint? }` — captured
+   * verbatim from the last failed response. Phase 8-E: lets the Sync
+   * panel render an actionable message instead of just an HTTP code.
+   * Absent on transient network errors (no response body to log). */
+  errorBody?: SyncErrorBody;
+  /** Status code of the response that triggered the failure. Powers
+   * the panel's "Authorization" vs "Validation" grouping without the
+   * UI having to re-parse `error`. */
+  errorStatus?: number;
+  /** Wall-clock ISO timestamp when the entry was last marked failed.
+   * Drives "1 hour ago" hints in the panel. */
+  failedAt?: string;
+  /** Phase 8-E telemetry: set true once the entry has been included in
+   * a `POST /api/sync/failures` report so a repeating pull-sync doesn't
+   * re-post the same row. Never cleared — failed rows stay in the
+   * queue until 8-F's Retry / Discard actions land. */
+  reported?: boolean;
 };
 
 export type LocalGame = {

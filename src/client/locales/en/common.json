@@ -54,6 +54,26 @@
       "hint": "Add OnBoard to your home screen for quick access",
       "cta": "Add to home screen",
       "iosHint": "On iOS, tap the Share button in Safari, then \"Add to Home Screen\"."
+    },
+    "sync": {
+      "title": "Sync queue",
+      "ok": "All changes synced",
+      "okHint": "Nothing is waiting to reach the server.",
+      "pending_one": "{{count}} change waiting to sync",
+      "pending_other": "{{count}} changes waiting to sync",
+      "pendingHint": "These will retry automatically as soon as the connection is back.",
+      "failed_one": "{{count}} change couldn't sync",
+      "failed_other": "{{count}} changes couldn't sync",
+      "failedHint": "The server rejected these requests. Share this list with the maintainer to help fix the issue.",
+      "entryLabel": "{{method}} {{path}}",
+      "entryStatus": "HTTP {{status}}",
+      "entryField": "Field: {{field}}",
+      "entryHint": "Hint: {{hint}}",
+      "entryRetries_one": "{{count}} retry",
+      "entryRetries_other": "{{count}} retries",
+      "entryFailedAt": "Failed at {{when}}",
+      "entryUnknown": "No error message from server",
+      "noActionsYet": "Retry / Discard actions land in a follow-up release."
     }
   },
   "games": {
@@ -433,7 +453,9 @@
     "offlineBanner": "Offline — changes will sync when you reconnect",
     "offlineNoCache": "This page wasn't saved for offline use. Reconnect to load it.",
     "syncPending_one": "1 change pending sync",
-    "syncPending_other": "{{count}} changes pending sync"
+    "syncPending_other": "{{count}} changes pending sync",
+    "syncFailedBanner": "Some changes couldn't sync — open Settings to review",
+    "syncFailedBannerCta": "Open Settings"
   },
   "avatar": {
     "title": "Photo",
