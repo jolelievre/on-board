@@ -6,6 +6,7 @@ import {
   resolvePlayerByProfileId,
 } from "../lib/match-profiles.js";
 import { matchVisibilityWhere } from "../lib/profile-scope.js";
+import { structuredError } from "../lib/structured-errors.js";
 import type { AuthUser } from "../middleware/auth.js";
 
 type AuthEnv = {
@@ -79,25 +80,32 @@ export const matchesRoutes = new Hono<AuthEnv>()
     };
 
     if (!gameId || !players || !Array.isArray(players) || players.length === 0) {
-      return c.json({ error: "gameId and players array are required" }, 400);
+      return structuredError(c, 400, {
+        error: "gameId and players array are required",
+        field: !gameId ? "gameId" : "players",
+      });
     }
 
     if (clientMatchId !== undefined && !CUID_RE.test(clientMatchId)) {
-      return c.json({ error: "Invalid match id format" }, 400);
+      return structuredError(c, 400, {
+        error: "Invalid match id format",
+        field: "id",
+      });
     }
 
     // Validate game exists and player count
     const game = await prisma.game.findUnique({ where: { id: gameId } });
     if (!game) {
-      return c.json({ error: "Game not found" }, 404);
+      return structuredError(c, 404, {
+        error: "Game not found",
+        field: "gameId",
+      });
     }
     if (players.length < game.minPlayers || players.length > game.maxPlayers) {
-      return c.json(
-        {
-          error: `This game requires ${game.minPlayers}–${game.maxPlayers} players`,
-        },
-        400,
-      );
+      return structuredError(c, 400, {
+        error: `This game requires ${game.minPlayers}–${game.maxPlayers} players`,
+        field: "players",
+      });
     }
 
     // Every Player must reference an existing Profile. The legacy
@@ -107,16 +115,22 @@ export const matchesRoutes = new Hono<AuthEnv>()
     // failure mode is loud rather than producing rows we can't render.
     for (const p of players) {
       if (typeof p.profileId !== "string" || !CUID_RE.test(p.profileId)) {
-        return c.json(
-          { error: "Each player must include a valid profileId" },
-          400,
-        );
+        return structuredError(c, 400, {
+          error: "Each player must include a valid profileId",
+          field: "players[].profileId",
+        });
       }
       if (typeof p.position !== "number") {
-        return c.json({ error: "All players must have a position" }, 400);
+        return structuredError(c, 400, {
+          error: "All players must have a position",
+          field: "players[].position",
+        });
       }
       if (p.id !== undefined && !CUID_RE.test(p.id)) {
-        return c.json({ error: "Invalid player id format" }, 400);
+        return structuredError(c, 400, {
+          error: "Invalid player id format",
+          field: "players[].id",
+        });
       }
     }
 
@@ -131,7 +145,11 @@ export const matchesRoutes = new Hono<AuthEnv>()
       });
       if (existing) {
         if (existing.createdById !== user.id) {
-          return c.json({ error: "Match id is already in use" }, 403);
+          return structuredError(c, 403, {
+            error: "Match id is already in use",
+            field: "id",
+            hint: "Another account already created a match with this id — generate a fresh one.",
+          });
         }
         return c.json(existing, 200);
       }
@@ -174,7 +192,14 @@ export const matchesRoutes = new Hono<AuthEnv>()
       });
     } catch (err) {
       if (err instanceof ProfileAuthorizationError) {
-        return c.json({ error: err.message }, err.status);
+        return structuredError(c, err.status, {
+          error: err.message,
+          field: "players[].profileId",
+          hint:
+            err.status === 404
+              ? "The profile id was not synced to the server, or it was deleted."
+              : "The signed-in account does not own or link to this profile.",
+        });
       }
       // Idempotency race: when two replays of the same queued POST
       // arrive concurrently, both can pass the `findUnique` check above
@@ -212,7 +237,10 @@ export const matchesRoutes = new Hono<AuthEnv>()
     if (since !== undefined) {
       const parsed = new Date(since);
       if (Number.isNaN(parsed.getTime())) {
-        return c.json({ error: "Invalid `since` timestamp" }, 400);
+        return structuredError(c, 400, {
+          error: "Invalid `since` timestamp",
+          field: "since",
+        });
       }
       sinceDate = parsed;
     }
@@ -257,7 +285,10 @@ export const matchesRoutes = new Hono<AuthEnv>()
     });
 
     if (!match) {
-      return c.json({ error: "Match not found" }, 404);
+      return structuredError(c, 404, {
+        error: "Match not found",
+        hint: "The match was not synced or was deleted from the server.",
+      });
     }
 
     return c.json(match);
@@ -280,19 +311,28 @@ export const matchesRoutes = new Hono<AuthEnv>()
     });
 
     if (!existing) {
-      return c.json({ error: "Match not found" }, 404);
+      return structuredError(c, 404, {
+        error: "Match not found",
+        hint: "The create-match POST may still be queued or failed for this match id.",
+      });
     }
 
     // Validate status transition
     if (status && !["IN_PROGRESS", "COMPLETED"].includes(status)) {
-      return c.json({ error: "Invalid status" }, 400);
+      return structuredError(c, 400, {
+        error: "Invalid status",
+        field: "status",
+      });
     }
 
     // Validate winnerId belongs to match players
     if (winnerId) {
       const validPlayer = existing.players.some((p) => p.id === winnerId);
       if (!validPlayer) {
-        return c.json({ error: "Winner must be a player in this match" }, 400);
+        return structuredError(c, 400, {
+          error: "Winner must be a player in this match",
+          field: "winnerId",
+        });
       }
     }
 
@@ -325,41 +365,58 @@ export const matchesRoutes = new Hono<AuthEnv>()
     });
 
     if (!existing) {
-      return c.json({ error: "Match not found" }, 404);
+      return structuredError(c, 404, {
+        error: "Match not found",
+        hint: "The create-match POST may still be queued or failed for this match id.",
+      });
     }
 
     if (existing.status === "COMPLETED") {
-      return c.json(
-        { error: "Cannot edit a completed match" },
-        400,
-      );
+      return structuredError(c, 400, {
+        error: "Cannot edit a completed match",
+      });
     }
 
     if (playerOrder) {
       if (!Array.isArray(playerOrder) || playerOrder.length === 0) {
-        return c.json({ error: "playerOrder must be a non-empty array" }, 400);
+        return structuredError(c, 400, {
+          error: "playerOrder must be a non-empty array",
+          field: "playerOrder",
+        });
       }
       const existingIds = new Set(existing.players.map((p) => p.id));
       const seenIds = new Set<string>();
       const seenPositions = new Set<number>();
       for (const entry of playerOrder) {
         if (!entry || typeof entry.playerId !== "string") {
-          return c.json({ error: "Each playerOrder entry must have playerId" }, 400);
+          return structuredError(c, 400, {
+            error: "Each playerOrder entry must have playerId",
+            field: "playerOrder[].playerId",
+          });
         }
         if (typeof entry.position !== "number" || !Number.isInteger(entry.position)) {
-          return c.json({ error: "playerOrder positions must be integers" }, 400);
+          return structuredError(c, 400, {
+            error: "playerOrder positions must be integers",
+            field: "playerOrder[].position",
+          });
         }
         if (!existingIds.has(entry.playerId)) {
-          return c.json(
-            { error: `Player ${entry.playerId} is not in this match` },
-            400,
-          );
+          return structuredError(c, 400, {
+            error: `Player ${entry.playerId} is not in this match`,
+            field: "playerOrder[].playerId",
+          });
         }
         if (seenIds.has(entry.playerId)) {
-          return c.json({ error: "Duplicate playerId in playerOrder" }, 400);
+          return structuredError(c, 400, {
+            error: "Duplicate playerId in playerOrder",
+            field: "playerOrder[].playerId",
+          });
         }
         if (seenPositions.has(entry.position)) {
-          return c.json({ error: "Duplicate position in playerOrder" }, 400);
+          return structuredError(c, 400, {
+            error: "Duplicate position in playerOrder",
+            field: "playerOrder[].position",
+          });
         }
         seenIds.add(entry.playerId);
         seenPositions.add(entry.position);
@@ -367,10 +424,10 @@ export const matchesRoutes = new Hono<AuthEnv>()
       // Reorder must cover every player so the unique [matchId, position]
       // constraint can't be violated by leaving stale rows.
       if (seenIds.size !== existing.players.length) {
-        return c.json(
-          { error: "playerOrder must include every player in the match" },
-          400,
-        );
+        return structuredError(c, 400, {
+          error: "playerOrder must include every player in the match",
+          field: "playerOrder",
+        });
       }
     }
 
@@ -428,13 +485,12 @@ export const matchesRoutes = new Hono<AuthEnv>()
       select: { id: true, status: true },
     });
     if (!match) {
-      return c.json({ error: "Match not found" }, 404);
+      return structuredError(c, 404, { error: "Match not found" });
     }
     if (match.status !== "COMPLETED") {
-      return c.json(
-        { error: "Only completed matches can be shared" },
-        400,
-      );
+      return structuredError(c, 400, {
+        error: "Only completed matches can be shared",
+      });
     }
 
     const existing = await prisma.matchShareToken.findUnique({
@@ -460,7 +516,7 @@ export const matchesRoutes = new Hono<AuthEnv>()
       select: { id: true },
     });
     if (!match) {
-      return c.json({ error: "Match not found" }, 404);
+      return structuredError(c, 404, { error: "Match not found" });
     }
 
     await prisma.matchShareToken.deleteMany({ where: { matchId: id } });
@@ -477,7 +533,7 @@ export const matchesRoutes = new Hono<AuthEnv>()
       select: { id: true },
     });
     if (!match) {
-      return c.json({ error: "Match not found" }, 404);
+      return structuredError(c, 404, { error: "Match not found" });
     }
 
     const token = await prisma.matchShareToken.findUnique({
