@@ -1,5 +1,10 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { createAndSignIn } from "../helpers/auth";
+import {
+  createProfile as createProfileApi,
+  mintLinkToken,
+  signUpContext,
+} from "../helpers/api";
 
 async function createProfile(
   request: APIRequestContext,
@@ -56,7 +61,7 @@ async function createCompletedMatch(
   };
 }
 
-test.describe("API: Share token (owner-only mutations)", () => {
+test.describe("API: Share token (participant mutations)", () => {
   test("POST /api/matches/:id/share-token creates a token on a completed match", async ({
     request,
   }) => {
@@ -99,6 +104,68 @@ test.describe("API: Share token (owner-only mutations)", () => {
     await createAndSignIn(request);
     const res = await request.post(`/api/matches/${matchId}/share-token`);
     expect(res.status()).toBe(404);
+  });
+
+  test("non-creator participant can mint a share token (linked friend)", async ({
+    browser,
+  }) => {
+    // A creates a match including A's friend-profile for B, then
+    // bilaterally links it to B. B then mints a share token — they're
+    // not the creator but they're a visible participant.
+    const aCtx = await browser.newContext();
+    const bCtx = await browser.newContext();
+    try {
+      await signUpContext(aCtx);
+      await signUpContext(bCtx);
+
+      // Establish bilateral link first so the Player rows on the match
+      // carry the right `profileLinkedUserId` denormalisation.
+      const aBProfile = await createProfileApi(aCtx.request, "B-friend");
+      const bAProfile = await createProfileApi(bCtx.request, "A-friend");
+      const bToken = await mintLinkToken(bCtx.request, bAProfile.id);
+      const linkRes = await aCtx.request.post(
+        `/api/profiles/${aBProfile.id}/link`,
+        { data: { token: bToken } },
+      );
+      expect(linkRes.ok()).toBeTruthy();
+
+      // A creates + completes a 7WD match with A-self + linked B.
+      const gameRes = await aCtx.request.get("/api/games/7-wonders-duel");
+      const game = (await gameRes.json()) as { id: string };
+      const aSelfTemp = await createProfileApi(aCtx.request, "A-self-temp");
+      const createRes = await aCtx.request.post("/api/matches", {
+        data: {
+          gameId: game.id,
+          players: [
+            { profileId: aSelfTemp.id, position: 0 },
+            { profileId: aBProfile.id, position: 1 },
+          ],
+        },
+      });
+      const created = (await createRes.json()) as {
+        id: string;
+        players: { id: string }[];
+      };
+      await aCtx.request.put(`/api/matches/${created.id}`, {
+        data: {
+          status: "COMPLETED",
+          victoryType: "score",
+          winnerId: created.players[0].id,
+        },
+      });
+
+      // B mints the share token via their own session — they aren't
+      // the creator, but the match is visible via the linked profile.
+      const bShareRes = await bCtx.request.post(
+        `/api/matches/${created.id}/share-token`,
+      );
+      expect(bShareRes.status()).toBe(201);
+      const bShareBody = (await bShareRes.json()) as { token: string };
+      expect(typeof bShareBody.token).toBe("string");
+    } finally {
+      await aCtx.close();
+      await bCtx.close();
+    }
   });
 
   test("POST refuses in-progress matches (400)", async ({ request }) => {
