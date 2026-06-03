@@ -54,6 +54,26 @@
       "hint": "Ajoutez OnBoard à votre écran d'accueil pour un accès rapide",
       "cta": "Ajouter à l'écran d'accueil",
       "iosHint": "Sur iOS, appuyez sur le bouton Partager dans Safari, puis « Sur l'écran d'accueil »."
+    },
+    "sync": {
+      "title": "File de synchronisation",
+      "ok": "Tout est synchronisé",
+      "okHint": "Rien n'attend d'être envoyé au serveur.",
+      "pending_one": "{{count}} modification en attente de synchronisation",
+      "pending_other": "{{count}} modifications en attente de synchronisation",
+      "pendingHint": "Elles seront renvoyées dès que la connexion sera rétablie.",
+      "failed_one": "{{count}} modification n'a pas pu être synchronisée",
+      "failed_other": "{{count}} modifications n'ont pas pu être synchronisées",
+      "failedHint": "Le serveur a refusé ces requêtes. Partagez cette liste avec le mainteneur pour aider à corriger le problème.",
+      "entryLabel": "{{method}} {{path}}",
+      "entryStatus": "HTTP {{status}}",
+      "entryField": "Champ : {{field}}",
+      "entryHint": "Indice : {{hint}}",
+      "entryRetries_one": "{{count}} tentative",
+      "entryRetries_other": "{{count}} tentatives",
+      "entryFailedAt": "Échec à {{when}}",
+      "entryUnknown": "Aucun message d'erreur du serveur",
+      "noActionsYet": "Les actions Réessayer / Abandonner arrivent dans une prochaine version."
     }
   },
   "games": {
@@ -433,7 +453,9 @@
     "offlineBanner": "Hors ligne — les modifications seront synchronisées à la reconnexion",
     "offlineNoCache": "Cette page n'a pas été enregistrée pour le mode hors ligne. Reconnectez-vous pour la charger.",
     "syncPending_one": "1 modification en attente de sync",
-    "syncPending_other": "{{count}} modifications en attente de sync"
+    "syncPending_other": "{{count}} modifications en attente de sync",
+    "syncFailedBanner": "Certaines modifications n'ont pas pu être synchronisées — ouvrez Paramètres pour vérifier",
+    "syncFailedBannerCta": "Ouvrir Paramètres"
   },
   "avatar": {
     "title": "Photo",
