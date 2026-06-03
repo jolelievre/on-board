@@ -419,13 +419,13 @@ export function Icon({ name, size = 20, stroke = 1.6, className, title }: Props)
         </svg>
       );
     case "share":
-      // iOS-style share glyph: arrow rising out of a tray. Universal
-      // enough to read on every platform.
+      // Curved share-arrow, modelled on the YouTube / Facebook
+      // affordance — more widely-recognised as "share" than the iOS
+      // arrow-out-of-tray glyph.
       return (
         <svg {...props}>
           {titleEl}
-          <path d="M12 3v13M8 7l4-4 4 4" />
-          <path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+          <path d="M13 5 L20 12 L13 19 L13 15 C9 15 6 16 4 19 C5 13 9 11 13 11 Z" />
         </svg>
       );
     case "skull-king":
