@@ -1158,9 +1158,9 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 | Real-time sync indicator | ✅ Shipped | (already in `__root.tsx`) |
 | Match history filters (game / profile / date) | ⛔ Dropped — existing per-game/per-profile navigation already scopes the lists; filters would duplicate it. Revisit in v1.x at scale. | — |
 | Personal stats dashboard | 🟡 Per-profile only (6-B) | PR 8-C |
-| Lighthouse PWA audit | 🟡 Infra ready, not run | PR 8-G |
-| Install help page (public) | ❌ Missing | PR 8-G |
-| v1.0.0 release tooling | ❌ Missing | PR 8-H |
+| Lighthouse PWA audit | 🟡 Infra ready, not run | PR 8-I |
+| Install help page (public) | ❌ Missing | PR 8-I |
+| v1.0.0 release tooling | ❌ Missing | PR 8-J |
 | **Multi-provider auth + account linking** | ✅ Shipped (8-A, #27) | PR 8-A |
 | **Privacy + ToS pages** (Facebook prereq) | ✅ Shipped (8-A, #27) | PR 8-A |
 | **Account-switch leak** — same-device sign-in as different user sees prior user's matches (surfaced during 8-A testing) | ✅ Shipped (8-B, #28) | PR 8-B |
@@ -1168,11 +1168,13 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 | **Public read-only match share-link** | ❌ Missing | PR 8-D |
 | **Sync queue visibility** (Settings panel + failed-state banner + structured server errors + best-effort telemetry) — surfaced during 8-D mobile testing, see #31 | ❌ Missing | PR 8-E (ship-first) |
 | **Sync queue recovery** (cascading-failure marker, Retry/Discard actions, auto-unblock) | ❌ Missing | PR 8-F (depends on 8-E) |
-| **App version footer in Settings** | ❌ Missing | PR 8-G |
-| **Screenshot-script refresh** (cover post-Phase-5 screens) | ❌ Stale | PR 8-H (end of phase so it captures everything) |
-| **Graphify refresh** | ❌ Stale | PR 8-H (end of phase so it captures everything) |
+| **Delete a match / delete a profile** — destructive cleanup affordances for the user-facing data model. Match history surfaces a long-press / overflow action; Profile detail surfaces a Delete button. Both go through the sync queue with confirm dialogs and cascade rules. | ❌ Missing | PR 8-G |
+| **Local↔server model consistency audit** — sweep every Dexie table (Match, Profile, Player, Score) against its Prisma counterpart to catch fields that exist server-side but were never mirrored client-side (the `createdById` oversight surfaced in 8-F is the immediate example). Adds a typecheck-style guard so future field drift gets caught. | ❌ Missing | PR 8-H |
+| **App version footer in Settings** | ❌ Missing | PR 8-I |
+| **Screenshot-script refresh** (cover post-Phase-5 screens) | ❌ Stale | PR 8-J (end of phase so it captures everything) |
+| **Graphify refresh** | ❌ Stale | PR 8-J (end of phase so it captures everything) |
 
-### Phasing — 9 PRs
+### Phasing — 11 PRs
 
 #### PR 8-A — Multi-provider auth + account linking + Privacy/ToS (`feat/multi-provider-auth`, ~2 days) ✅ DONE (#27)
 
@@ -1347,7 +1349,7 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
   - `DELETE /api/matches/:id/share-token` — owner revokes.
   - `GET /api/share/:token` — public, no auth. Returns minimal payload: game name + slug, completedAt, players (alias + final score), winner, victoryType. No `profileIds`, no `createdById`, no extraneous metadata.
 - Client:
-  - Public route `routes/share.$token.tsx` (outside `_authenticated/`). Renders the summary using the same `MatchHistoryRow`-style layout for visual consistency, plus an "Install OnBoard to track your own matches" CTA linking to `/install` (added by PR 8-G) + the login page. Until 8-G lands, the CTA can point at `/` — the link target is swapped in 8-G without touching this PR.
+  - Public route `routes/share.$token.tsx` (outside `_authenticated/`). Renders the summary using the same `MatchHistoryRow`-style layout for visual consistency, plus an "Install OnBoard to track your own matches" CTA linking to `/install` (added by PR 8-I) + the login page. Until 8-I lands, the CTA can point at `/` — the link target is swapped in 8-I without touching this PR.
   - Open-Graph meta tags rendered server-side via Hono's static-file branch for the `/share/:token` URL so chat-app unfurls show the matchup. (Single-purpose exception to the SPA-only stance; document the rationale next to the handler.)
   - "Share match" action on `MatchCompleteScreen.tsx` (SK) and end-of-match state in `SevenWondersDuelScorer.tsx`: dialog with the `/share/:token` URL + copy button + revoke option. Uses Web Share API where available, fallback to clipboard.
 - E2E: owner shares match → unauthenticated context loads `/share/:token` and sees the right data → owner revokes → public route now 404. Verify OG meta tags via `page.evaluate` against `<head>`.
@@ -1428,12 +1430,75 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 
 **Acceptance**: take the captured failure from 8-E, push the fix, observe the stuck state drain on the same device. The Charles repro no longer ends in a silent split-brain — either the entry retries successfully, or the user discards it through Settings and the dependent match entries fall through cleanly.
 
-#### PR 8-G — Public install help + Lighthouse audit + Settings version footer (`feat/install-help-and-lighthouse`, ~1 day)
+#### PR 8-G — Delete a match + delete a profile (`feat/delete-match-and-profile`, ~1 day)
 
-**Goal**: every loose-end gating a friend's "go install OnBoard" experience. Dev-asset refresh (screenshots + graphify) is deliberately deferred to PR 8-H so it captures the final state of everything, not a snapshot that gets invalidated by 8-D's UI work.
+**Goal**: ship the destructive cleanup affordances the user-facing data model has been missing since Phase 5. Every other CRUD verb (create / read / update) is wired across local + sync queue + server; delete is the gap. Friends need a way to drop a mistaken match entry or retire a profile they no longer share games with.
+
+**Match delete**:
+- Long-press / overflow action on each row in match history (and on the `MatchCompleteScreen` if surfaced there too) opens a confirm dialog: "Delete this match? Scores and players will be removed for everyone who played."
+- New `mutations.ts` `deleteMatch(matchId)` that:
+  - Cascade-deletes locally: `db.scores.where("matchId").equals(id).delete()` + `db.players.where("matchId").equals(id).delete()` + `db.matches.delete(id)`.
+  - Enqueues `DELETE /api/matches/:id` via `syncEngine.enqueue`. Server cascade follows Prisma's existing relations.
+- Auth: only the match creator can delete (server enforces via `Match.createdById === session.user.id`; UI hides the affordance for non-creators).
+- 8-F semantics carry through: a failed `DELETE` shows up in the Sync panel like any other failure; Retry / Discard are available.
+
+**Profile delete**:
+- Profile detail page (`routes/_authenticated/players/$id.tsx`) gets a destructive `Delete profile` button at the bottom. Only renders for profiles where `ownerId === viewerId` (you can't delete a profile you don't own).
+- Confirm dialog enumerates: "This profile is in N matches. Deleting will remove it from those matches and any scores attached to it." For linked profiles, additionally warn: "This profile is linked to <friend name>. Deleting will unlink first — they keep their side of the connection."
+- New `mutations.ts` `deleteProfile(profileId)` that:
+  - For linked profiles, calls `unlinkProfile` first (existing flow).
+  - Cascade-removes player rows that reference the profile (server handles the FK constraint).
+  - Enqueues `DELETE /api/profiles/:id`.
+- Idempotency: client-supplied request id stays the same — server treats repeated `DELETE` on an already-deleted row as 204.
+
+**Critical files**:
+
+| File | Action |
+|---|---|
+| `src/client/lib/mutations.ts` | New `deleteMatch` + `deleteProfile` helpers |
+| `src/client/components/matches/MatchHistoryRow.tsx` | Overflow menu with Delete |
+| `src/client/routes/_authenticated/players/$id.tsx` | Delete button + confirm |
+| `src/server/routes/matches.ts` | `DELETE /api/matches/:id` (creator-only) |
+| `src/server/routes/profiles.ts` | `DELETE /api/profiles/:id` (owner-only) |
+| `e2e/delete-match.spec.ts` (NEW) | Drives the delete flow end-to-end |
+| `e2e/delete-profile.spec.ts` (NEW) | Same for profile (incl. linked-profile unlink-first path) |
+
+**Acceptance**: own a match, delete it from history → it disappears locally + on the server. Own a linked profile, click Delete → confirm dialog explains the unlink-first behaviour → confirm → profile gone, friend keeps their side intact.
+
+#### PR 8-H — Local↔server model consistency audit (`chore/dexie-server-model-audit`, ~0.5 day)
+
+**Goal**: catch the next `createdById`-style oversight before it bites. PR 8-F surfaced that `Match.createdById` exists server-side but was never mirrored in `createMatch`'s local write — it only landed via pull-sync, which left a multi-day window where the local row was incomplete (and broke ownership inference on every device that created a match in that window). This PR sweeps every Dexie table against its Prisma counterpart and adds a check that catches future drift.
+
+**Audit pass** — for each pair below, list the Prisma fields, list the Dexie fields, surface any gap, and decide per gap whether to mirror locally (and via which optimistic-write path), or leave as server-only with documentation:
+
+| Server (Prisma) | Client (Dexie) | Mirror source |
+|---|---|---|
+| `Match` | `LocalMatch` | `createMatch`, `pullMatches` |
+| `Profile` | `LocalProfile` | `createProfile`, `patchProfile`, `pullProfiles` |
+| `Player` | `LocalPlayer` | `createMatch` (embedded), `pullMatches` (embedded) |
+| `Score` | `LocalScore` | `upsertScores`, `pullScores` (embedded in match) |
+
+**Drift guard**:
+- A small TS module (or a `scripts/check-model-drift.ts` invoked from `npm run type-check`) that imports the Prisma-generated types and the Dexie types and uses TS's structural type assertions to fail compilation when a server field has no Dexie equivalent and isn't on an allow-list of "server-only" fields.
+- Allow-list (with reasons): `Match.createdAt` (server-stamped, mirrored only after pull), session-related computed fields, etc.
+
+**Critical files**:
+
+| File | Action |
+|---|---|
+| `src/client/lib/db.ts` | Add any missing fields surfaced by the audit |
+| `src/client/lib/mutations.ts` | Update create/patch helpers so the eager local write is complete |
+| `scripts/check-model-drift.ts` (NEW) | The compile-time guard |
+| `package.json` | Wire the guard into `type-check` |
+
+**Acceptance**: the audit table at the top of this PR's description lists every Prisma field, every Dexie field, the gap (if any), and the resolution. The drift guard fails when artificially poking a hole (e.g. removing `LocalMatch.gameId`). `npm run type-check` passes cleanly with everything in sync.
+
+#### PR 8-I — Public install help + Lighthouse audit + Settings version footer (`feat/install-help-and-lighthouse`, ~1 day)
+
+**Goal**: every loose-end gating a friend's "go install OnBoard" experience. Dev-asset refresh (screenshots + graphify) is deliberately deferred to PR 8-J so it captures the final state of everything, not a snapshot that gets invalidated by 8-D's UI work.
 
 **Public install-help page**:
-- New route `routes/install.tsx` (outside `_authenticated/`). Two collapsible sections: iOS (Safari → Share → Add to Home Screen) and Android (Chrome → menu → Install app). Detects platform via UA hints, expands the relevant section by default. Uses placeholder/existing screenshots from `plan-assets/` — refreshed assets land in 8-H.
+- New route `routes/install.tsx` (outside `_authenticated/`). Two collapsible sections: iOS (Safari → Share → Add to Home Screen) and Android (Chrome → menu → Install app). Detects platform via UA hints, expands the relevant section by default. Uses placeholder/existing screenshots from `plan-assets/` — refreshed assets land in 8-J.
 - Linked from the login page footer.
 - Re-point the share-link page's install CTA (introduced in 8-D) at `/install`.
 - The authenticated install-prompt UI in `settings.tsx` stays — the new `/install` page is for friends arriving from a chat link who haven't signed in yet.
@@ -1441,7 +1506,7 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 **Lighthouse audit + manifest polish**:
 - Run Lighthouse against integration with mobile + desktop presets.
 - Manifest gaps to close in `vite.config.ts`: add `shortcuts[]` for "New match" + "Stats". Verify `purpose: "maskable"` icon has the recommended safe-area padding.
-- `screenshots[]` deferred to PR 8-H (depends on the asset refresh). Lighthouse installability + PWA-quality checks don't require `screenshots[]` for a passing score.
+- `screenshots[]` deferred to PR 8-J (depends on the asset refresh). Lighthouse installability + PWA-quality checks don't require `screenshots[]` for a passing score.
 - Fix any sub-100 finding the audit surfaces.
 
 **Settings additions** (`routes/_authenticated/settings.tsx`):
@@ -1461,9 +1526,9 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 
 **Acceptance**: Lighthouse PWA criteria pass against integration (mobile + desktop). Logged-out visitor can reach `/install` from `/`. Settings shows `v0.x.y • abc1234`.
 
-#### PR 8-H — Dev-asset refresh + v1.0.0 release (`release/v1.0.0`, ~1 day)
+#### PR 8-J — Dev-asset refresh + v1.0.0 release (`release/v1.0.0`, ~1 day)
 
-**Goal**: regenerate the dev artefacts now that everything in 8-A/B/C/D has landed, then cut the version and deploy to production.
+**Goal**: regenerate the dev artefacts now that everything in 8-A through 8-I has landed, then cut the version and deploy to production.
 
 **Screenshot script refresh** (`scripts/capture-screenshots.ts`):
 - Audit current screen coverage against the post-Phase-8 surface. Add: Players tab (`/players`), profile detail (`/players/$id`), Avatar Capture Studio's 4 states, every Skull King screen (start, bidding, bid recap, round result, transition, complete, scoreboard), Stats dashboard, Install help page, public share-link page, login page with both providers visible, Privacy + ToS pages.
@@ -1480,19 +1545,19 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 - New `CHANGELOG.md` at repo root, with one entry per merged phase from this `PLAN.md` (Phase 0 through Phase 8, plus 5b/5c/8b notes). Keep `PLAN.md` present for now — Phase 8b's doc pass migrates it to a CHANGELOG-only model.
 - Tag `v1.0.0`, push tag. Coolify production deploy fires automatically per `.github/workflows/deploy-prod.yml`.
 - Smoke test on production: login via each provider, create a match in each game, install on a real phone, verify share-link unfurls.
-- Update this Phase 8 section to mark PRs 8-A through 8-H as ✅ DONE; PR 8-I (doc pass) begins once v1.0.0 is verified in production.
+- Update this Phase 8 section to mark PRs 8-A through 8-J as ✅ DONE; PR 8-K (doc pass) begins once v1.0.0 is verified in production.
 
-#### PR 8-I — Documentation pass (`chore/docs-pass`, post-v1.0.0, ~1.5 days)
+#### PR 8-K — Documentation pass (`chore/docs-pass`, post-v1.0.0, ~1.5 days)
 
-**Goal**: Replace the bootstrap-era doc set with a stable reference, now that v1.0.0 is shipped and the architecture has settled. The final sub-PR of Phase 8. Runs AFTER PR 8-H has tagged v1.0.0 — no user-facing changes, no version bump (or a `1.0.1` docs-only bump if you prefer).
+**Goal**: Replace the bootstrap-era doc set with a stable reference, now that v1.0.0 is shipped and the architecture has settled. The final sub-PR of Phase 8. Runs AFTER PR 8-J has tagged v1.0.0 — no user-facing changes, no version bump (or a `1.0.1` docs-only bump if you prefer).
 
-PR 8-H creates an initial `CHANGELOG.md` seeded from Phase 0–8 entries; 8-I finishes the migration by promoting/expanding the doc set, then removes `PLAN.md` itself.
+PR 8-J creates an initial `CHANGELOG.md` seeded from Phase 0–8 entries; 8-K finishes the migration by promoting/expanding the doc set, then removes `PLAN.md` itself.
 
 The gap today: project description, data model, auth flow, game rules, public surfaces (install / privacy / terms / share-link), and API surface are scattered across `CLAUDE.md`, `PLAN.md`, source comments, and one offline-specific doc. Writing it earlier would have produced churn — this PR parks the work behind the v1 freeze.
 
 **What to write**:
 
-- **README rewrite** — currently bootstrap-only. Replace with: what OnBoard is, who it's for, the offline-first stance, install instructions (link to the public `/install` page shipped in 8-G), link to the doc set below.
+- **README rewrite** — currently bootstrap-only. Replace with: what OnBoard is, who it's for, the offline-first stance, install instructions (link to the public `/install` page shipped in 8-I), link to the doc set below.
 - **`docs/architecture.md`** — companion to `docs/offline-architecture.md`, covering what offline doesn't:
   - **Data model**: Profile / Player / Match / Score / `MatchShareToken` relationships; single-Profile model; `ownerId` + `linkedUserId` semantics; the `avatarFrame` / `avatarRing` stamp model from Phase 7.
   - **Auth flow**: better-auth with Google + Facebook (wired in 8-A; Apple deferred to v1.x — see Out of scope). Session cookie semantics. **Email-keyed account linking** — one `User` regardless of which provider signed in. Link-token HMAC for profile-to-account binding (from 6-C).
@@ -1501,7 +1566,7 @@ The gap today: project description, data model, auth flow, game rules, public su
   - **Stats engine** (from 8-C): viewer-personal computation pattern (`useMyStats`, `useMyGameStats`, `useGameRankings`) — all derived from Dexie via `useLiveQuery`, no server endpoint.
   - **Achievements engine** (from 8-D): client-only computation over `matches` + `scores`, same `useLiveQuery` pattern; fixed v1 set; same `<AchievementsRow>` works for self and friends.
   - **Match share-link** (from 8-D): `MatchShareToken` table, public unauthenticated `/share/:token` route, OG meta tags rendered server-side as a **deliberate exception** to the SPA-only stance — document why and where.
-  - **Build-time version injection** (from 8-G): how `__APP_VERSION__` and `__GIT_SHA__` flow from `package.json` + Docker build arg into the Settings footer.
+  - **Build-time version injection** (from 8-I): how `__APP_VERSION__` and `__GIT_SHA__` flow from `package.json` + Docker build arg into the Settings footer.
 - **`docs/games/{skull-king,7-wonders-duel}.md`** — per-game rules + scoring tables + variant matrix. Currently lives as comments next to the scoring functions; promoting it makes the rules legible without reading TypeScript and gives a home for screenshots.
 - **`docs/api.md`** — route reference (request / response shapes, auth requirements, error codes). Cover the post-Phase-8 surface in full:
   - `/api/auth/*` (better-auth handlers for Google + Facebook)
@@ -1515,7 +1580,7 @@ The gap today: project description, data model, auth flow, game rules, public su
 
 **What to retire**:
 
-- **`PLAN.md`** → fully migrated into `CHANGELOG.md` (the initial CHANGELOG.md from PR 8-H becomes the canonical history; remaining PLAN.md narrative is folded in). `PLAN.md` is then removed.
+- **`PLAN.md`** → fully migrated into `CHANGELOG.md` (the initial CHANGELOG.md from PR 8-J becomes the canonical history; remaining PLAN.md narrative is folded in). `PLAN.md` is then removed.
 - Scattered scoring rules in source comments → migrate to `docs/games/*.md`, leave a one-line pointer in the source.
 
 **Acceptance**: a new contributor can clone the repo, read `README.md` → `docs/architecture.md` → `docs/public-surfaces.md` → `docs/api.md`, and understand the system without reading any source code. `CLAUDE.md` no longer duplicates content that lives in `docs/`. The doc set reflects the actual three-provider auth model, achievements + share-link surfaces, and the public-route SSR exception.
