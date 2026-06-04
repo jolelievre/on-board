@@ -95,7 +95,19 @@ function stripQueryString(url: string): string {
  *     user's row that was never mirrored into our Dexie
  *
  * Callers treat `null` as "not the current user" so these entries
- * never replay and never appear in the Sync panel. */
+ * never replay and never appear in the Sync panel.
+ *
+ * For match-kind targets we fall back to any player row's embedded
+ * `profile.ownerId` when the Match row itself has no `createdById`.
+ * Pre-8-F `createMatch` set `createdById` server-side only, so local
+ * Match rows created before this PR (including every entry currently
+ * stuck on the maintainer's mobile queue) carry `createdById:
+ * undefined`. Player rows for those matches DO carry the creator's
+ * id transitively — the creator owns every profile referenced in
+ * their own match's players list, so `player.profile.ownerId ===
+ * Match.createdById` by construction. Without this fallback, every
+ * pre-fix match POST would be filtered out as foreign and the user
+ * would never see the recovery surface for their own stuck entries. */
 export async function inferEntryOwnerId(
   entry: SyncQueueEntry,
 ): Promise<string | null> {
@@ -104,7 +116,12 @@ export async function inferEntryOwnerId(
 
   if (target.kind === "match") {
     const match = await db.matches.get(target.id);
-    return match?.createdById ?? null;
+    if (match?.createdById) return match.createdById;
+    const player = await db.players
+      .where("matchId")
+      .equals(target.id)
+      .first();
+    return player?.profile?.ownerId ?? null;
   }
   // target.kind === "profile"
   const profile = await db.profiles.get(target.id);

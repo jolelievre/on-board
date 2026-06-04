@@ -114,6 +114,135 @@ async function seedTwoUsersMatches(page: Page, currentUserId: string) {
 }
 
 test.describe("Sync queue multi-user scoping (Phase 8-F)", () => {
+  test("pre-fix match rows (no createdById) attribute via player.profile.ownerId fallback", async ({
+    page,
+  }) => {
+    // Regression for the comment surfaced during PR review: every
+    // Match row on a device whose queue was populated before this PR
+    // has `createdById: undefined` locally (the field was previously
+    // set server-side and only arrived via pull-sync). Without the
+    // fallback in `inferEntryOwnerId`, those rows would be treated as
+    // foreign and the entire stuck queue would become invisible on
+    // the maintainer's mobile device after the v7 upgrade.
+    //
+    // The fallback resolves match ownership via `player.profile.
+    // ownerId` for any player in the match: the creator owns every
+    // profile referenced in their own match's players list, so the
+    // ownerId is the creator by construction. This test seeds the
+    // pre-fix shape verbatim and asserts the queued match POST still
+    // surfaces.
+    const PRE_FIX_MATCH_ID = "prefixmatchidaaaaaaaaaaaa";
+    const PLAYER_PROFILE_ID = "prefixplayerprofileaaaaaa";
+
+    await page.goto("/games");
+    await page.waitForLoadState("domcontentloaded");
+    const currentUserId = await readCurrentUserId(page);
+
+    await page.route("**/api/**", (route) => route.fulfill({ status: 503 }));
+
+    await page.evaluate(
+      async ({ matchId, profileId, currentUserId }) => {
+        const openDb = () =>
+          new Promise<IDBDatabase>((resolve, reject) => {
+            const req = window.indexedDB.open("onboard");
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+          });
+        const db = await openDb();
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(
+            ["matches", "players", "profiles", "syncQueue"],
+            "readwrite",
+          );
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+          const now = new Date().toISOString();
+
+          // Pre-fix Match row: createdById deliberately omitted.
+          tx.objectStore("matches").put({
+            id: matchId,
+            gameId: "skull-king",
+            // no createdById
+            status: "IN_PROGRESS",
+            victoryType: null,
+            winnerId: null,
+            metadata: {},
+            startedAt: now,
+            completedAt: null,
+            updatedAt: now,
+          });
+
+          // The owner-attribution fallback path: a profile owned by
+          // the current user, embedded on a player row in the match.
+          tx.objectStore("profiles").put({
+            id: profileId,
+            ownerId: currentUserId,
+            linkedUserId: null,
+            alias: "Pre-fix player",
+            customAvatarUrl: null,
+            useLinkedAvatar: true,
+            avatarFrame: "circle",
+            avatarRing: null,
+            usedAt: now,
+            createdAt: now,
+            updatedAt: now,
+            linkedUser: null,
+          });
+          tx.objectStore("players").put({
+            id: "prefixplayer1234567890ab",
+            matchId,
+            profileId,
+            profileLinkedUserId: null,
+            position: 0,
+            profile: {
+              id: profileId,
+              ownerId: currentUserId,
+              linkedUserId: null,
+              alias: "Pre-fix player",
+              customAvatarUrl: null,
+              useLinkedAvatar: true,
+              avatarFrame: "circle",
+              avatarRing: null,
+              linkedUser: null,
+            },
+            updatedAt: now,
+          });
+
+          tx.objectStore("syncQueue").add({
+            method: "POST",
+            url: "/api/matches",
+            body: JSON.stringify({
+              id: matchId,
+              gameId: "skull-king",
+              players: [],
+            }),
+            createdAt: now,
+            retries: 0,
+            status: "pending",
+          });
+        });
+        db.close();
+      },
+      {
+        matchId: PRE_FIX_MATCH_ID,
+        profileId: PLAYER_PROFILE_ID,
+        currentUserId,
+      },
+    );
+
+    await page.goto("/settings");
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.getByTestId("settings-sync-panel")).toBeVisible();
+
+    // The entry surfaces despite the Match row's missing createdById —
+    // the inferer falls back to player.profile.ownerId and resolves
+    // it to the current user. Without the fallback this would render
+    // an empty OK panel.
+    const pendingList = page.getByTestId("sync-pending-list");
+    await expect(pendingList).toBeVisible();
+    await expect(pendingList.getByTestId("sync-entry")).toHaveCount(1);
+  });
+
   test("foreign-user entries don't surface in the panel and don't replay on flush", async ({
     page,
   }) => {
