@@ -35,6 +35,27 @@ export function clearSessionCache() {
   localStorage.removeItem(CACHE_KEY);
 }
 
+/** Synchronous accessor for the current user id, sourced from the
+ * localStorage cache that `useAuthSession` keeps in lockstep with
+ * `authClient.useSession()`. Throws when no session is cached — every
+ * non-React caller (sync engine flush(), failure-reporter, mutation
+ * pipeline) only ever runs under the authenticated route guard, so a
+ * missing user id at call time is an invariant violation we want to
+ * surface loudly rather than silently no-op.
+ *
+ * Mirrors `useRequiredViewerId`'s contract for React code: same
+ * "session is guaranteed by the auth shell" assumption, expressed at
+ * the lib layer where hooks aren't available. */
+export function requireCachedUserId(): string {
+  const id = readCache()?.user.id;
+  if (!id) {
+    throw new Error(
+      "requireCachedUserId called without a cached session — caller must run under the authenticated route guard.",
+    );
+  }
+  return id;
+}
+
 /**
  * Offline-safe wrapper around authClient.useSession().
  *

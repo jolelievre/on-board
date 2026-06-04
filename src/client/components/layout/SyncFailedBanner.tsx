@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
 import { db } from "../../lib/db";
 import { Icon } from "../ui/Icon";
+import { inferEntryOwnerId } from "../../lib/sync-ownership";
+import { useRequiredViewerId } from "../../hooks/useRequiredViewerId";
 
 /**
  * Sticky app-shell banner that surfaces a non-empty terminally-failed
@@ -18,14 +20,24 @@ import { Icon } from "../ui/Icon";
  */
 export function SyncFailedBanner() {
   const { t } = useTranslation();
+  // Banner is scoped to the current user (8-F multi-user safety). A
+  // foreign-user's failed entry lingering in this device's IndexedDB
+  // would otherwise light the banner while the Sync panel — also
+  // ownership-filtered — showed nothing to act on.
+  const viewerId = useRequiredViewerId();
 
   const needsBanner = useLiveQuery(
     async () => {
-      const failedCount = await db.syncQueue
+      const failed = await db.syncQueue
         .where("status")
         .equals("failed")
-        .count();
-      if (failedCount === 0) return false;
+        .toArray();
+      const ownedFailed: typeof failed = [];
+      for (const entry of failed) {
+        const ownerId = await inferEntryOwnerId(entry);
+        if (ownerId === viewerId) ownedFailed.push(entry);
+      }
+      if (ownedFailed.length === 0) return false;
 
       const ack = await db.syncMeta.get("failedBannerAcknowledgedAt");
       // Never opened Settings → surface anything that's failed, including
@@ -37,17 +49,13 @@ export function SyncFailedBanner() {
       // `failedAt` count as acknowledged once Settings was opened —
       // otherwise the user would have no way to dismiss the banner for
       // entries that pre-date the failedAt instrumentation.
-      const newer = await db.syncQueue
-        .where("status")
-        .equals("failed")
-        .filter(
-          (entry) =>
-            entry.failedAt !== undefined && entry.failedAt > ack.value,
-        )
-        .count();
-      return newer > 0;
+      const newer = ownedFailed.filter(
+        (entry) =>
+          entry.failedAt !== undefined && entry.failedAt > ack.value,
+      );
+      return newer.length > 0;
     },
-    [],
+    [viewerId],
     false,
   );
 
