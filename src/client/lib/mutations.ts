@@ -37,6 +37,11 @@ export type CreateMatchInput = {
   players: {
     profileId: string;
   }[];
+  /** The user creating the match. Stored on the local Match row as
+   * `createdById` so 8-F's ownership inferer can attribute the
+   * queued POST back to this user before the server confirms the
+   * create (and the pull-sync mirrors the canonical projection). */
+  ownerId: string;
   /** Pre-supplied id (tests/replay). Otherwise generated. */
   id?: string;
   metadata?: Record<string, unknown>;
@@ -107,6 +112,7 @@ export async function createMatch(
   const match: LocalMatch = {
     id: matchId,
     gameId: input.gameId,
+    createdById: input.ownerId,
     status: "IN_PROGRESS",
     victoryType: null,
     winnerId: null,

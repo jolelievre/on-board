@@ -1,4 +1,6 @@
 import { db } from "./db";
+import { requireCachedUserId } from "../hooks/useAuthSession";
+import { filterOwnedBy } from "./sync-ownership";
 
 /** Phase 8-E telemetry: post every newly-failed sync queue entry to
  * `/api/sync/failures` so we get a server-side trail of stuck states
@@ -12,15 +14,25 @@ import { db } from "./db";
  * Called from `pullSync()` after each pull lands. Pull-sync already
  * has the `navigator.onLine` guard, but we re-check here so a direct
  * caller (tests, dev tooling) gets the same short-circuit.
+ *
+ * Multi-user safety (PR 8-F): only failures belonging to the currently
+ * logged-in user are reported. The server stamps `userId` from the
+ * session, so reporting a foreign-user's failure under the wrong
+ * session would attribute it to the wrong account in `SyncFailureLog`.
+ * Foreign-user entries stay unreported until that user logs back in.
  */
 export async function reportSyncFailures(): Promise<void> {
   if (!navigator.onLine) return;
 
-  const unreported = await db.syncQueue
+  const currentUserId = requireCachedUserId();
+
+  const allUnreported = await db.syncQueue
     .where("status")
     .equals("failed")
     .filter((entry) => entry.reported !== true)
     .toArray();
+
+  const unreported = await filterOwnedBy(allUnreported, currentUserId);
 
   if (unreported.length === 0) return;
 

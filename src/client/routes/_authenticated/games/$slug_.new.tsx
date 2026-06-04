@@ -350,6 +350,7 @@ function NewMatchForm({
       const { matchId } = await createMatch({
         gameId: game.id,
         players,
+        ownerId: viewerId,
         ...(metadata ? { metadata } : {}),
       });
       navigate({ to: "/matches/$id", params: { id: matchId } });

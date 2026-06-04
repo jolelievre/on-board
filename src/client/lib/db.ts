@@ -64,7 +64,24 @@ export type SyncQueueEntry = {
   body?: string;
   createdAt: string;
   retries: number;
-  status: "pending" | "failed";
+  /** `pending` — eligible for the next flush.
+   *  `failed` — terminal failure (4xx, or 5xx after the retry budget).
+   *  `blocked` — Phase 8-F cascading-failure marker. A later entry
+   *  whose body / URL references a client-supplied id that appeared in
+   *  an upstream `failed` entry. Skipped by the replayer; flipped back
+   *  to `pending` automatically when the upstream entry succeeds (via
+   *  Retry, or because the upstream eventually drained).
+   *  `discarded` — Phase 8-F tombstone. The user explicitly gave up on
+   *  the entry from the Sync panel; the row stays in the queue so
+   *  downstream gates that scan it (e.g. `useMatchSyncStatus` for the
+   *  Share button) still treat the match / profile as not-yet-synced.
+   *  Skipped by the replayer; ignored by the failed-banner / telemetry
+   *  reporter. Can be undone by Retry, which flips it back to `pending`. */
+  status: "pending" | "failed" | "blocked" | "discarded";
+  /** Set on `blocked` rows: the `id` of the upstream failed entry that
+   * caused the cascade. Drives auto-unblock on parent success, and the
+   * Sync panel's "Blocked by …" badge. */
+  blockedBy?: number;
   /** Free-form short summary (e.g. `HTTP 400`, `Max retries reached`).
    * Kept for backwards-compat with v2-era rows that didn't have
    * `errorBody`. The Sync panel falls back to this when `errorBody`
@@ -84,8 +101,8 @@ export type SyncQueueEntry = {
   failedAt?: string;
   /** Phase 8-E telemetry: set true once the entry has been included in
    * a `POST /api/sync/failures` report so a repeating pull-sync doesn't
-   * re-post the same row. Never cleared — failed rows stay in the
-   * queue until 8-F's Retry / Discard actions land. */
+   * re-post the same row. Cleared by 8-F's Retry action so a fresh
+   * failure gets reported again. */
   reported?: boolean;
 };
 
@@ -328,7 +345,92 @@ class OnBoardDB extends Dexie {
               row.profile.avatarRing = null;
           });
       });
+
+    // v7 — Phase 8-F: sync queue recovery. Adds `blocked` as a third
+    // status value plus a `blockedBy` foreign key onto the same
+    // `syncQueue` table. No new indexes — the existing `status` index
+    // still answers all live-query predicates ("pending count", "any
+    // failed", "any blocked"). The upgrader runs a retroactive
+    // cascade scan over the existing `failed` rows so users on
+    // 8-E-era queues land with their dependents already grouped
+    // under the upstream failure — without it, those users would see
+    // 30+ unrelated `failed` entries and have to Retry every one by
+    // hand instead of clicking Retry on the parent and letting the
+    // cascade drain.
+    this.version(7)
+      .stores({
+        syncQueue: "++id, createdAt, status",
+        games: "id, slug",
+        matches:
+          "id, gameId, status, startedAt, updatedAt, [createdById+startedAt]",
+        players:
+          "id, matchId, profileId, profileLinkedUserId, [matchId+position]",
+        scores: "id, matchId, [matchId+playerId+category], updatedAt",
+        profiles: "id, ownerId, linkedUserId, usedAt, updatedAt",
+        syncMeta: "key",
+      })
+      .upgrade(async (tx) => {
+        // Sort by createdAt so older failures get a chance to "claim"
+        // their dependents before younger failures do. A dependent of
+        // two upstream failures is attributed to the older one — once
+        // that resolves, the younger failure (if still failed) blocks
+        // it again on the next flush.
+        const all = (await tx
+          .table("syncQueue")
+          .orderBy("createdAt")
+          .toArray()) as SyncQueueEntry[];
+        for (const parent of all) {
+          if (parent.status !== "failed" || parent.id === undefined) continue;
+          const parentIds = extractClientIds(parent);
+          if (parentIds.length === 0) continue;
+          for (const candidate of all) {
+            if (candidate.id === undefined) continue;
+            if (candidate.id === parent.id) continue;
+            if (candidate.createdAt <= parent.createdAt) continue;
+            if (candidate.status === "blocked") continue;
+            if (!entryReferencesAny(candidate, parentIds)) continue;
+            await tx.table("syncQueue").update(candidate.id, {
+              status: "blocked",
+              blockedBy: parent.id,
+            });
+            // Mutate in-place so subsequent iterations skip this row.
+            candidate.status = "blocked";
+            candidate.blockedBy = parent.id;
+          }
+        }
+      });
   }
+}
+
+/** Extract every client-supplied cuid-like id from an entry's URL and
+ * JSON body. Used by the cascade marker to find later entries that
+ * depend on this one (their body / URL contains one of these strings).
+ *
+ * Lives in db.ts (not sync.ts) so the v7 upgrader can call it without
+ * pulling sync.ts in at module-init time. Kept exported for the
+ * sync engine to import.
+ *
+ * Implementation: scan with `/[a-z0-9]{20,}/g`. Real cuids are 24+
+ * alphanumeric lowercase; the legacy `draft_<uuid>` ids (10/05 entries
+ * from the user's stuck queue) don't match — but that's fine, those
+ * orphans have no parent in the queue and never act as a "parent" in
+ * the cascade sense. */
+export function extractClientIds(entry: SyncQueueEntry): string[] {
+  const haystack = `${entry.url}\n${entry.body ?? ""}`;
+  const matches = haystack.match(/[a-z0-9]{20,}/g);
+  if (!matches) return [];
+  return Array.from(new Set(matches));
+}
+
+/** Does the candidate entry's URL or body contain any of the given
+ * client-supplied ids as a substring? */
+export function entryReferencesAny(
+  candidate: SyncQueueEntry,
+  ids: string[],
+): boolean {
+  if (ids.length === 0) return false;
+  const haystack = `${candidate.url}\n${candidate.body ?? ""}`;
+  return ids.some((id) => haystack.includes(id));
 }
 
 export const db = new OnBoardDB();
