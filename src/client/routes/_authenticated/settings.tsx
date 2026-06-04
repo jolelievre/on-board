@@ -277,13 +277,31 @@ function SyncPanel() {
   // / Discard buttons live only on the parent — clicking Retry on a
   // dependent doesn't help (it just re-fails until the parent lands),
   // so we hide the affordance entirely on the children.
-  const failureGroups = buildFailureGroups(failed, blocked);
+  const failureGroups = buildGroups(failed, blocked);
   // Blocked entries whose parent isn't currently `failed` (parent was
   // discarded or somehow vanished). Shouldn't happen under normal
   // flows — discard cascade now tombstones dependents alongside the
   // parent — but render them defensively so they can be acted on.
   const orphanBlocked = blocked.filter(
     (b) => !failureGroups.some((g) => g.dependentIds.has(b.id ?? -1)),
+  );
+  // Discarded entries group the same way: a root (no blockedBy — was
+  // failed before discard) and dependents that point at it via
+  // blockedBy (preserved through the tombstone). Retry on the root
+  // un-discards the cascade back to a working state — same affordance
+  // as the failed view, identical mental model.
+  const discardedRoots = discarded.filter(
+    (e) => e.blockedBy === undefined,
+  );
+  const discardedDescendants = discarded.filter(
+    (e) => e.blockedBy !== undefined,
+  );
+  const discardedGroups = buildGroups(discardedRoots, discardedDescendants);
+  // Defensive: if a discarded dependent's root somehow isn't in the
+  // queue any more, render it standalone so the user can still Retry
+  // it. Same orphan logic as the blocked side above.
+  const orphanDiscarded = discardedDescendants.filter(
+    (d) => !discardedGroups.some((g) => g.dependentIds.has(d.id ?? -1)),
   );
 
   const dateFormatter = new Intl.DateTimeFormat(i18n.language, {
@@ -402,7 +420,9 @@ function SyncPanel() {
 
       {discarded.length > 0 && (
         <DiscardedEntries
-          entries={discarded}
+          totalCount={discarded.length}
+          groups={discardedGroups}
+          orphans={orphanDiscarded}
           dateFormatter={dateFormatter}
         />
       )}
@@ -427,14 +447,23 @@ function SyncPanel() {
  * entries. The user deliberately gave up on these, but the rows stay
  * in the queue so downstream gates that scan it (`useMatchSyncStatus`
  * for the Share button) keep the corresponding match / profile flagged
- * as not-yet-synced. Retry flips a row back to `pending` so the user
- * can put it through again — useful if the underlying server bug got
- * fixed since they discarded. */
+ * as not-yet-synced.
+ *
+ * Discarded entries are rendered with the same parent-with-collapsible-
+ * dependents card as the failed cascade above — same mental model, same
+ * UX, and clicking Retry on a discarded root undoes the whole cascade
+ * (the engine's `rediscardedCascadeToBlocked` walks `blockedBy` to
+ * resurrect tombstoned dependents back to `blocked`, waiting for the
+ * root to drain). */
 function DiscardedEntries({
-  entries,
+  totalCount,
+  groups,
+  orphans,
   dateFormatter,
 }: {
-  entries: SyncQueueEntry[];
+  totalCount: number;
+  groups: FailureGroup[];
+  orphans: SyncQueueEntry[];
   dateFormatter: Intl.DateTimeFormat;
 }) {
   const { t } = useTranslation();
@@ -452,28 +481,47 @@ function DiscardedEntries({
         aria-expanded={open}
         data-testid="sync-discarded-toggle"
       >
-        {t("settings.sync.discardedSection", { count: entries.length })}
+        {t("settings.sync.discardedSection", { count: totalCount })}
         <Icon name={open ? "minus" : "plus"} size={14} />
       </button>
 
       {open && (
         <>
           <p className={styles.hint}>{t("settings.sync.discardedSectionHint")}</p>
-          <ul className={styles.syncList}>
-            {entries.map((entry) => (
-              <SyncEntryRow
-                key={entry.id ?? `${entry.createdAt}-${entry.url}`}
-                entry={entry}
-                dateFormatter={dateFormatter}
-                onRetry={
-                  entry.id !== undefined
-                    ? () => void syncEngine.retry(entry.id!)
-                    : null
-                }
-                onRequestDiscard={null}
-              />
-            ))}
-          </ul>
+          {groups.length > 0 && (
+            <div className={styles.syncList} data-testid="sync-discarded-list">
+              {groups.map((group) => (
+                <FailureGroupCard
+                  key={group.parent.id ?? `${group.parent.createdAt}-${group.parent.url}`}
+                  group={group}
+                  dateFormatter={dateFormatter}
+                  onRetry={() =>
+                    group.parent.id !== undefined &&
+                    void syncEngine.retry(group.parent.id)
+                  }
+                  // Already discarded — no Discard affordance.
+                  onRequestDiscard={null}
+                />
+              ))}
+            </div>
+          )}
+          {orphans.length > 0 && (
+            <ul className={styles.syncList} data-testid="sync-discarded-orphans">
+              {orphans.map((entry) => (
+                <SyncEntryRow
+                  key={entry.id ?? `${entry.createdAt}-${entry.url}`}
+                  entry={entry}
+                  dateFormatter={dateFormatter}
+                  onRetry={
+                    entry.id !== undefined
+                      ? () => void syncEngine.retry(entry.id!)
+                      : null
+                  }
+                  onRequestDiscard={null}
+                />
+              ))}
+            </ul>
+          )}
         </>
       )}
     </div>
@@ -752,26 +800,27 @@ type FailureGroup = {
   dependentIds: Set<number>;
 };
 
-/** Group every `failed` entry with its transitive `blocked` descendants
- * by walking the `blockedBy` chain. Each group represents a single root
- * cause: Retry / Discard on the parent resolves the whole subtree.
+/** Group each parent with its transitive descendants by walking the
+ * `blockedBy` chain. Reused for both the failed-cascade view (parent
+ * is `failed`, dependents are `blocked`) and the discarded-tombstone
+ * view (parent + dependents are all `discarded`).
  *
  * Dependents are flattened (not nested) so the expanded view is a
- * scannable list rather than a deep tree — even when B blocks C and C
- * blocks D, the user only ever clicks Retry on A and the cascade
- * drains. */
-function buildFailureGroups(
-  failed: SyncQueueEntry[],
-  blocked: SyncQueueEntry[],
+ * scannable list rather than a deep tree — even when B blocks C and
+ * C blocks D, the user only ever clicks Retry on A and the cascade
+ * resolves. */
+function buildGroups(
+  parents: SyncQueueEntry[],
+  candidates: SyncQueueEntry[],
 ): FailureGroup[] {
-  return failed.map((parent) => {
+  return parents.map((parent) => {
     const dependents: SyncQueueEntry[] = [];
     const queue: number[] = parent.id !== undefined ? [parent.id] : [];
     const seen = new Set<number>(queue);
     while (queue.length > 0) {
       const ancestorId = queue.shift();
       if (ancestorId === undefined) continue;
-      for (const candidate of blocked) {
+      for (const candidate of candidates) {
         if (candidate.id === undefined) continue;
         if (candidate.blockedBy !== ancestorId) continue;
         if (seen.has(candidate.id)) continue;
@@ -803,7 +852,10 @@ function FailureGroupCard({
   group: FailureGroup;
   dateFormatter: Intl.DateTimeFormat;
   onRetry: () => void;
-  onRequestDiscard: () => void;
+  /** Null when the card is rendered inside the Discarded section —
+   * the entry is already tombstoned, so the Discard affordance is
+   * suppressed and the user only sees Retry. */
+  onRequestDiscard: (() => void) | null;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);

@@ -181,6 +181,43 @@ async function gotoSyncPanel(page: Page) {
   await expect(page.getByTestId("settings-sync-panel")).toBeVisible();
 }
 
+type QueueRowSnapshot = {
+  id: number;
+  status: string;
+  body?: string;
+  blockedBy?: number;
+};
+
+async function readQueueRows(page: Page): Promise<QueueRowSnapshot[]> {
+  return page.evaluate(async () => {
+    const openDb = () =>
+      new Promise<IDBDatabase>((resolve, reject) => {
+        const req = window.indexedDB.open("onboard");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    const db = await openDb();
+    const rows = await new Promise<
+      { id: number; status: string; body?: string; blockedBy?: number }[]
+    >((resolve, reject) => {
+      const tx = db.transaction("syncQueue", "readonly");
+      const req = tx.objectStore("syncQueue").getAll();
+      req.onsuccess = () =>
+        resolve(
+          req.result as {
+            id: number;
+            status: string;
+            body?: string;
+            blockedBy?: number;
+          }[],
+        );
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return rows;
+  });
+}
+
 test.describe("Sync queue recovery (Phase 8-F)", () => {
   test("failed parent renders as a group card; dependents are collapsed by default and reachable via the toggle", async ({
     page,
@@ -276,58 +313,137 @@ test.describe("Sync queue recovery (Phase 8-F)", () => {
     await expect(page.getByTestId("sync-entry")).toHaveCount(0);
 
     // BUT the rows still exist as discarded tombstones: collapsed
-    // section at the bottom, expandable, badges the local-only state.
-    // This is the gate that keeps the Share button disabled for
-    // matches whose create-POST was discarded.
+    // section at the bottom, expandable. The discarded section mirrors
+    // the failed-cascade UX — one parent card per root, dependents
+    // collapsed under a "+N related changes" toggle. This is the gate
+    // that keeps the Share button disabled for matches whose
+    // create-POST was discarded.
     const discardedSection = page.getByTestId("sync-discarded-section");
     await expect(discardedSection).toBeVisible();
     await page.getByTestId("sync-discarded-toggle").click();
-    const discardedBadges = page.getByTestId("sync-entry-discarded-badge");
-    await expect(discardedBadges).toHaveCount(3);
 
-    // Confirm the raw Dexie state: 3 rows, all `discarded`.
-    const statuses = await page.evaluate(async () => {
-      const openDb = () =>
-        new Promise<IDBDatabase>((resolve, reject) => {
-          const req = window.indexedDB.open("onboard");
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
-        });
-      const db = await openDb();
-      const rows = await new Promise<{ status: string }[]>(
-        (resolve, reject) => {
-          const tx = db.transaction("syncQueue", "readonly");
-          const req = tx.objectStore("syncQueue").getAll();
-          req.onsuccess = () => resolve(req.result as { status: string }[]);
-          req.onerror = () => reject(req.error);
-        },
-      );
-      db.close();
-      return rows.map((r) => r.status).sort();
-    });
-    expect(statuses).toEqual(["discarded", "discarded", "discarded"]);
+    // Exactly one discarded group renders (the discarded root). Its
+    // parent row carries the Discarded badge; dependents are
+    // collapsed under a "+N related" toggle that the user expands
+    // on demand.
+    const discardedList = page.getByTestId("sync-discarded-list");
+    const discardedGroups = discardedList.getByTestId("sync-failure-group");
+    await expect(discardedGroups).toHaveCount(1);
+    await expect(
+      discardedGroups.first().getByTestId("sync-entry-discarded-badge"),
+    ).toHaveCount(1);
+    const discardedToggle = discardedGroups
+      .first()
+      .getByTestId("sync-group-related-toggle");
+    await expect(discardedToggle).toContainText("2");
+
+    await discardedToggle.click();
+    const allDiscardedBadges = page.getByTestId("sync-entry-discarded-badge");
+    await expect(allDiscardedBadges).toHaveCount(3);
+
+    // Confirm the raw Dexie state: 3 rows, all `discarded`. The two
+    // dependents must retain `blockedBy` pointing at the parent so a
+    // future Retry on the parent can find them and un-discard them
+    // (without that link, a 30-entry cascade discard would require
+    // 30 individual Retry clicks to undo).
+    const rows = await readQueueRows(page);
+    expect(rows.map((r) => r.status).sort()).toEqual([
+      "discarded",
+      "discarded",
+      "discarded",
+    ]);
+    const parent = rows.find(
+      (r) => r.body !== undefined && r.body.includes(PARENT_PROFILE_ID),
+    );
+    expect(parent).toBeDefined();
+    const dependentsWithLink = rows.filter(
+      (r) => r.blockedBy === parent!.id,
+    );
+    expect(dependentsWithLink).toHaveLength(2);
   });
 
-  test("retry on the parent unblocks dependents (verified at the Dexie level)", async ({
+  test("retry on a discarded parent un-discards the cascade dependents back to blocked", async ({
     page,
   }) => {
-    // The full happy path — parent succeeds → dependents drain — would
-    // require a real network round-trip. We assert the engine-level
-    // contract instead: clicking Retry flips the parent to `pending`
-    // and unblocks its dependents back to `pending` so the next flush
-    // pass picks them up. The flush itself is exercised by the rest
-    // of the suite.
+    // The full undo flow: user discards a cascade (parent + 2
+    // dependents tombstoned), changes their mind, clicks Retry on
+    // the parent. Parent flips to `pending`; dependents flip back
+    // to `blocked` (preserving blockedBy) and drain naturally if
+    // the parent succeeds.
+    //
+    // Stub /api so the parent doesn't actually replay during the
+    // assertion window — 503 keeps it `pending` after the engine
+    // picks it up, letting us read a clean Dexie state.
+    await page.goto("/games");
+    await page.waitForLoadState("domcontentloaded");
+    await seedCascadedQueue(page);
+
+    await page.route("**/api/**", (route) => route.fulfill({ status: 503 }));
+    await gotoSyncPanel(page);
+
+    // Discard the cascade first.
+    const failedRow = page
+      .getByTestId("sync-entry")
+      .filter({ hasText: "/api/profiles" })
+      .first();
+    await failedRow.getByTestId("sync-entry-discard").click();
+    await page.getByTestId("sync-discard-confirm").click();
+    await expect(page.getByTestId("sync-summary-ok")).toBeVisible();
+
+    // Open the Discarded section and click Retry on the parent.
+    await page.getByTestId("sync-discarded-toggle").click();
+    const discardedParent = page
+      .getByTestId("sync-discarded-section")
+      .getByTestId("sync-entry")
+      .filter({ hasText: "/api/profiles" })
+      .first();
+    await discardedParent.getByTestId("sync-entry-retry").click();
+
+    // Final state, read from Dexie: parent pending, 2 dependents
+    // blocked (with blockedBy still pointing at the parent), zero
+    // discarded. The active list shows the failure group again with
+    // a +2 related toggle.
+    await expect
+      .poll(async () => {
+        const rows = await readQueueRows(page);
+        return rows.map((r) => r.status).sort();
+      })
+      .toEqual(["blocked", "blocked", "pending"]);
+
+    const rows = await readQueueRows(page);
+    const parent = rows.find((r) => r.status === "pending");
+    expect(parent).toBeDefined();
+    const blockedDeps = rows.filter((r) => r.status === "blocked");
+    expect(blockedDeps).toHaveLength(2);
+    for (const dep of blockedDeps) {
+      expect(dep.blockedBy).toBe(parent!.id);
+    }
+  });
+
+  test("retry on a failed parent re-queues it; dependents stay blocked until the parent actually drains", async ({
+    page,
+  }) => {
+    // The full happy path (parent succeeds → blocked dependents flip
+    // to pending in the same flush pass) needs a real round-trip. We
+    // assert the *engine contract* here: Retry on a failed parent only
+    // re-queues that single entry. Blocked dependents stay blocked
+    // because nothing has landed server-side yet — flipping them to
+    // pending speculatively would have them re-fail (parent hasn't
+    // successfully created the upstream resource) and re-fall through
+    // the cascade marker on the next pass. The flush success path
+    // (`unblockDependents`) is the *only* legitimate trigger to flip
+    // them; covered by the suite's natural drains.
     await page.goto("/games");
     await page.waitForLoadState("domcontentloaded");
     await seedCascadedQueue(page);
     await gotoSyncPanel(page);
 
-    // Stub every endpoint the engine might hit during a flush so it
-    // can't re-fail anything: 503 lands on the 5xx branch, which
-    // increments the retry counter but leaves status=`pending`
-    // (until MAX_RETRIES, which we won't reach in one flush pass).
-    // Pulls + telemetry POSTs are also intercepted so the live-query
-    // interval doesn't churn other rows during the assertion window.
+    // Stub every endpoint the engine might hit during a flush so the
+    // parent can't actually drain: 503 increments the retry counter
+    // but leaves status=`pending` (until MAX_RETRIES, which we won't
+    // reach in one flush pass). Pulls + telemetry POSTs are also
+    // intercepted so the live-query interval doesn't churn other
+    // rows during the assertion window.
     await page.route("**/api/**", (route) => route.fulfill({ status: 503 }));
 
     const failedRow = page
@@ -336,32 +452,11 @@ test.describe("Sync queue recovery (Phase 8-F)", () => {
       .first();
     await failedRow.getByTestId("sync-entry-retry").click();
 
-    // Poll Dexie until the unblock landed. The UI re-render is
-    // incidental here — the contract is "Retry flips status across
-    // the cascade".
     await expect
-      .poll(async () =>
-        page.evaluate(async () => {
-          const openDb = () =>
-            new Promise<IDBDatabase>((resolve, reject) => {
-              const req = window.indexedDB.open("onboard");
-              req.onsuccess = () => resolve(req.result);
-              req.onerror = () => reject(req.error);
-            });
-          const db = await openDb();
-          const rows = await new Promise<{ status: string }[]>(
-            (resolve, reject) => {
-              const tx = db.transaction("syncQueue", "readonly");
-              const req = tx.objectStore("syncQueue").getAll();
-              req.onsuccess = () =>
-                resolve(req.result as { status: string }[]);
-              req.onerror = () => reject(req.error);
-            },
-          );
-          db.close();
-          return rows.map((r) => r.status).sort();
-        }),
-      )
-      .toEqual(["pending", "pending", "pending"]);
+      .poll(async () => {
+        const rows = await readQueueRows(page);
+        return rows.map((r) => r.status).sort();
+      })
+      .toEqual(["blocked", "blocked", "pending"]);
   });
 });

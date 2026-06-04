@@ -150,13 +150,22 @@ export const syncEngine = {
     }
   },
 
-  /** Re-queue a failed / blocked entry. Resets retries and clears the
-   * failure metadata so the engine treats it as a fresh attempt and the
-   * 8-E machinery captures a fresh `errorBody` on a re-fail (the user
-   * sees the *current* server error, not last time's stale string).
+  /** Re-queue a failed / blocked / discarded entry. Resets retries and
+   * clears the failure metadata so the engine treats it as a fresh
+   * attempt and the 8-E machinery captures a fresh `errorBody` on a
+   * re-fail (the user sees the *current* server error, not last time's
+   * stale string).
    *
-   * Also unblocks every entry whose `blockedBy` points at this one — if
-   * the user is retrying the parent, they want the cascade to drain.
+   * Cascade semantics: dependents stay `blocked` (or get flipped from
+   * `discarded` back to `blocked` if they were tombstoned by a prior
+   * Discard cascade) — they wait for *this* entry to drain. When the
+   * parent's POST succeeds in flush(), `unblockDependents` flips the
+   * whole cascade to pending in the same pass; if the parent fails
+   * again, `markCascadeBlocked` finds the (already-blocked)
+   * dependents idempotently. Either way, the dependent chain only
+   * advances when the parent actually lands server-side, never
+   * speculatively.
+   *
    * Triggers an immediate flush so the user sees activity. */
   async retry(entryId: number): Promise<void> {
     await db.syncQueue.update(entryId, {
@@ -169,7 +178,7 @@ export const syncEngine = {
       blockedBy: undefined,
       reported: undefined,
     });
-    await unblockDependents(entryId);
+    await rediscardedCascadeToBlocked(entryId);
     void syncEngine.flush();
   },
 
@@ -182,11 +191,18 @@ export const syncEngine = {
    * would clear the queue, the Share button would re-enable, and the
    * user would get a 404 on a match the server has no record of.
    *
-   * `clearReported` flips off the telemetry flag so a deliberate discard
-   * doesn't leave the row carrying a stale "already reported" mark; the
-   * row is now in a permanent state and reporter / banner alike skip it.
+   * `blockedBy` is preserved on dependents so the cascade link survives
+   * the tombstone: Retry on the parent later walks the same link to
+   * un-discard everything it took down. Without this, undoing a
+   * cascade discard would require the user to click Retry on every
+   * dependent individually — tedious for a 30-entry cascade.
    *
-   * Reversible via Retry, which flips the entry back to `pending`. */
+   * `reported: true` flips off the telemetry flag so the failure
+   * reporter and banner alike skip the row from now on.
+   *
+   * Reversible via Retry, which flips the entry back to `pending`
+   * AND undoes the discard for any dependents the same parent
+   * cascade-tombstoned. */
   async discard(entryId: number, options: { cascade: boolean }): Promise<void> {
     const ids = options.cascade
       ? [entryId, ...(await collectDependentChain(entryId))]
@@ -195,7 +211,6 @@ export const syncEngine = {
       for (const id of ids) {
         await db.syncQueue.update(id, {
           status: "discarded",
-          blockedBy: undefined,
           reported: true,
         });
       }
@@ -387,6 +402,38 @@ async function markCascadeBlocked(
       status: "blocked",
       blockedBy: parent.id,
     });
+  }
+}
+
+/** Walk the (transitive) cascade rooted at `parentId` and flip every
+ * `discarded` entry pointing at any ancestor back to `blocked`. Called
+ * from `retry()` so a Retry on a parent undoes the Discard that took
+ * its dependents down with it.
+ *
+ * Only operates on `status === "discarded"` rows — we never auto-undo
+ * a discard from anywhere else (a natural successful drain of a
+ * discarded parent's twin doesn't resurrect the user's deliberate
+ * Discard decisions; only an explicit Retry does). */
+async function rediscardedCascadeToBlocked(parentId: number): Promise<void> {
+  const queue: number[] = [parentId];
+  const seen = new Set<number>();
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (id === undefined || seen.has(id)) continue;
+    seen.add(id);
+    const dependents = await db.syncQueue
+      .where("status")
+      .equals("discarded")
+      .filter((e) => e.blockedBy === id)
+      .toArray();
+    for (const dep of dependents) {
+      if (dep.id === undefined) continue;
+      await db.syncQueue.update(dep.id, {
+        status: "blocked",
+        // blockedBy stays — it already points at the same parent.
+      });
+      queue.push(dep.id);
+    }
   }
 }
 
