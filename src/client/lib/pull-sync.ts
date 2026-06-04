@@ -275,10 +275,23 @@ async function mergeProfiles(
   }
 
   const toPut: LocalProfile[] = [];
+  const toDelete: string[] = [];
   let linkTransition = false;
   let unlinkTransition = false;
   for (const p of rows) {
     const local = existingById.get(p.id);
+    // Phase 8-G tombstone — server retired this profile. Hard-delete
+    // the local mirror regardless of LWW (the server is authoritative
+    // on row existence; an in-flight optimistic edit on a profile that
+    // got tombstoned remotely would otherwise leave a ghost row). The
+    // Player rows that reference this profile are NOT touched: their
+    // embedded `profile` snapshot keeps rendering historical matches
+    // verbatim, and the server's canonical Profile row is still alive
+    // (just marked deletedAt), so `Player.profileId` keeps resolving.
+    if (p.deletedAt) {
+      if (local) toDelete.push(local.id);
+      continue;
+    }
     // LWW on updatedAt: skip when the local copy is at least as fresh.
     // Profile edits flow through `mutations.ts`, which bumps the local
     // updatedAt at write time; the server bumps on PATCH. A tie favours
@@ -326,6 +339,7 @@ async function mergeProfiles(
     });
   }
   if (toPut.length > 0) await db.profiles.bulkPut(toPut);
+  if (toDelete.length > 0) await db.profiles.bulkDelete(toDelete);
   return { link: linkTransition, unlink: unlinkTransition };
 }
 
@@ -439,8 +453,19 @@ async function mergeMatches(rows: ApiMatch[]): Promise<void> {
   const playerIdsToKeepByMatch = new Map<string, Set<string>>();
   const scoreIdsToKeepByMatch = new Map<string, Set<string>>();
   const matchesToReconcile: string[] = [];
+  const tombstonedMatchIds: string[] = [];
 
   for (const m of rows) {
+    // Phase 8-G tombstone — server retired this match. Hard-delete
+    // the local mirror (match + players + scores) regardless of LWW;
+    // tombstones carry the prune signal exactly once through the
+    // `?since=` delta so we must consume it here. We collect the ids
+    // and run the cascade after the bulk-put pass so the two writes
+    // can't fight over the same rows.
+    if (m.deletedAt) {
+      tombstonedMatchIds.push(m.id);
+      continue;
+    }
     // `/api/matches` always returns updatedAt; the shared ApiMatch
     // type widens it to optional/nullable for the legacy-cache
     // hydration path, so we normalize once here.
@@ -511,6 +536,24 @@ async function mergeMatches(rows: ApiMatch[]): Promise<void> {
   if (matchesToPut.length > 0) await db.matches.bulkPut(matchesToPut);
   if (playersToPut.length > 0) await db.players.bulkPut(playersToPut);
   if (scoresToPut.length > 0) await db.scores.bulkPut(scoresToPut);
+
+  // Phase 8-G — cascade-delete the local mirror for any tombstoned
+  // matches the server just signalled. Mirrors the cleanup
+  // `mutations.deleteMatch` does locally for the originating device;
+  // here we replay it on every other device that pulled the
+  // tombstone. Players + scores follow the match in the same Dexie
+  // transaction so reactive hooks see a consistent post-state.
+  if (tombstonedMatchIds.length > 0) {
+    await db.players
+      .where("matchId")
+      .anyOf(tombstonedMatchIds)
+      .delete();
+    await db.scores
+      .where("matchId")
+      .anyOf(tombstonedMatchIds)
+      .delete();
+    await db.matches.bulkDelete(tombstonedMatchIds);
+  }
 
   // Prune child rows that no longer exist on the server (e.g. a player
   // removed in a future API; today this is a no-op, but the LWW story

@@ -143,6 +143,16 @@
     "rematch": "Rematch →",
     "notFound": "Match not found.",
     "scoringNotSupported": "Scoring for {{game}} is not yet supported.",
+    "delete": {
+      "cta": "Delete match",
+      "moreLabel": "Match options",
+      "title": "Delete this match?",
+      "body": "Scores and players will be removed for everyone who played. This can't be undone.",
+      "confirm": "Delete",
+      "submitting": "Deleting…",
+      "cancel": "Cancel",
+      "error": "Could not delete the match. Try again."
+    },
     "newMatch": {
       "title": "New match",
       "playerLabel": "Player {{n}}",
@@ -333,6 +343,18 @@
       "theirWins": "Them",
       "draws_one": "{{count}} draw",
       "draws_other": "{{count}} draws"
+    },
+    "delete": {
+      "cta": "Delete profile",
+      "title": "Delete this profile?",
+      "body_one": "{{alias}} is in {{count}} match. The match stays — only the profile disappears from your list, suggestions and stats. Their alias keeps showing on existing scoreboards.",
+      "body_other": "{{alias}} is in {{count}} matches. The matches stay — only the profile disappears from your list, suggestions and stats. Their alias keeps showing on existing scoreboards.",
+      "bodyNoMatches": "{{alias}} hasn't played any match yet. The profile will disappear from your list and suggestions.",
+      "linkedWarning": "{{alias}} is linked to a Google account. Deleting unlinks them first — they keep their own profile of you (unlinked) but they won't see the shared matches any more.",
+      "confirm": "Delete",
+      "submitting": "Deleting…",
+      "cancel": "Cancel",
+      "error": "Could not delete the profile. Try again."
     }
   },
   "stats": {

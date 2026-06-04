@@ -1,6 +1,7 @@
 import { createId } from "@paralleldrive/cuid2";
 import {
   db,
+  extractClientIds,
   type AvatarFrame,
   type AvatarRing,
   type LocalMatch,
@@ -828,6 +829,145 @@ export async function patchProfile(input: PatchProfileInput): Promise<void> {
   if (refreshedProfile) {
     await refreshLocalPlayerProjections(refreshedProfile);
   }
+
+  scheduleFlush();
+}
+
+// ─── Delete mutations (Phase 8-G) ───
+//
+// Both deleteMatch and deleteProfile follow the same shape:
+//   1. Drop any queued syncQueue entry that targets the row being
+//      deleted — they're moot once the row is gone, and we don't want a
+//      stale POST to fight the DELETE on replay (which would either
+//      404 against the tombstone or, worse, recreate the row).
+//   2. Hard-delete the local mirror so reactive hooks rerender
+//      immediately without the deleted resource.
+//   3. Enqueue the DELETE so the server tombstones the row whenever
+//      connectivity allows. Sync.ts treats DELETE → 404 as success so
+//      replays after a server-side tombstone are no-ops.
+//
+// Differences:
+//   - Match delete cascades locally to its players and scores (server
+//     side already has Match.players / Match.scores cascade via Prisma
+//     `onDelete: Cascade`, but we lean on the soft-delete tombstone
+//     server-side — only the local mirror is hard-removed).
+//   - Profile delete does NOT touch the local Player rows that
+//     reference it: their embedded `profile` snapshot keeps the alias /
+//     avatar / frame / ring intact so historical multi-player matches
+//     keep rendering correctly. The server's tombstone preserves the
+//     canonical Profile row for the same reason.
+
+export async function deleteMatch(input: {
+  matchId: string;
+  /** Phase 8-G — viewer id used as the queue entry's `ownerId` stamp.
+   * Required because the mutation hard-deletes the local Match row,
+   * which would otherwise leave `inferEntryOwnerId` with nothing to
+   * walk back through and `filterOwnedBy` would drop the DELETE as
+   * foreign. Caller passes from `useRequiredViewerId()`. */
+  viewerId: string;
+}): Promise<void> {
+  const ts = nowIso();
+  const { matchId, viewerId } = input;
+
+  await db.transaction(
+    "rw",
+    [db.matches, db.players, db.scores, db.syncQueue],
+    async () => {
+      // Wipe any queued mutation that references this match id (the
+      // create POST, in-flight score patches, status PUTs, etc.). The
+      // 8-F cascade machinery exists for the failure case; here we
+      // simply drop the entries outright because the user has
+      // explicitly retired the match. Outstanding POSTs that never
+      // reached the server are simply forgotten — the DELETE we queue
+      // below will 404 against the server, which sync.ts treats as
+      // success on idempotent replay.
+      const queueEntries = await db.syncQueue.toArray();
+      for (const entry of queueEntries) {
+        if (entry.id === undefined) continue;
+        if (extractClientIds(entry).includes(matchId)) {
+          await db.syncQueue.delete(entry.id);
+        }
+      }
+
+      // Hard-delete the local mirror. Reactive hooks (`useMatchList`,
+      // `useMatch`, `useAchievements`, `useMyStats`, etc.) drop the
+      // match in the next render cycle. Players + scores follow so
+      // the Dexie store stays consistent — server-side tombstone keeps
+      // the Match row alive but the local mirror has no use for it.
+      const players = await db.players
+        .where("matchId")
+        .equals(matchId)
+        .toArray();
+      const playerIds = players.map((p) => p.id);
+      if (playerIds.length > 0) await db.players.bulkDelete(playerIds);
+
+      const scores = await db.scores
+        .where("matchId")
+        .equals(matchId)
+        .toArray();
+      const scoreIds = scores.map((s) => s.id);
+      if (scoreIds.length > 0) await db.scores.bulkDelete(scoreIds);
+
+      await db.matches.delete(matchId);
+
+      await db.syncQueue.add({
+        method: "DELETE",
+        url: `/api/matches/${matchId}`,
+        createdAt: ts,
+        retries: 0,
+        status: "pending",
+        ownerId: viewerId,
+      });
+    },
+  );
+
+  scheduleFlush();
+}
+
+export async function deleteProfile(input: {
+  profileId: string;
+  /** Phase 8-G — viewer id used as the queue entry's `ownerId` stamp.
+   * Required because the mutation hard-deletes the local Profile row,
+   * which would otherwise leave `inferEntryOwnerId` with nothing to
+   * walk back through and `filterOwnedBy` would drop the DELETE as
+   * foreign. Caller passes from `useRequiredViewerId()`. */
+  viewerId: string;
+}): Promise<void> {
+  const ts = nowIso();
+  const { profileId, viewerId } = input;
+
+  await db.transaction("rw", [db.profiles, db.syncQueue], async () => {
+    // Same queue cleanup pattern as deleteMatch — drop any queued
+    // mutation referencing this profile id (the create POST, alias
+    // patches, avatar uploads, link tokens, …). They're moot once the
+    // user has retired the profile.
+    const queueEntries = await db.syncQueue.toArray();
+    for (const entry of queueEntries) {
+      if (entry.id === undefined) continue;
+      if (extractClientIds(entry).includes(profileId)) {
+        await db.syncQueue.delete(entry.id);
+      }
+    }
+
+    // Hard-delete the local Profile row. The Player rows referencing
+    // this profile are NOT touched — their embedded `profile` snapshot
+    // keeps the alias / avatar / frame / ring intact so historical
+    // multi-player matches keep rendering exactly as they were before
+    // deletion. The server-side row stays alive (tombstoned via
+    // `deletedAt`) so `Player.profileId` (RESTRICT) keeps resolving on
+    // every device — including late-arriving linked-friend devices that
+    // pull a multi-player match for the first time after the deletion.
+    await db.profiles.delete(profileId);
+
+    await db.syncQueue.add({
+      method: "DELETE",
+      url: `/api/profiles/${profileId}`,
+      createdAt: ts,
+      retries: 0,
+      status: "pending",
+      ownerId: viewerId,
+    });
+  });
 
   scheduleFlush();
 }

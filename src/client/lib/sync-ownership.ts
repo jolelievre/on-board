@@ -111,6 +111,14 @@ function stripQueryString(url: string): string {
 export async function inferEntryOwnerId(
   entry: SyncQueueEntry,
 ): Promise<string | null> {
+  // Phase 8-G — explicit owner stamp wins. DELETE mutations hard-delete
+  // the local row before flush runs, so the row-walking inference
+  // below would return null and `filterOwnedBy` would drop the entry
+  // as foreign. Mutations that delete must therefore stamp `ownerId`
+  // at enqueue time. Other mutations can also stamp it for robustness
+  // even when the row inference would succeed.
+  if (entry.ownerId) return entry.ownerId;
+
   const target = parseTarget(entry);
   if (!target) return null;
 

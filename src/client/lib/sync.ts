@@ -109,6 +109,18 @@ export const syncEngine = {
             await unblockDependents(entry.id!);
             anySuccess = true;
             madeProgress = true;
+          } else if (entry.method === "DELETE" && res.status === 404) {
+            // Phase 8-G — idempotent DELETE replay. A 404 on a DELETE
+            // means the server already doesn't have the row, which IS
+            // the goal state. Treat as success: drop the queue entry
+            // and unblock any cascade dependents. Without this, a
+            // DELETE that replayed after a sibling device's tombstone
+            // already drained (or a DELETE retried after the user
+            // re-installed the app) would be stuck `failed` forever.
+            await db.syncQueue.delete(entry.id!);
+            await unblockDependents(entry.id!);
+            anySuccess = true;
+            madeProgress = true;
           } else if (res.status === 401 || res.status === 403) {
             // Auth or ownership failure — replaying won't change the outcome.
             const errorBody = await readStructuredErrorBody(res);

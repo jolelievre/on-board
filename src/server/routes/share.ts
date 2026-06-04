@@ -47,7 +47,14 @@ export const shareRoutes = new Hono().get("/:token", async (c) => {
       },
     },
   });
-  if (!row || row.match.status !== "COMPLETED") {
+  // Tombstoned matches (Phase 8-G) 404 the public share even if a token
+  // exists — revoking the share is an explicit owner action, but a
+  // deleted match implicitly retires every consumer surface.
+  if (
+    !row ||
+    row.match.status !== "COMPLETED" ||
+    row.match.deletedAt !== null
+  ) {
     return c.json({ error: "Share link not found" }, 404);
   }
 

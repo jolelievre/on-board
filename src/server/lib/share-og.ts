@@ -50,7 +50,14 @@ export async function buildShareOgPayload(
       },
     },
   });
-  if (!row || row.match.status !== "COMPLETED") return null;
+  // Tombstoned matches (Phase 8-G) produce no OG payload — the chat-app
+  // crawler will then see the SPA's own not-found state.
+  if (
+    !row ||
+    row.match.status !== "COMPLETED" ||
+    row.match.deletedAt !== null
+  )
+    return null;
 
   const totalByPlayer = new Map<string, number>();
   for (const s of row.match.scores) {

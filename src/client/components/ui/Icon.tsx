@@ -36,7 +36,9 @@ export type IconName =
   | "flag"
   | "zero"
   | "calendar-check"
-  | "share";
+  | "share"
+  | "trash"
+  | "more-vertical";
 
 type Props = {
   name: IconName;
@@ -426,6 +428,31 @@ export function Icon({ name, size = 20, stroke = 1.6, className, title }: Props)
         <svg {...props}>
           {titleEl}
           <path d="M13 5 L20 12 L13 19 L13 15 C9 15 6 16 4 19 C5 13 9 11 13 11 Z" />
+        </svg>
+      );
+    case "trash":
+      // Lid + body, with two vertical lines for the bag tabs. Used as
+      // the destructive-action glyph throughout Phase 8-G (delete match,
+      // delete profile).
+      return (
+        <svg {...props}>
+          {titleEl}
+          <path d="M4 7h16" />
+          <path d="M10 4h4a1 1 0 011 1v2H9V5a1 1 0 011-1z" />
+          <path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13" />
+          <path d="M10 11v6M14 11v6" />
+        </svg>
+      );
+    case "more-vertical":
+      // Three vertical dots — universal "overflow menu" affordance.
+      // Used in Phase 8-G to surface the destructive delete action
+      // alongside the existing per-screen primary actions.
+      return (
+        <svg {...props}>
+          {titleEl}
+          <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
         </svg>
       );
     case "skull-king":

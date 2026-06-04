@@ -94,6 +94,12 @@ export type ApiProfile = {
   usedAt: string;
   createdAt: string;
   updatedAt: string;
+  /** Phase 8-G soft-delete tombstone. When present (non-null), the
+   * server has retired this profile and the pull-sync merger
+   * hard-deletes the local mirror. The canonical row remains on the
+   * server so embedded `Player.profile` projections keep rendering
+   * historical multi-player matches verbatim. */
+  deletedAt?: string | null;
   linkedUser: ApiProfileLinkedUser | null;
 };
 
@@ -121,6 +127,12 @@ export type ApiMatch = {
   /** Optional in the legacy persisted-cache hydration path; required on
    * fresh `/api/matches` responses (pull-sync narrows defensively). */
   updatedAt?: string | null;
+  /** Phase 8-G soft-delete tombstone. The server keeps tombstoned
+   * matches in the `?since=` delta so linked-friend devices receive
+   * the prune signal exactly once. The pull-sync merger sees this
+   * field set, hard-deletes the local match + its players + scores,
+   * and skips writing the row. */
+  deletedAt?: string | null;
   players?: ApiPlayer[];
   scores?: ApiScore[];
 };

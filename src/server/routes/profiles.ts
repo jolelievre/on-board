@@ -10,6 +10,7 @@ import {
   mergeProfiles,
   ProfileMergeError,
 } from "../lib/profile-merge.js";
+import { unlinkProfileBilateral } from "../lib/profile-unlink.js";
 import { bumpMatchesForProfile, ensureSelfProfile } from "../lib/profiles.js";
 import {
   createLinkToken,
@@ -113,10 +114,22 @@ export const profilesRoutes = new Hono<AuthEnv>()
     // (the Player row embeds the Profile projection), never in my own
     // listing. The owner check covers both my self-Profile and every
     // friend I've added.
+    //
+    // Phase 8-G tombstone semantics:
+    //   - WITH `since`: include tombstoned rows in the delta so a
+    //     sibling device of the same user (multi-device offline-first)
+    //     receives the prune signal exactly once. `mergeProfiles`
+    //     hard-deletes the local mirror on seeing `deletedAt`.
+    //   - WITHOUT `since`: filter out tombstones — this is the
+    //     active-list path for fresh devices, the Players-tab
+    //     read, and the visibility-reconcile helper. Tombstoned
+    //     profiles shouldn't appear in either.
     const profiles = await prisma.profile.findMany({
       where: {
         ownerId: user.id,
-        ...(sinceDate ? { updatedAt: { gt: sinceDate } } : {}),
+        ...(sinceDate
+          ? { updatedAt: { gt: sinceDate } }
+          : { deletedAt: null }),
       },
       select: profileSelect,
       // `usedAt` first so the most-recently-used profiles bubble to the
@@ -265,9 +278,9 @@ export const profilesRoutes = new Hono<AuthEnv>()
 
     const existing = await prisma.profile.findUnique({
       where: { id },
-      select: { ownerId: true, alias: true },
+      select: { ownerId: true, alias: true, deletedAt: true },
     });
-    if (!existing) {
+    if (!existing || existing.deletedAt !== null) {
       return structuredError(c, 404, {
         error: "Profile not found",
         hint: "The create-profile POST may still be queued or failed for this profile id.",
@@ -319,9 +332,9 @@ export const profilesRoutes = new Hono<AuthEnv>()
 
     const existing = await prisma.profile.findUnique({
       where: { id },
-      select: { ownerId: true },
+      select: { ownerId: true, deletedAt: true },
     });
-    if (!existing) {
+    if (!existing || existing.deletedAt !== null) {
       return structuredError(c, 404, { error: "Profile not found" });
     }
     // Only the owner can upload — even the linked user can't override
@@ -397,9 +410,9 @@ export const profilesRoutes = new Hono<AuthEnv>()
 
     const existing = await prisma.profile.findUnique({
       where: { id },
-      select: { ownerId: true },
+      select: { ownerId: true, deletedAt: true },
     });
-    if (!existing) {
+    if (!existing || existing.deletedAt !== null) {
       return structuredError(c, 404, { error: "Profile not found" });
     }
     if (existing.ownerId !== user.id) {
@@ -495,9 +508,9 @@ export const profilesRoutes = new Hono<AuthEnv>()
 
     const profile = await prisma.profile.findUnique({
       where: { id },
-      select: { ownerId: true, linkedUserId: true },
+      select: { ownerId: true, linkedUserId: true, deletedAt: true },
     });
-    if (!profile) {
+    if (!profile || profile.deletedAt !== null) {
       return structuredError(c, 404, { error: "Profile not found" });
     }
     if (profile.ownerId !== user.id) {
@@ -530,9 +543,9 @@ export const profilesRoutes = new Hono<AuthEnv>()
 
     const profile = await prisma.profile.findUnique({
       where: { id },
-      select: { ownerId: true, linkedUserId: true },
+      select: { ownerId: true, linkedUserId: true, deletedAt: true },
     });
-    if (!profile) {
+    if (!profile || profile.deletedAt !== null) {
       return structuredError(c, 404, { error: "Profile not found" });
     }
     if (profile.ownerId !== user.id) {
@@ -605,15 +618,27 @@ export const profilesRoutes = new Hono<AuthEnv>()
     const [target, source] = await Promise.all([
       prisma.profile.findUnique({
         where: { id },
-        select: { id: true, ownerId: true, linkedUserId: true, alias: true },
+        select: {
+          id: true,
+          ownerId: true,
+          linkedUserId: true,
+          alias: true,
+          deletedAt: true,
+        },
       }),
       prisma.profile.findUnique({
         where: { id: sourceProfileId },
-        select: { id: true, ownerId: true, linkedUserId: true, alias: true },
+        select: {
+          id: true,
+          ownerId: true,
+          linkedUserId: true,
+          alias: true,
+          deletedAt: true,
+        },
       }),
     ]);
 
-    if (!target) {
+    if (!target || target.deletedAt !== null) {
       return structuredError(c, 404, { error: "Profile not found" });
     }
     if (target.ownerId !== user.id) {
@@ -621,11 +646,11 @@ export const profilesRoutes = new Hono<AuthEnv>()
         error: "Only the owner can link this profile",
       });
     }
-    if (!source) {
+    if (!source || source.deletedAt !== null) {
       // Token signature was valid but the source row is gone (deleted
-      // between QR mint and scan). Treat as a stale token so the user
-      // sees an actionable refresh prompt rather than a 404 inside a
-      // link error.
+      // between QR mint and scan, or soft-deleted in the interim).
+      // Treat as a stale token so the user sees an actionable refresh
+      // prompt rather than a 404 inside a link error.
       return structuredError(c, 400, {
         error: "Link token has expired",
         field: "token",
@@ -754,9 +779,14 @@ export const profilesRoutes = new Hono<AuthEnv>()
 
     const target = await prisma.profile.findUnique({
       where: { id },
-      select: { id: true, ownerId: true, linkedUserId: true },
+      select: {
+        id: true,
+        ownerId: true,
+        linkedUserId: true,
+        deletedAt: true,
+      },
     });
-    if (!target) {
+    if (!target || target.deletedAt !== null) {
       return structuredError(c, 404, { error: "Profile not found" });
     }
     if (target.ownerId !== user.id && target.linkedUserId !== user.id) {
@@ -782,33 +812,76 @@ export const profilesRoutes = new Hono<AuthEnv>()
       });
     }
 
-    // Find the counterpart profile (the other half of the bilateral
-    // link). It may not exist for legacy unilateral links — that's
-    // fine, we just clear `target` alone.
-    const counterpart = await prisma.profile.findFirst({
-      where: {
-        ownerId: target.linkedUserId,
-        linkedUserId: target.ownerId,
+    await prisma.$transaction(async (tx) => {
+      await unlinkProfileBilateral(tx, id);
+    });
+    const profile = await prisma.profile.findUnique({
+      where: { id },
+      select: profileSelect,
+    });
+    return c.json(profile);
+  })
+  .delete("/:id", async (c) => {
+    // Phase 8-G — soft-delete (tombstone) a profile. Owner-only.
+    //
+    // For linked profiles we run the existing bilateral-unlink
+    // transaction first so the friend loses match-visibility through
+    // the 6-C link-transition cursor reset (their next pull-sync
+    // triggers an orphan-prune on previously-shared matches). The
+    // bilateral unlink also strips `linkedUserId` from the friend's
+    // reciprocal profile — the same semantics as a manual unlink.
+    //
+    // We *never* hard-delete the row. `Player.profileId` (RESTRICT,
+    // NOT NULL since 6-C) needs to keep resolving so multi-player
+    // matches stay structurally complete and the embedded
+    // `Player.profile` snapshot keeps rendering alias / avatar /
+    // frame / ring on every device — including late-arriving linked
+    // friends who never pulled the match before deletion. See the
+    // load-bearing contract on `playerProfileInclude` in
+    // `src/server/routes/matches.ts`.
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    const existing = await prisma.profile.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        ownerId: true,
+        linkedUserId: true,
+        deletedAt: true,
       },
-      select: { id: true },
+    });
+    if (!existing) {
+      return structuredError(c, 404, { error: "Profile not found" });
+    }
+    if (existing.ownerId !== user.id) {
+      return structuredError(c, 403, {
+        error: "Only the owner can delete this profile",
+      });
+    }
+    if (existing.deletedAt !== null) {
+      // Idempotent: replay of an already-applied DELETE is success.
+      return c.body(null, 204);
+    }
+    // Same self-Profile guard as unlink. Deleting your own self-Profile
+    // would orphan every match you've participated in via the embedded
+    // Player.profile snapshot under your name; reject explicitly. Account
+    // deletion (out of scope here) is the right path for that intent.
+    if (existing.ownerId === existing.linkedUserId) {
+      return structuredError(c, 409, {
+        error: "Cannot delete your own self-profile",
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (existing.linkedUserId !== null) {
+        await unlinkProfileBilateral(tx, id);
+      }
+      await tx.profile.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
     });
 
-    const updates = [
-      prisma.profile.update({
-        where: { id },
-        data: { linkedUserId: null },
-        select: profileSelect,
-      }),
-    ];
-    if (counterpart) {
-      updates.push(
-        prisma.profile.update({
-          where: { id: counterpart.id },
-          data: { linkedUserId: null },
-          select: profileSelect,
-        }),
-      );
-    }
-    const [profile] = await prisma.$transaction(updates);
-    return c.json(profile);
+    return c.body(null, 204);
   });

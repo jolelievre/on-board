@@ -20,6 +20,7 @@ import { Button } from "../../../components/ui/Button";
 import { Avatar } from "../../../components/ui/Avatar";
 import { AvatarUploader } from "../../../components/profiles/AvatarUploader";
 import { MergeDialog } from "../../../components/profiles/MergeDialog";
+import { DeleteProfileDialog } from "../../../components/profiles/DeleteProfileDialog";
 import { LinkScanner } from "../../../components/profiles/LinkScanner";
 import { LinkCodeDisplay } from "../../../components/profiles/LinkCodeDisplay";
 import { AchievementsRow } from "../../../components/profiles/AchievementsRow";
@@ -101,6 +102,7 @@ function ProfileDetailBody({
   const ownedIndex = useOwnedProfileIndex(viewerId);
   const name = displayProfileName(profile, ownedIndex);
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const stats = useProfileStats(profile.id, viewerId);
   const recent = useProfileRecentMatches(profile.id, viewerId, 10);
@@ -144,6 +146,7 @@ function ProfileDetailBody({
               params: { profileId: survivorId },
             })
           }
+          onDeleteRequest={() => setDeleteOpen(true)}
         />
 
         {!isSelf && headToHead && headToHead.matches > 0 && (
@@ -276,6 +279,23 @@ function ProfileDetailBody({
           }}
         />
       )}
+
+      {deleteOpen && (
+        <DeleteProfileDialog
+          profile={profile}
+          viewerId={viewerId}
+          matchCount={stats?.totalMatches ?? 0}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={() => {
+            setDeleteOpen(false);
+            // After a successful delete the local Dexie row is gone,
+            // so `useProfile(profileId)` flips to `status: "missing"`.
+            // Navigate back to the Players tab listing before that
+            // transition renders the not-found state mid-fade.
+            void navigate({ to: "/players", replace: true });
+          }}
+        />
+      )}
     </>
   );
 }
@@ -305,6 +325,7 @@ function ProfileEditPanel({
   name,
   onMergedTo,
   onMergeOpen,
+  onDeleteRequest,
 }: {
   profile: LocalProfile;
   viewerId: string;
@@ -314,6 +335,9 @@ function ProfileEditPanel({
   name: string;
   onMergedTo: (survivorId: string) => void;
   onMergeOpen: () => void;
+  /** Phase 8-G — opens the parent-owned `DeleteProfileDialog`. Only
+   * surfaced when `canEdit` is true (owner, non-self profile). */
+  onDeleteRequest: () => void;
 }) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
@@ -358,6 +382,21 @@ function ProfileEditPanel({
               </Button>
             </div>
           )}
+          {/* Phase 8-G — destructive cleanup affordance at the bottom of
+              the editor. Owner-only (canEdit). Confirm dialog explains
+              the unlink-first behaviour for linked profiles and the
+              snapshot-preserving semantics for unclaimed ones. */}
+          <div className={styles.deleteActionRow}>
+            <Button
+              type="button"
+              variant="ghost"
+              iconBefore={<Icon name="trash" size={16} />}
+              onClick={onDeleteRequest}
+              data-testid="profile-delete-action"
+            >
+              {t("players.delete.cta")}
+            </Button>
+          </div>
         </div>
       </Group>
     );
