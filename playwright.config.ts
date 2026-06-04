@@ -23,6 +23,12 @@ export default defineConfig({
   use: {
     baseURL,
     trace: "on-first-retry",
+    // Pin headless explicitly so an ambient env var (HEADED, PWDEBUG)
+    // or a stale CLI flag can't accidentally launch visible browsers
+    // mid-run and steal window focus. The `test:headed` and `test:ui`
+    // npm scripts both pass their own --headed / --ui flag, which
+    // override this value on demand.
+    headless: true,
     // Auth state will be set per-project via storageState
   },
   projects: [
