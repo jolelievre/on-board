@@ -112,7 +112,7 @@ export const syncEngine = {
           } else if (res.status === 401 || res.status === 403) {
             // Auth or ownership failure — replaying won't change the outcome.
             const errorBody = await readStructuredErrorBody(res);
-            await markEntryFailed(entry, errorBody, res.status);
+            await markEntryFailed(entry, errorBody, res.status, currentUserId);
             madeProgress = true;
           } else if (res.status >= 400 && res.status < 500) {
             // Other 4xx (validation, conflict, not-found) — replays won't fix
@@ -120,11 +120,11 @@ export const syncEngine = {
             // retry budget. The server's structured body lets the Sync
             // panel render an actionable message for diagnosis (Phase 8-E).
             const errorBody = await readStructuredErrorBody(res);
-            await markEntryFailed(entry, errorBody, res.status);
+            await markEntryFailed(entry, errorBody, res.status, currentUserId);
             madeProgress = true;
           } else {
             // 5xx — server-side glitch, retry per the budget.
-            const becameFailed = await incrementRetry(entry, res);
+            const becameFailed = await incrementRetry(entry, res, currentUserId);
             if (becameFailed) madeProgress = true;
           }
         } catch {
@@ -299,10 +299,14 @@ export const syncEngine = {
  * any later pending entries that depend on this one. Returns `true` if
  * the entry transitioned to `failed` this call — lets the flush loop
  * count it as progress (a status change that needs another pass to
- * spot any newly-unblocked work). */
+ * spot any newly-unblocked work).
+ *
+ * `currentUserId` scopes the cascade marker so we only block
+ * dependents owned by the same user as the failing entry. */
 async function incrementRetry(
   entry: SyncQueueEntry,
   res: Response,
+  currentUserId: string,
 ): Promise<boolean> {
   const nextRetries = entry.retries + 1;
   if (nextRetries >= MAX_RETRIES) {
@@ -315,7 +319,10 @@ async function incrementRetry(
       errorStatus: res.status,
       failedAt: new Date().toISOString(),
     });
-    await markCascadeBlocked({ ...entry, retries: nextRetries });
+    await markCascadeBlocked(
+      { ...entry, retries: nextRetries },
+      currentUserId,
+    );
     return true;
   }
   await db.syncQueue.update(entry.id!, { retries: nextRetries });
@@ -323,11 +330,15 @@ async function incrementRetry(
 }
 
 /** Mark an entry terminal failure and cascade-block its dependents.
- * Shared between the 4xx and auth-failure paths in flush(). */
+ * Shared between the 4xx and auth-failure paths in flush().
+ *
+ * `currentUserId` scopes the cascade marker so we only block
+ * dependents owned by the same user as the failing entry. */
 async function markEntryFailed(
   entry: SyncQueueEntry,
   errorBody: SyncErrorBody | null,
   status: number,
+  currentUserId: string,
 ): Promise<void> {
   await db.syncQueue.update(entry.id!, {
     status: "failed",
@@ -336,7 +347,7 @@ async function markEntryFailed(
     errorStatus: status,
     failedAt: new Date().toISOString(),
   });
-  await markCascadeBlocked(entry);
+  await markCascadeBlocked(entry, currentUserId);
 }
 
 /** Find every later `pending` entry whose URL / body references one of
@@ -347,16 +358,26 @@ async function markEntryFailed(
  *
  * Already-`failed` or already-`blocked` entries are left alone — their
  * own failure metadata is the more useful diagnostic. Only `pending`
- * candidates flip. */
-async function markCascadeBlocked(parent: SyncQueueEntry): Promise<void> {
+ * candidates flip.
+ *
+ * Scoped to `currentUserId` so a failing entry of ours can't mark a
+ * foreign user's pending entry as `blocked` (which would then cascade
+ * into a foreign-user tombstone if we Discard the parent). In practice
+ * cuids are unique enough that bodies never collide cross-user, but
+ * the ownership filter makes the multi-user semantics explicit. */
+async function markCascadeBlocked(
+  parent: SyncQueueEntry,
+  currentUserId: string,
+): Promise<void> {
   if (parent.id === undefined) return;
   const parentIds = extractClientIds(parent);
   if (parentIds.length === 0) return;
 
-  const candidates = await db.syncQueue
+  const allPending = await db.syncQueue
     .where("status")
     .equals("pending")
     .toArray();
+  const candidates = await filterOwnedBy(allPending, currentUserId);
 
   for (const candidate of candidates) {
     if (candidate.id === undefined) continue;
