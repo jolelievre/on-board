@@ -18,7 +18,11 @@ import { test, expect, type Page } from "@playwright/test";
 const SEED_FAILED_ENTRY = {
   method: "POST",
   url: "/api/profiles",
-  body: JSON.stringify({ id: "seed-bad-id-for-test", alias: "" }),
+  // The profile id here gets mirrored as a local Dexie row owned by
+  // the current user — 8-F's ownership inferer reads that row to scope
+  // the panel to "our" entries.
+  profileId: "seedbadidfortest123456789",
+  body: JSON.stringify({ id: "seedbadidfortest123456789", alias: "" }),
   errorBody: {
     error: "Alias is required",
     field: "alias",
@@ -27,42 +31,90 @@ const SEED_FAILED_ENTRY = {
   errorStatus: 400,
 };
 
+async function readCurrentUserId(page: Page): Promise<string> {
+  // useAuthSession writes the session cache in a useEffect that runs
+  // after first render — `domcontentloaded` can land before that
+  // effect, so poll until the cache materialises rather than reading
+  // synchronously.
+  await page.waitForFunction(
+    () => localStorage.getItem("onboard_session_cache") !== null,
+    null,
+    { timeout: 10_000 },
+  );
+  const id = await page.evaluate(() => {
+    const raw = localStorage.getItem("onboard_session_cache");
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { user?: { id?: string } };
+      return parsed.user?.id ?? null;
+    } catch {
+      return null;
+    }
+  });
+  expect(id, "auth-setup must populate the session cache").not.toBeNull();
+  return id!;
+}
+
 async function seedFailedEntry(page: Page) {
   // Use raw IndexedDB rather than Dexie. By the time `page.goto('/games')`
   // returns, the app has already opened the `onboard` database at its
-  // current Dexie schema version, so the object stores exist. We just
-  // need to push one row into `syncQueue` and clear the banner ack.
-  await page.evaluate(async (seed) => {
-    const openDb = () =>
-      new Promise<IDBDatabase>((resolve, reject) => {
-        const req = window.indexedDB.open("onboard");
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-    const db = await openDb();
+  // current Dexie schema version, so the object stores exist. We push
+  // one row into `syncQueue`, mirror the corresponding local profile
+  // row (so 8-F's ownership inferer attributes the entry to us), and
+  // clear the banner ack.
+  const currentUserId = await readCurrentUserId(page);
+  await page.evaluate(
+    async ({ seed, currentUserId }) => {
+      const openDb = () =>
+        new Promise<IDBDatabase>((resolve, reject) => {
+          const req = window.indexedDB.open("onboard");
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      const db = await openDb();
 
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(["syncQueue", "syncMeta"], "readwrite");
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-      tx.objectStore("syncQueue").add({
-        method: seed.method,
-        url: seed.url,
-        body: seed.body,
-        createdAt: new Date().toISOString(),
-        retries: 3,
-        status: "failed",
-        error: seed.errorBody.error,
-        errorBody: seed.errorBody,
-        errorStatus: seed.errorStatus,
-        failedAt: new Date().toISOString(),
-        reported: true, // suppress telemetry POST in tests
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(
+          ["syncQueue", "syncMeta", "profiles"],
+          "readwrite",
+        );
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        const now = new Date().toISOString();
+        tx.objectStore("profiles").put({
+          id: seed.profileId,
+          ownerId: currentUserId,
+          linkedUserId: null,
+          alias: "Test Profile",
+          customAvatarUrl: null,
+          useLinkedAvatar: true,
+          avatarFrame: "circle",
+          avatarRing: null,
+          usedAt: now,
+          createdAt: now,
+          updatedAt: now,
+          linkedUser: null,
+        });
+        tx.objectStore("syncQueue").add({
+          method: seed.method,
+          url: seed.url,
+          body: seed.body,
+          createdAt: now,
+          retries: 3,
+          status: "failed",
+          error: seed.errorBody.error,
+          errorBody: seed.errorBody,
+          errorStatus: seed.errorStatus,
+          failedAt: now,
+          reported: true, // suppress telemetry POST in tests
+        });
+        tx.objectStore("syncMeta").delete("failedBannerAcknowledgedAt");
       });
-      tx.objectStore("syncMeta").delete("failedBannerAcknowledgedAt");
-    });
 
-    db.close();
-  }, SEED_FAILED_ENTRY);
+      db.close();
+    },
+    { seed: SEED_FAILED_ENTRY, currentUserId },
+  );
 }
 
 test.describe("Sync queue visibility (Phase 8-E)", () => {
@@ -134,7 +186,8 @@ test.describe("Sync queue visibility (Phase 8-E)", () => {
     await page.goto("/games");
     await page.waitForLoadState("domcontentloaded");
 
-    await page.evaluate(async () => {
+    const currentUserId = await readCurrentUserId(page);
+    await page.evaluate(async (currentUserId) => {
       const openDb = () =>
         new Promise<IDBDatabase>((resolve, reject) => {
           const req = window.indexedDB.open("onboard");
@@ -143,14 +196,36 @@ test.describe("Sync queue visibility (Phase 8-E)", () => {
         });
       const db = await openDb();
       await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(["syncQueue", "syncMeta"], "readwrite");
+        const tx = db.transaction(
+          ["syncQueue", "syncMeta", "profiles"],
+          "readwrite",
+        );
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
+        const now = new Date().toISOString();
+        // Mirror the local profile row so 8-F's ownership inferer
+        // attributes the queued entry to us — the pre-8-E shape of
+        // the queue entry itself stays intact (no failedAt /
+        // errorBody / errorStatus).
+        tx.objectStore("profiles").put({
+          id: "legacy",
+          ownerId: currentUserId,
+          linkedUserId: null,
+          alias: "Legacy",
+          customAvatarUrl: null,
+          useLinkedAvatar: true,
+          avatarFrame: "circle",
+          avatarRing: null,
+          usedAt: now,
+          createdAt: now,
+          updatedAt: now,
+          linkedUser: null,
+        });
         tx.objectStore("syncQueue").add({
           method: "POST",
           url: "/api/profiles",
           body: JSON.stringify({ id: "legacy", alias: "" }),
-          createdAt: new Date().toISOString(),
+          createdAt: now,
           retries: 3,
           status: "failed",
           error: "Max retries reached",
@@ -161,7 +236,7 @@ test.describe("Sync queue visibility (Phase 8-E)", () => {
         tx.objectStore("syncMeta").delete("failedBannerAcknowledgedAt");
       });
       db.close();
-    });
+    }, currentUserId);
 
     await page.reload();
     await page.waitForLoadState("domcontentloaded");
