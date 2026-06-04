@@ -1,4 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
+import { readCurrentUserId } from "./helpers/auth";
+import { readSyncQueueRows } from "./helpers/dexie";
 
 /**
  * Phase 8-F — Sync queue recovery.
@@ -17,30 +19,6 @@ import { test, expect, type Page } from "@playwright/test";
 
 const PARENT_PROFILE_ID = "seedparentprofileabc1234";
 const CHILD_MATCH_ID = "seedchildmatchidxyz9876543";
-
-async function readCurrentUserId(page: Page): Promise<string> {
-  // useAuthSession writes the session cache in a useEffect that runs
-  // after first render — `domcontentloaded` can land before that
-  // effect, so poll until the cache materialises rather than reading
-  // synchronously.
-  await page.waitForFunction(
-    () => localStorage.getItem("onboard_session_cache") !== null,
-    null,
-    { timeout: 10_000 },
-  );
-  const id = await page.evaluate(() => {
-    const raw = localStorage.getItem("onboard_session_cache");
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw) as { user?: { id?: string } };
-      return parsed.user?.id ?? null;
-    } catch {
-      return null;
-    }
-  });
-  expect(id, "auth-setup must populate the session cache").not.toBeNull();
-  return id!;
-}
 
 async function seedCascadedQueue(page: Page) {
   // 8-F scopes the panel + replay to entries owned by the current
@@ -181,42 +159,6 @@ async function gotoSyncPanel(page: Page) {
   await expect(page.getByTestId("settings-sync-panel")).toBeVisible();
 }
 
-type QueueRowSnapshot = {
-  id: number;
-  status: string;
-  body?: string;
-  blockedBy?: number;
-};
-
-async function readQueueRows(page: Page): Promise<QueueRowSnapshot[]> {
-  return page.evaluate(async () => {
-    const openDb = () =>
-      new Promise<IDBDatabase>((resolve, reject) => {
-        const req = window.indexedDB.open("onboard");
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-    const db = await openDb();
-    const rows = await new Promise<
-      { id: number; status: string; body?: string; blockedBy?: number }[]
-    >((resolve, reject) => {
-      const tx = db.transaction("syncQueue", "readonly");
-      const req = tx.objectStore("syncQueue").getAll();
-      req.onsuccess = () =>
-        resolve(
-          req.result as {
-            id: number;
-            status: string;
-            body?: string;
-            blockedBy?: number;
-          }[],
-        );
-      req.onerror = () => reject(req.error);
-    });
-    db.close();
-    return rows;
-  });
-}
 
 test.describe("Sync queue recovery (Phase 8-F)", () => {
   test("failed parent renders as a group card; dependents are collapsed by default and reachable via the toggle", async ({
@@ -346,7 +288,7 @@ test.describe("Sync queue recovery (Phase 8-F)", () => {
     // future Retry on the parent can find them and un-discard them
     // (without that link, a 30-entry cascade discard would require
     // 30 individual Retry clicks to undo).
-    const rows = await readQueueRows(page);
+    const rows = await readSyncQueueRows(page);
     expect(rows.map((r) => r.status).sort()).toEqual([
       "discarded",
       "discarded",
@@ -405,12 +347,12 @@ test.describe("Sync queue recovery (Phase 8-F)", () => {
     // a +2 related toggle.
     await expect
       .poll(async () => {
-        const rows = await readQueueRows(page);
+        const rows = await readSyncQueueRows(page);
         return rows.map((r) => r.status).sort();
       })
       .toEqual(["blocked", "blocked", "pending"]);
 
-    const rows = await readQueueRows(page);
+    const rows = await readSyncQueueRows(page);
     const parent = rows.find((r) => r.status === "pending");
     expect(parent).toBeDefined();
     const blockedDeps = rows.filter((r) => r.status === "blocked");
@@ -454,7 +396,7 @@ test.describe("Sync queue recovery (Phase 8-F)", () => {
 
     await expect
       .poll(async () => {
-        const rows = await readQueueRows(page);
+        const rows = await readSyncQueueRows(page);
         return rows.map((r) => r.status).sort();
       })
       .toEqual(["blocked", "blocked", "pending"]);

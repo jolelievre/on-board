@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
 import { db } from "../../lib/db";
 import { Icon } from "../ui/Icon";
-import { inferEntryOwnerId } from "../../lib/sync-ownership";
+import { filterOwnedBy } from "../../lib/sync-ownership";
 import { useRequiredViewerId } from "../../hooks/useRequiredViewerId";
 
 /**
@@ -32,11 +32,7 @@ export function SyncFailedBanner() {
         .where("status")
         .equals("failed")
         .toArray();
-      const ownedFailed: typeof failed = [];
-      for (const entry of failed) {
-        const ownerId = await inferEntryOwnerId(entry);
-        if (ownerId === viewerId) ownedFailed.push(entry);
-      }
+      const ownedFailed = await filterOwnedBy(failed, viewerId);
       if (ownedFailed.length === 0) return false;
 
       const ack = await db.syncMeta.get("failedBannerAcknowledgedAt");

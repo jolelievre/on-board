@@ -10,7 +10,7 @@ import type { SyncErrorBody } from "../../shared/sync-errors";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { requireCachedUserId } from "../hooks/useAuthSession";
 import { useRequiredViewerId } from "../hooks/useRequiredViewerId";
-import { filterOwnedBy, inferEntryOwnerId } from "./sync-ownership";
+import { filterOwnedBy } from "./sync-ownership";
 
 const MAX_RETRIES = 3;
 
@@ -255,16 +255,8 @@ export const syncEngine = {
           .where("status")
           .equals("pending")
           .toArray();
-        // Inline the inference rather than calling filterOwnedBy so
-        // useLiveQuery sees the .get reads on matches/profiles too —
-        // alias edits / match deletes on a foreign user's data won't
-        // shift our count, but pending-entries on our matches do.
-        let count = 0;
-        for (const entry of all) {
-          const ownerId = await inferEntryOwnerId(entry);
-          if (ownerId === viewerId) count += 1;
-        }
-        return count;
+        const owned = await filterOwnedBy(all, viewerId);
+        return owned.length;
       },
       [viewerId],
       0,

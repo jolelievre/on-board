@@ -10,7 +10,7 @@ import {
 } from "../../lib/pull-sync";
 import { db, type SyncQueueEntry } from "../../lib/db";
 import { syncEngine } from "../../lib/sync";
-import { inferEntryOwnerId } from "../../lib/sync-ownership";
+import { filterOwnedBy } from "../../lib/sync-ownership";
 import { useInstallPrompt } from "../../hooks/useInstallPrompt";
 import { clearSessionCache } from "../../hooks/useAuthSession";
 import { useRequiredViewerId } from "../../hooks/useRequiredViewerId";
@@ -242,12 +242,7 @@ function SyncPanel() {
   const liveEntries = useLiveQuery(
     async () => {
       const all = await db.syncQueue.orderBy("createdAt").toArray();
-      const owned: SyncQueueEntry[] = [];
-      for (const entry of all) {
-        const ownerId = await inferEntryOwnerId(entry);
-        if (ownerId === viewerId) owned.push(entry);
-      }
-      return owned;
+      return filterOwnedBy(all, viewerId);
     },
     [viewerId],
   );

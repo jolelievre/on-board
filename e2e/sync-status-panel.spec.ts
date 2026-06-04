@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { readCurrentUserId } from "./helpers/auth";
 
 /**
  * Phase 8-E — Sync queue visibility.
@@ -30,30 +31,6 @@ const SEED_FAILED_ENTRY = {
   },
   errorStatus: 400,
 };
-
-async function readCurrentUserId(page: Page): Promise<string> {
-  // useAuthSession writes the session cache in a useEffect that runs
-  // after first render — `domcontentloaded` can land before that
-  // effect, so poll until the cache materialises rather than reading
-  // synchronously.
-  await page.waitForFunction(
-    () => localStorage.getItem("onboard_session_cache") !== null,
-    null,
-    { timeout: 10_000 },
-  );
-  const id = await page.evaluate(() => {
-    const raw = localStorage.getItem("onboard_session_cache");
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw) as { user?: { id?: string } };
-      return parsed.user?.id ?? null;
-    } catch {
-      return null;
-    }
-  });
-  expect(id, "auth-setup must populate the session cache").not.toBeNull();
-  return id!;
-}
 
 async function seedFailedEntry(page: Page) {
   // Use raw IndexedDB rather than Dexie. By the time `page.goto('/games')`

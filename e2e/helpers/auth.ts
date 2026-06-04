@@ -1,4 +1,4 @@
-import type { APIRequestContext, Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 let userCounter = 0;
 
@@ -158,6 +158,36 @@ export async function loginWithFacebook(page: Page) {
   }
 
   await page.waitForURL("**/games", { timeout: 30000 });
+}
+
+/**
+ * Read the current user's id from the localStorage session cache that
+ * `useAuthSession` keeps in lockstep with `authClient.useSession()`.
+ *
+ * Used by specs that need to seed Dexie rows owned by the logged-in
+ * test user (e.g. for the 8-F ownership inference filter). The cache
+ * is written by a `useEffect` after first render, so we poll until
+ * it materialises rather than read synchronously on `domcontentloaded`
+ * (which can land before the effect fires).
+ */
+export async function readCurrentUserId(page: Page): Promise<string> {
+  await page.waitForFunction(
+    () => localStorage.getItem("onboard_session_cache") !== null,
+    null,
+    { timeout: 10_000 },
+  );
+  const id = await page.evaluate(() => {
+    const raw = localStorage.getItem("onboard_session_cache");
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { user?: { id?: string } };
+      return parsed.user?.id ?? null;
+    } catch {
+      return null;
+    }
+  });
+  expect(id, "auth-setup must populate the session cache").not.toBeNull();
+  return id!;
 }
 
 /**
