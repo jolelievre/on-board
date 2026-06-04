@@ -9,6 +9,8 @@ import {
   SYNC_META_FAILED_BANNER_ACK,
 } from "../../lib/pull-sync";
 import { db, type SyncQueueEntry } from "../../lib/db";
+import { syncEngine } from "../../lib/sync";
+import { inferEntryOwnerId } from "../../lib/sync-ownership";
 import { useInstallPrompt } from "../../hooks/useInstallPrompt";
 import { clearSessionCache } from "../../hooks/useAuthSession";
 import { useRequiredViewerId } from "../../hooks/useRequiredViewerId";
@@ -213,23 +215,47 @@ function AliasInput({
   );
 }
 
-/** Phase 8-E sync queue diagnostic panel. Renders every entry in the
- * local sync queue grouped by status so the user can see what's stuck
- * and copy the server's error message to the maintainer.
+/** Sync queue diagnostic + recovery panel. Renders every entry in the
+ * local sync queue grouped by status so the user can see what's stuck,
+ * inspect the request body, and either Retry or Discard each failure.
  *
- * Read-only: Retry / Discard actions ship with PR 8-F. Opening this
- * panel also acknowledges the app-shell `SyncFailedBanner` — the ack
+ * Opening this panel acks the app-shell `SyncFailedBanner` — the ack
  * writes the current time into `syncMeta.failedBannerAcknowledgedAt`,
  * which suppresses the banner until a *new* failure lands afterwards.
+ *
+ * Cascade model (Phase 8-F): a failed entry can have downstream
+ * `blocked` entries (anything later that referenced one of its
+ * client-supplied ids). Retry on a parent unblocks the chain
+ * automatically; Discard on a parent prompts with the list of
+ * dependents that will also be dropped.
  */
 function SyncPanel() {
   const { t, i18n } = useTranslation();
+  // Scope the panel to the current user — IndexedDB is per-origin, not
+  // per-user, so historic account switches leave foreign-user entries
+  // sitting in the same Dexie store. Without this filter the panel
+  // would render mutations the current user can't legitimately Retry
+  // (the server would refuse) and could Discard mutations that would
+  // succeed for the rightful owner when they next log in.
+  const viewerId = useRequiredViewerId();
 
   const liveEntries = useLiveQuery(
-    () => db.syncQueue.orderBy("createdAt").toArray(),
-    [],
+    async () => {
+      const all = await db.syncQueue.orderBy("createdAt").toArray();
+      const owned: SyncQueueEntry[] = [];
+      for (const entry of all) {
+        const ownerId = await inferEntryOwnerId(entry);
+        if (ownerId === viewerId) owned.push(entry);
+      }
+      return owned;
+    },
+    [viewerId],
   );
   const entries: SyncQueueEntry[] = liveEntries ?? [];
+
+  // Track which entry the user is about to discard so we can confirm
+  // first. Stored as the entry id; null when no dialog is open.
+  const [discardingId, setDiscardingId] = useState<number | null>(null);
 
   // Ack the banner whenever this component is mounted. The banner reads
   // `syncMeta.failedBannerAcknowledgedAt` against the queue's max
@@ -241,11 +267,34 @@ function SyncPanel() {
 
   const pending = entries.filter((e) => e.status === "pending");
   const failed = entries.filter((e) => e.status === "failed");
+  const blocked = entries.filter((e) => e.status === "blocked");
+  const discarded = entries.filter((e) => e.status === "discarded");
+
+  // Group every failed parent with its transitive blocked descendants.
+  // Each parent renders as a card; its dependents collapse under a
+  // "Show N related changes" toggle so the user sees one root call to
+  // act on rather than a 30-row wall after a cascade fails. The Retry
+  // / Discard buttons live only on the parent — clicking Retry on a
+  // dependent doesn't help (it just re-fails until the parent lands),
+  // so we hide the affordance entirely on the children.
+  const failureGroups = buildFailureGroups(failed, blocked);
+  // Blocked entries whose parent isn't currently `failed` (parent was
+  // discarded or somehow vanished). Shouldn't happen under normal
+  // flows — discard cascade now tombstones dependents alongside the
+  // parent — but render them defensively so they can be acted on.
+  const orphanBlocked = blocked.filter(
+    (b) => !failureGroups.some((g) => g.dependentIds.has(b.id ?? -1)),
+  );
 
   const dateFormatter = new Intl.DateTimeFormat(i18n.language, {
     dateStyle: "short",
     timeStyle: "short",
   });
+
+  const discardTarget =
+    discardingId !== null
+      ? entries.find((e) => e.id === discardingId) ?? null
+      : null;
 
   return (
     <div data-testid="settings-sync-panel">
@@ -283,22 +332,149 @@ function SyncPanel() {
             : t("settings.sync.okHint")}
       </p>
 
-      {entries.length > 0 && (
-        <ul className={styles.syncList} data-testid="sync-entry-list">
-          {entries.map((entry) => (
+      {blocked.length > 0 && (
+        <p
+          className={styles.hint}
+          data-testid="sync-summary-blocked"
+        >
+          {t("settings.sync.blocked", { count: blocked.length })}
+        </p>
+      )}
+
+      {pending.length > 0 && (
+        <ul className={styles.syncList} data-testid="sync-pending-list">
+          {pending.map((entry) => (
             <SyncEntryRow
               key={entry.id ?? `${entry.createdAt}-${entry.url}`}
               entry={entry}
               dateFormatter={dateFormatter}
+              onRetry={null}
+              onRequestDiscard={null}
             />
           ))}
         </ul>
       )}
 
-      {failed.length > 0 && (
-        <p className={styles.hint} data-testid="sync-no-actions-yet">
-          {t("settings.sync.noActionsYet")}
-        </p>
+      {failureGroups.length > 0 && (
+        <div className={styles.syncList} data-testid="sync-entry-list">
+          {failureGroups.map((group) => (
+            <FailureGroupCard
+              key={group.parent.id ?? `${group.parent.createdAt}-${group.parent.url}`}
+              group={group}
+              dateFormatter={dateFormatter}
+              onRetry={() =>
+                group.parent.id !== undefined &&
+                void syncEngine.retry(group.parent.id)
+              }
+              onRequestDiscard={() =>
+                group.parent.id !== undefined &&
+                setDiscardingId(group.parent.id)
+              }
+            />
+          ))}
+        </div>
+      )}
+
+      {orphanBlocked.length > 0 && (
+        <ul
+          className={styles.syncList}
+          data-testid="sync-orphan-blocked-list"
+        >
+          {orphanBlocked.map((entry) => (
+            <SyncEntryRow
+              key={entry.id ?? `${entry.createdAt}-${entry.url}`}
+              entry={entry}
+              dateFormatter={dateFormatter}
+              onRetry={
+                entry.id !== undefined
+                  ? () => void syncEngine.retry(entry.id!)
+                  : null
+              }
+              onRequestDiscard={
+                entry.id !== undefined
+                  ? () => setDiscardingId(entry.id!)
+                  : null
+              }
+            />
+          ))}
+        </ul>
+      )}
+
+      {discarded.length > 0 && (
+        <DiscardedEntries
+          entries={discarded}
+          dateFormatter={dateFormatter}
+        />
+      )}
+
+      {discardTarget && (
+        <DiscardConfirmDialog
+          entry={discardTarget}
+          dateFormatter={dateFormatter}
+          onCancel={() => setDiscardingId(null)}
+          onConfirm={async (cascade) => {
+            if (discardTarget.id === undefined) return;
+            await syncEngine.discard(discardTarget.id, { cascade });
+            setDiscardingId(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Collapsible bottom section listing tombstoned (discarded) queue
+ * entries. The user deliberately gave up on these, but the rows stay
+ * in the queue so downstream gates that scan it (`useMatchSyncStatus`
+ * for the Share button) keep the corresponding match / profile flagged
+ * as not-yet-synced. Retry flips a row back to `pending` so the user
+ * can put it through again — useful if the underlying server bug got
+ * fixed since they discarded. */
+function DiscardedEntries({
+  entries,
+  dateFormatter,
+}: {
+  entries: SyncQueueEntry[];
+  dateFormatter: Intl.DateTimeFormat;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div
+      className={styles.syncDiscardedSection}
+      data-testid="sync-discarded-section"
+    >
+      <button
+        type="button"
+        className={styles.syncDiscardedToggle}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        data-testid="sync-discarded-toggle"
+      >
+        {t("settings.sync.discardedSection", { count: entries.length })}
+        <Icon name={open ? "minus" : "plus"} size={14} />
+      </button>
+
+      {open && (
+        <>
+          <p className={styles.hint}>{t("settings.sync.discardedSectionHint")}</p>
+          <ul className={styles.syncList}>
+            {entries.map((entry) => (
+              <SyncEntryRow
+                key={entry.id ?? `${entry.createdAt}-${entry.url}`}
+                entry={entry}
+                dateFormatter={dateFormatter}
+                onRetry={
+                  entry.id !== undefined
+                    ? () => void syncEngine.retry(entry.id!)
+                    : null
+                }
+                onRequestDiscard={null}
+              />
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );
@@ -307,18 +483,25 @@ function SyncPanel() {
 function SyncEntryRow({
   entry,
   dateFormatter,
+  onRetry,
+  onRequestDiscard,
 }: {
   entry: SyncQueueEntry;
   dateFormatter: Intl.DateTimeFormat;
+  onRetry: (() => void) | null;
+  onRequestDiscard: (() => void) | null;
 }) {
   const { t } = useTranslation();
+  const [bodyOpen, setBodyOpen] = useState(false);
   const path = stripQueryString(entry.url);
   const message = entry.errorBody?.error ?? entry.error;
   const isFailed = entry.status === "failed";
+  const isBlocked = entry.status === "blocked";
+  const isDiscarded = entry.status === "discarded";
 
   return (
     <li
-      className={`${styles.syncEntry} ${isFailed ? styles.syncEntryFailed : ""}`}
+      className={`${styles.syncEntry} ${isFailed ? styles.syncEntryFailed : ""} ${isBlocked ? styles.syncEntryBlocked : ""} ${isDiscarded ? styles.syncEntryDiscarded : ""}`}
       data-testid="sync-entry"
       data-status={entry.status}
     >
@@ -327,6 +510,22 @@ function SyncEntryRow({
         {entry.errorStatus !== undefined && (
           <span className={styles.syncEntryStatus}>
             {t("settings.sync.entryStatus", { status: entry.errorStatus })}
+          </span>
+        )}
+        {isBlocked && (
+          <span
+            className={styles.syncEntryBlockedBadge}
+            data-testid="sync-entry-blocked-badge"
+          >
+            {t("settings.sync.blockedBadge")}
+          </span>
+        )}
+        {isDiscarded && (
+          <span
+            className={styles.syncEntryBlockedBadge}
+            data-testid="sync-entry-discarded-badge"
+          >
+            {t("settings.sync.discardedBadge")}
           </span>
         )}
       </div>
@@ -338,6 +537,10 @@ function SyncEntryRow({
         >
           {message ?? t("settings.sync.entryUnknown")}
         </p>
+      )}
+
+      {isBlocked && (
+        <p className={styles.syncEntryMeta}>{t("settings.sync.blockedHint")}</p>
       )}
 
       {entry.errorBody?.field && (
@@ -361,11 +564,307 @@ function SyncEntryRow({
             })
           : dateFormatter.format(new Date(entry.createdAt))}
       </p>
+
+      <button
+        type="button"
+        className={styles.syncEntryBodyToggle}
+        onClick={() => setBodyOpen((open) => !open)}
+        data-testid="sync-entry-body-toggle"
+        aria-expanded={bodyOpen}
+      >
+        {bodyOpen
+          ? t("settings.sync.bodyToggleHide")
+          : t("settings.sync.bodyToggleShow")}
+      </button>
+
+      {bodyOpen && (
+        <pre
+          className={styles.syncEntryBody}
+          data-testid="sync-entry-body"
+        >
+          {prettifyBody(entry.body) ?? t("settings.sync.bodyEmpty")}
+        </pre>
+      )}
+
+      {(onRetry || onRequestDiscard) && (
+        <div className={styles.syncEntryActions}>
+          {onRetry && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onRetry}
+              iconBefore={<Icon name="refresh" size={14} />}
+              data-testid="sync-entry-retry"
+            >
+              {t("settings.sync.retry")}
+            </Button>
+          )}
+          {onRequestDiscard && (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={onRequestDiscard}
+              iconBefore={<Icon name="x" size={14} />}
+              data-testid="sync-entry-discard"
+            >
+              {t("settings.sync.discard")}
+            </Button>
+          )}
+        </div>
+      )}
     </li>
+  );
+}
+
+function DiscardConfirmDialog({
+  entry,
+  dateFormatter,
+  onConfirm,
+  onCancel,
+}: {
+  entry: SyncQueueEntry;
+  dateFormatter: Intl.DateTimeFormat;
+  onConfirm: (cascade: boolean) => void | Promise<void>;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const [dependents, setDependents] = useState<SyncQueueEntry[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Resolve dependents on mount so the dialog renders the count
+  // before the user clicks Confirm. Stays null while loading; render
+  // a placeholder body in the meantime so the dialog dimensions
+  // don't jump when the count arrives.
+  useEffect(() => {
+    if (entry.id === undefined) {
+      setDependents([]);
+      return;
+    }
+    let cancelled = false;
+    void syncEngine.dependentsOf(entry.id).then((deps) => {
+      if (!cancelled) setDependents(deps);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [entry.id]);
+
+  // Escape closes; matches MergeDialog UX so users have a consistent
+  // dismiss affordance across the app.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onCancel]);
+
+  const path = stripQueryString(entry.url);
+  const cascadeCount = dependents?.length ?? 0;
+  const hasCascade = cascadeCount > 0;
+
+  return (
+    <div
+      className={styles.syncDiscardBackdrop}
+      role="dialog"
+      aria-modal="true"
+      data-testid="sync-discard-dialog"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div className={styles.syncDiscardSheet}>
+        <h2 className={styles.syncDiscardTitle}>
+          {t("settings.sync.discardConfirmTitle")}
+        </h2>
+        <p className={styles.syncDiscardEntry}>
+          {t("settings.sync.entryLabel", { method: entry.method, path })}
+        </p>
+        <p className={styles.syncDiscardBody}>
+          {hasCascade
+            ? t("settings.sync.discardConfirmBody", { count: cascadeCount })
+            : t("settings.sync.discardConfirmBodySolo")}
+        </p>
+        {hasCascade && dependents && (
+          <ul
+            className={styles.syncDiscardList}
+            data-testid="sync-discard-dependent-list"
+          >
+            {dependents.map((dep) => (
+              <li key={dep.id ?? `${dep.createdAt}-${dep.url}`}>
+                {t("settings.sync.entryLabel", {
+                  method: dep.method,
+                  path: stripQueryString(dep.url),
+                })}
+                <span className={styles.syncDiscardListMeta}>
+                  {" · "}
+                  {dateFormatter.format(new Date(dep.createdAt))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className={styles.syncDiscardActions}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            onClick={onCancel}
+            disabled={busy}
+          >
+            {t("settings.sync.discardConfirmCancel")}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="md"
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onConfirm(hasCascade);
+              } finally {
+                setBusy(false);
+              }
+            }}
+            disabled={busy || dependents === null}
+            data-testid="sync-discard-confirm"
+          >
+            {t("settings.sync.discardConfirmCta")}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
 function stripQueryString(url: string): string {
   const queryAt = url.indexOf("?");
   return queryAt === -1 ? url : url.slice(0, queryAt);
+}
+
+type FailureGroup = {
+  parent: SyncQueueEntry;
+  dependents: SyncQueueEntry[];
+  /** Ids of every dependent in `dependents`, hoisted for O(1) lookups
+   * when computing orphan-blocked entries upstream. */
+  dependentIds: Set<number>;
+};
+
+/** Group every `failed` entry with its transitive `blocked` descendants
+ * by walking the `blockedBy` chain. Each group represents a single root
+ * cause: Retry / Discard on the parent resolves the whole subtree.
+ *
+ * Dependents are flattened (not nested) so the expanded view is a
+ * scannable list rather than a deep tree — even when B blocks C and C
+ * blocks D, the user only ever clicks Retry on A and the cascade
+ * drains. */
+function buildFailureGroups(
+  failed: SyncQueueEntry[],
+  blocked: SyncQueueEntry[],
+): FailureGroup[] {
+  return failed.map((parent) => {
+    const dependents: SyncQueueEntry[] = [];
+    const queue: number[] = parent.id !== undefined ? [parent.id] : [];
+    const seen = new Set<number>(queue);
+    while (queue.length > 0) {
+      const ancestorId = queue.shift();
+      if (ancestorId === undefined) continue;
+      for (const candidate of blocked) {
+        if (candidate.id === undefined) continue;
+        if (candidate.blockedBy !== ancestorId) continue;
+        if (seen.has(candidate.id)) continue;
+        seen.add(candidate.id);
+        dependents.push(candidate);
+        queue.push(candidate.id);
+      }
+    }
+    return {
+      parent,
+      dependents,
+      dependentIds: new Set(
+        dependents.map((d) => d.id).filter((id): id is number => id !== undefined),
+      ),
+    };
+  });
+}
+
+/** Render one failed parent with its blocked descendants collapsed
+ * under a "Show N related changes" toggle. Retry / Discard live only
+ * on the parent — clicking them on a dependent is a no-op until the
+ * parent succeeds, so the UI hides the affordance there entirely. */
+function FailureGroupCard({
+  group,
+  dateFormatter,
+  onRetry,
+  onRequestDiscard,
+}: {
+  group: FailureGroup;
+  dateFormatter: Intl.DateTimeFormat;
+  onRetry: () => void;
+  onRequestDiscard: () => void;
+}) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const dependentCount = group.dependents.length;
+
+  return (
+    <div className={styles.syncGroup} data-testid="sync-failure-group">
+      <SyncEntryRow
+        entry={group.parent}
+        dateFormatter={dateFormatter}
+        onRetry={onRetry}
+        onRequestDiscard={onRequestDiscard}
+      />
+
+      {dependentCount > 0 && (
+        <div className={styles.syncGroupDependents}>
+          <button
+            type="button"
+            className={styles.syncGroupToggle}
+            onClick={() => setExpanded((value) => !value)}
+            aria-expanded={expanded}
+            data-testid="sync-group-related-toggle"
+          >
+            {expanded
+              ? t("settings.sync.relatedToggleHide", { count: dependentCount })
+              : t("settings.sync.relatedToggleShow", { count: dependentCount })}
+            <Icon name={expanded ? "minus" : "plus"} size={12} />
+          </button>
+
+          {expanded && (
+            <ul
+              className={styles.syncList}
+              data-testid="sync-group-dependents"
+            >
+              {group.dependents.map((dependent) => (
+                <SyncEntryRow
+                  key={dependent.id ?? `${dependent.createdAt}-${dependent.url}`}
+                  entry={dependent}
+                  dateFormatter={dateFormatter}
+                  onRetry={null}
+                  onRequestDiscard={null}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Pretty-print the JSON body of a queued mutation for the Sync panel.
+ * Non-JSON bodies (or empty bodies) render the raw string. Returns
+ * `null` for entirely missing bodies so the caller can substitute a
+ * localized empty-state message. */
+function prettifyBody(body: string | undefined): string | null {
+  if (body === undefined || body === "") return null;
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return body;
+  }
 }
