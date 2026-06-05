@@ -1434,36 +1434,95 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 
 **Goal**: ship the destructive cleanup affordances the user-facing data model has been missing since Phase 5. Every other CRUD verb (create / read / update) is wired across local + sync queue + server; delete is the gap. Friends need a way to drop a mistaken match entry or retire a profile they no longer share games with.
 
+**Why the naive "DELETE row" path is wrong** — two structural traps that drive the design below:
+
+1. **Multi-player matches lose their bearings when an unclaimed profile is hard-deleted.** Since PR 6-C, `Player.userId` and `Player.name` are gone — the only join key is `Player.profileId` (NOT NULL, RESTRICT in the Prisma schema). Hard-deleting the Profile either FK-violates the Player row, or, with `onDelete: Cascade`, vaporises the Player + its Scores and breaks every other player's totals / winner / scoring math. Making `profileId` nullable with `SetNull` would force every UI surface that reads `player.profile.alias` to add a "deleted player" null-guard — heavy churn for a friend-circle app where the historical scoreboard should still read like the night it was played.
+2. **Pull-sync has no way to communicate deletions to a linked friend who already mirrored the match.** Today's `GET /api/matches?since=` returns only rows whose `updatedAt > since`. A hard-deleted match is gone from the SELECT → the linked friend's next delta is empty → their local Dexie row stays forever as a **ghost match**. Same trap for a hard-deleted profile that another device already pulled by visibility.
+
+**Design — tombstone model for both Match and Profile, propagated via the existing pull-sync delta.** Rendering keeps working because every `LocalPlayer` row carries an **embedded `profile` snapshot** (`src/client/lib/db.ts:138-157`, `LocalPlayerProfile`) — the canonical Profile row isn't needed at display time; the Player row already has alias / customAvatarUrl / useLinkedAvatar / avatarFrame / avatarRing / linkedUser baked in. The tombstone keeps the server-side Profile row alive so `Player.profileId` keeps resolving, and a side server contract (below) makes sure even *late-arriving devices* get the same snapshot.
+
+**Server projection contract (the load-bearing rule for late-arriving devices).** The embedded `Player.profile` projection that ships with `GET /api/matches[/:id]` **must not filter by `Profile.deletedAt`**. The join returns the full snapshot regardless of tombstone state. This is what guarantees:
+
+- A late-arriving linked friend (B), who never pulled before the deletion, sees a tombstoned unclaimed profile's correct alias and avatar in a multi-player match on their first pull.
+- A fresh device for the owner (signed in on a new phone post-deletion) re-renders historical matches with the tombstoned profile's name and avatar intact.
+- The `matchVisibilityWhere` predicate (`src/server/lib/profile-scope.ts:19-34`) continues to match through the tombstoned Profile's `ownerId` / `linkedUserId` fields — visibility is a structural property, not a lifecycle one.
+
+Active-list endpoints (`GET /api/profiles?since=` for the owner's Players tab, all client read hooks for suggestions / stats / achievements / etc.) DO filter `WHERE deletedAt IS NULL`. The *embedded projection inside a match payload* is the only unfiltered surface, and the include site carries a code comment to defend that against future refactors.
+
 **Match delete**:
-- Long-press / overflow action on each row in match history (and on the `MatchCompleteScreen` if surfaced there too) opens a confirm dialog: "Delete this match? Scores and players will be removed for everyone who played."
-- New `mutations.ts` `deleteMatch(matchId)` that:
-  - Cascade-deletes locally: `db.scores.where("matchId").equals(id).delete()` + `db.players.where("matchId").equals(id).delete()` + `db.matches.delete(id)`.
-  - Enqueues `DELETE /api/matches/:id` via `syncEngine.enqueue`. Server cascade follows Prisma's existing relations.
+- Creator-only **overflow button (`more-vertical` glyph)** in the match-detail page Header, opening a confirm dialog: "Delete this match? Scores and players will be removed for everyone who played." Scope adjustment from the original plan: the row-level overflow on `MatchHistoryRow` and the duplicate affordance on the completion screens are dropped for this PR — they would have required either resolving the row's top-right floating-badge collision or duplicating the dialog wiring on three surfaces for a low-frequency action. Deferred to a v1.x polish PR if user feedback asks for it.
+- New `mutations.deleteMatch({ matchId, viewerId })`:
+  - Dexie transaction over `matches` / `players` / `scores` / `syncQueue`: remove the local match + its players + scores.
+  - Enqueue `DELETE /api/matches/:id` with **`ownerId: viewerId`** stamped on the queue entry. The stamp is load-bearing: the mutation hard-deletes the local Match row before flush runs, so `inferEntryOwnerId` (sync-ownership.ts) can't walk back through the row to determine the owner. Without the stamp, `filterOwnedBy` drops the DELETE as foreign and the sync engine never replays it.
+  - Walk `db.syncQueue` for any entries whose URL/body references this match id (reuses `extractClientIds` + `entryReferencesAny` from `src/client/lib/db.ts:418-434`) and **outright delete** them — the user has explicitly retired the match, so stale POSTs / PATCHes / PUTs for it are moot. The DELETE we then enqueue is safe to fire either way: a 404 from the server (POST never drained) is treated as success on idempotent replay.
 - Auth: only the match creator can delete (server enforces via `Match.createdById === session.user.id`; UI hides the affordance for non-creators).
-- 8-F semantics carry through: a failed `DELETE` shows up in the Sync panel like any other failure; Retry / Discard are available.
+- 8-F semantics carry through: a failed `DELETE` shows up in the Sync panel like any other failure; Retry / Discard available.
 
 **Profile delete**:
-- Profile detail page (`routes/_authenticated/players/$id.tsx`) gets a destructive `Delete profile` button at the bottom. Only renders for profiles where `ownerId === viewerId` (you can't delete a profile you don't own).
-- Confirm dialog enumerates: "This profile is in N matches. Deleting will remove it from those matches and any scores attached to it." For linked profiles, additionally warn: "This profile is linked to <friend name>. Deleting will unlink first — they keep their side of the connection."
-- New `mutations.ts` `deleteProfile(profileId)` that:
-  - For linked profiles, calls `unlinkProfile` first (existing flow).
-  - Cascade-removes player rows that reference the profile (server handles the FK constraint).
-  - Enqueues `DELETE /api/profiles/:id`.
-- Idempotency: client-supplied request id stays the same — server treats repeated `DELETE` on an already-deleted row as 204.
+- Profile detail page (`routes/_authenticated/players/$profileId.tsx`) gets a destructive `Delete profile` button at the bottom of the edit-mode stack. Only rendered when `ownerId === viewerId` and the profile isn't the viewer's self-Profile (the route already redirects the self-Profile to Settings).
+- Confirm dialog: "{alias} is in N match(es). The match(es) stay — only the profile disappears from your list, suggestions and stats. Their alias keeps showing on existing scoreboards." For linked profiles, additionally: "{alias} is linked to a Google account. Deleting unlinks them first — they keep their own profile of you (unlinked) but they won't see the shared matches any more."
+- New `mutations.deleteProfile({ profileId, viewerId })`:
+  - Hard-delete the local `db.profiles` row (the Player rows referencing it continue to render from their embedded `profile` snapshot — no degradation).
+  - Enqueue `DELETE /api/profiles/:id` with **`ownerId: viewerId`** stamped on the queue entry. Same load-bearing rationale as `deleteMatch`: the local Profile row is gone post-mutation, so ownership inference can't walk back to it.
+  - Walk `db.syncQueue` for entries referencing this profile id and outright delete them (same pattern as the match path).
+- Server handler: if `linkedUserId` is set, run the existing **bilateral unlink** transaction first (factored out of `POST /:id/unlink` into `src/server/lib/profile-unlink.ts` — both endpoints call `unlinkProfileBilateral(tx, profileId)`). Then set `Profile.deletedAt` and bump `updatedAt`. Server **never** hard-deletes the row.
+- Linked-friend visibility on previously-shared matches: handled by the existing 6-C link-transition cursor reset in `mergeProfiles` — after the bilateral unlink, the friend's next pull triggers an orphan-prune that drops matches they no longer have visibility on. No new propagation channel needed for that branch.
+
+**Pull-sync extensions** (`src/client/lib/pull-sync.ts`):
+- `mergeMatches` — on an incoming match with `deletedAt` set, delete the local match + its players + scores, then skip writing the row (no UI consumer for a local tombstone).
+- `mergeProfiles` — on an incoming profile with `deletedAt` set, delete the local profile row. Do not touch Player rows that reference it (the server hasn't either).
+
+**Sync engine** (`src/client/lib/sync.ts`):
+- Retry classifier: treat **DELETE → 404 as success** (idempotent replay). Today every 4xx marks the entry `failed`; for DELETE specifically, a 404 means the server already doesn't have it, which is the goal state.
+
+**Dexie schema** — bump to **v8**: add `deletedAt?: string` to `LocalMatch` and `LocalProfile`. No index changes, no upgrader (an absent field on legacy rows simply means "active"). The bump is bookkeeping only — no data migration runs.
+
+**Why a tombstone on the *Match* too, not just hard-delete + cursor reset.** A cursor reset is heavy (full re-pull of every visible match, every time anyone deletes anything) and doesn't ride the existing delta path. Tombstones cost one extra row in the server delta exactly once per deletion per linked viewer, then never again — the friend's `?since=` advances past the tombstoned row and stops re-seeing it. Symmetric with profile tombstones, and reuses the same `deletedAt` convention everywhere.
+
+**Reuse, not new abstractions**:
+- **Bilateral unlink** for the linked-profile delete path → reuse the existing handler logic in `src/server/routes/profiles.ts` (`POST /:id/unlink`). Factor the transaction body into a helper called by both endpoints.
+- **Cascade-discard for queue cleanup** when a parent row is removed → reuse the 8-F machinery in `src/client/lib/sync.ts` + the id-extraction helpers in `db.ts`. Precedent: commits `019fc9f refactor(sync-rec): address PR review — shared helpers + filterOwnedBy` and `6dda46b feat(sync-rec): cascade-undo on Retry of a discarded parent`.
 
 **Critical files**:
 
 | File | Action |
 |---|---|
-| `src/client/lib/mutations.ts` | New `deleteMatch` + `deleteProfile` helpers |
-| `src/client/components/matches/MatchHistoryRow.tsx` | Overflow menu with Delete |
-| `src/client/routes/_authenticated/players/$id.tsx` | Delete button + confirm |
-| `src/server/routes/matches.ts` | `DELETE /api/matches/:id` (creator-only) |
-| `src/server/routes/profiles.ts` | `DELETE /api/profiles/:id` (owner-only) |
-| `e2e/delete-match.spec.ts` (NEW) | Drives the delete flow end-to-end |
-| `e2e/delete-profile.spec.ts` (NEW) | Same for profile (incl. linked-profile unlink-first path) |
+| `prisma/schema.prisma` | Add `Match.deletedAt`, `Profile.deletedAt`; migration `add_tombstones` |
+| `src/server/routes/matches.ts` | New `DELETE /:id`; `GET /:id` 404s tombstones; `GET /?since=` keeps tombstones in the delta; comment-document the embedded `include: { profile: true }` contract |
+| `src/server/routes/profiles.ts` | New `DELETE /:id` (owner-only); factor the bilateral-unlink transaction into a helper called by both `unlink` and `delete` |
+| `src/server/routes/share.ts` | 404 when the underlying match is tombstoned |
+| `src/client/lib/db.ts` | v8 schema: `deletedAt?: string` on `LocalMatch` + `LocalProfile`; no upgrader |
+| `src/client/lib/mutations.ts` | New `deleteMatch` + `deleteProfile`; reuse 8-F cascade-discard helper for queue cleanup |
+| `src/client/lib/pull-sync.ts` | Tombstone handling in `mergeMatches` + `mergeProfiles` |
+| `src/client/lib/sync.ts` | DELETE → 404 = success |
+| `src/client/hooks/data/useProfiles.ts` | `deletedAt IS NULL` filter on every active-profile read (list, suggestions, stats, head-to-head, played-with, recent, owned-index, self, profile-by-id) |
+| `src/client/hooks/data/useAchievements.ts`, `useMyStats.ts`, `useGameRankings.ts` | Same — exclude tombstoned profiles from active surfaces |
+| `src/client/components/matches/MatchHistoryRow.tsx` | Overflow menu with Delete (creator-only) |
+| `src/client/routes/_authenticated/players/$profileId.tsx` | Delete button + confirm dialog (owner-only) |
+| `src/client/components/scoring/skull-king/MatchCompleteScreen.tsx`, `SevenWondersDuelScorer.tsx` | Surface Delete action on completed match |
+| `src/client/locales/{en,fr}/common.json` | New keys: `match.delete.*`, `profile.delete.*` incl. the "linked friend, will unlink first" warning |
+| `e2e/delete-match.spec.ts` (NEW) | Creator-path delete + linked-friend ghost-match propagation + idempotent replay, UI-driven |
+| `e2e/delete-profile.spec.ts` (NEW) | Unclaimed multi-player snapshot-still-renders + linked auto-unlink-then-tombstone + late-arriving linked friend reading a match with a tombstoned unclaimed participant |
 
-**Acceptance**: own a match, delete it from history → it disappears locally + on the server. Own a linked profile, click Delete → confirm dialog explains the unlink-first behaviour → confirm → profile gone, friend keeps their side intact.
+**Verification scenarios** (drive through UI, not API):
+
+1. **Owned-match delete (creator path)** — owner creates a 7WD match, completes it, opens overflow menu, taps Delete, confirms. Row gone locally + in Postgres.
+2. **Linked-friend ghost-match propagation** — A and B linked. A creates a Skull King match with both. B's pull mirrors it. A deletes the match. B's next pull prunes the local row; match history no longer lists it.
+3. **Unclaimed-profile delete with multi-player match** — A has matches with Alice (unclaimed) + Bob (linked) + self. A deletes Alice's profile. Alice gone from Players tab + suggestions + stats; Skull King match still renders correctly with Alice's alias / avatar / frame / ring (driven by `Player.profile` snapshot). Scoring totals + winner display unchanged.
+4. **Linked-profile delete = auto-unlink + tombstone** — A deletes A's profile of friend B (currently linked). Confirm dialog explains unlink-first. After confirm: A's profile of B is tombstoned + gone from A's Players tab. B's reciprocal profile of A becomes an unclaimed profile under B's ownership (existing unlink semantics). B's previously-shared matches that no longer satisfy `matchVisibilityWhere` are pruned via the existing link-transition cursor reset in `mergeProfiles`.
+5. **Late-arriving linked friend (load-bearing case)** — A creates a Skull King match with self, Profile B (linked to user B), Profile C (unclaimed, owned by A). *Before B has ever pulled this match* (B offline, or fresh device), A deletes Profile C. B then comes online for the first time. Assert: B's `/api/matches?since=0` includes the match; the rendered scoreboard shows Profile C's alias + avatar + frame + ring exactly as A had them at the moment of deletion. Same assertion on a fresh device for A — historical match rendering must not degrade because the canonical Profile is tombstoned.
+6. **Idempotent replay** — force network down before flush, delete a match, bring network back. Sync queue replays the DELETE. Disconnect and DELETE again locally (second device that hadn't received the tombstone): server returns 404, sync engine treats as success, no stuck queue entry.
+7. **8-F cascade integration** — queue a `POST /api/matches` (offline), still offline delete the same match locally. Sync queue ends up with the cascade-discarded POST entry; Sync panel surfaces it. Bring network back: nothing to replay, no error banner.
+
+**Out of scope (explicitly deferred)**:
+- **Tombstone retention / pruning job.** Friend-circle scale → indefinite tombstone storage is fine for v1.0. Natural trigger when we *do* implement pruning: a tombstoned `Profile` is safe to hard-delete once every `Player` referencing it has also been removed (which happens organically as tombstoned matches age out + get hard-deleted in their own retention window). A tombstoned `Match` is safe to hard-delete once enough time has passed that every linked-friend device has had a chance to pull the prune signal. Both as a background sweep in a v1.x follow-up.
+- **"Undo delete" / restore.** Not a friend-circle ask.
+- **Hard-delete on a profile with zero player references.** Adds branching for negligible gain.
+- **Bulk delete** (multi-select). Not asked for.
+- **"(removed)" suffix in match history for tombstoned-profile rendering.** The embedded snapshot already renders the historical alias verbatim — adding a suffix would imply the friend retroactively changed identity, which is misleading.
+- **Cross-device delete dialogs** ("X also deleted this match on another device" toast). The pull-sync prune is silent; matches the existing sync-status surface.
+
+**Acceptance**: own a match, delete it from history → it disappears locally + on the server, and a linked friend's next pull prunes their local copy. Own a linked profile, click Delete → confirm dialog explains the unlink-first behaviour → confirm → profile gone from owner's active surfaces, multi-player matches still render the historical alias + avatar verbatim, late-arriving devices receive the same snapshot via the API.
 
 #### PR 8-H — Local↔server model consistency audit (`chore/dexie-server-model-audit`, ~0.5 day)
 

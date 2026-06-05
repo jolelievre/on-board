@@ -26,6 +26,14 @@ const CUID_RE = /^[a-z][a-z0-9]{19,31}$/;
 // arrive on the owner's side with Player rows pointing at Profiles the
 // owner can't see (e.g. the friend's self-Profile), and the UI would
 // have no name/avatar to render.
+//
+// Phase 8-G contract — DO NOT add `where: { deletedAt: null }` to this
+// projection. The embedded profile must keep shipping the alias / avatar
+// / frame / ring of tombstoned profiles so late-arriving linked-friend
+// devices (and fresh devices for the owner) can render historical matches
+// after the canonical Profile has been soft-deleted. Active-list endpoints
+// (`GET /api/profiles?since=`, the Players-tab read hooks) filter
+// tombstones; the embedded match projection is the one place that doesn't.
 const playerProfileInclude = {
   profile: {
     select: {
@@ -245,12 +253,22 @@ export const matchesRoutes = new Hono<AuthEnv>()
       sinceDate = parsed;
     }
 
+    // Phase 8-G tombstone semantics:
+    //   - WITH `since`: include tombstoned matches in the delta so a
+    //     linked-friend device receives the prune signal exactly once.
+    //     `mergeMatches` hard-deletes the local mirror (match + players
+    //     + scores) on seeing `deletedAt`.
+    //   - WITHOUT `since`: filter out tombstones — this is the
+    //     active-list path (fresh devices, `pruneLocalMatchesAgainstServer`
+    //     reconcile). Tombstoned matches shouldn't appear in either.
     const matches = await prisma.match.findMany({
       where: {
         AND: [
           matchVisibilityWhere(user.id),
           ...(gameId ? [{ gameId }] : []),
-          ...(sinceDate ? [{ updatedAt: { gt: sinceDate } }] : []),
+          ...(sinceDate
+            ? [{ updatedAt: { gt: sinceDate } }]
+            : [{ deletedAt: null }]),
         ],
       },
       include: {
@@ -270,9 +288,12 @@ export const matchesRoutes = new Hono<AuthEnv>()
     const user = c.get("user");
     const id = c.req.param("id");
 
+    // Active-read endpoint: tombstones return 404 so the detail page
+    // can't surface a soft-deleted match. Pull-sync still receives them
+    // via `GET /` to propagate the prune signal to linked friends.
     const match = await prisma.match.findFirst({
       where: {
-        AND: [{ id }, matchVisibilityWhere(user.id)],
+        AND: [{ id }, { deletedAt: null }, matchVisibilityWhere(user.id)],
       },
       include: {
         game: true,
@@ -293,6 +314,41 @@ export const matchesRoutes = new Hono<AuthEnv>()
 
     return c.json(match);
   })
+  .delete("/:id", async (c) => {
+    // Phase 8-G — soft-delete (tombstone) a match. Creator-only.
+    // Bumps `updatedAt` so the row flows through the next pull-sync
+    // delta with `deletedAt` set; client `mergeMatches` then prunes
+    // the local match + players + scores for every visible viewer.
+    // The row is intentionally kept so a future fresh-device pull
+    // still carries the prune signal and so `Player.profileId` keeps
+    // resolving for any embedded snapshot rendering elsewhere.
+    const user = c.get("user");
+    const id = c.req.param("id");
+
+    const existing = await prisma.match.findUnique({
+      where: { id },
+      select: { createdById: true, deletedAt: true },
+    });
+    if (!existing) {
+      return structuredError(c, 404, { error: "Match not found" });
+    }
+    if (existing.createdById !== user.id) {
+      return structuredError(c, 403, {
+        error: "Only the match creator can delete this match",
+      });
+    }
+    if (existing.deletedAt !== null) {
+      // Idempotent: replay of an already-applied DELETE is success.
+      return c.body(null, 204);
+    }
+
+    await prisma.match.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+
+    return c.body(null, 204);
+  })
   .put("/:id", async (c) => {
     const user = c.get("user");
     const id = c.req.param("id");
@@ -304,9 +360,9 @@ export const matchesRoutes = new Hono<AuthEnv>()
       winnerId?: string | null;
     };
 
-    // Validate match exists and belongs to user
+    // Validate match exists, belongs to user, and isn't tombstoned.
     const existing = await prisma.match.findFirst({
-      where: { id, createdById: user.id },
+      where: { id, createdById: user.id, deletedAt: null },
       include: { players: true },
     });
 
@@ -360,7 +416,7 @@ export const matchesRoutes = new Hono<AuthEnv>()
     };
 
     const existing = await prisma.match.findFirst({
-      where: { id, createdById: user.id },
+      where: { id, createdById: user.id, deletedAt: null },
       include: { players: true },
     });
 
@@ -481,7 +537,9 @@ export const matchesRoutes = new Hono<AuthEnv>()
     const id = c.req.param("id");
 
     const match = await prisma.match.findFirst({
-      where: { AND: [{ id }, matchVisibilityWhere(user.id)] },
+      where: {
+        AND: [{ id }, { deletedAt: null }, matchVisibilityWhere(user.id)],
+      },
       select: { id: true, status: true },
     });
     if (!match) {
@@ -512,7 +570,9 @@ export const matchesRoutes = new Hono<AuthEnv>()
     const id = c.req.param("id");
 
     const match = await prisma.match.findFirst({
-      where: { AND: [{ id }, matchVisibilityWhere(user.id)] },
+      where: {
+        AND: [{ id }, { deletedAt: null }, matchVisibilityWhere(user.id)],
+      },
       select: { id: true },
     });
     if (!match) {
@@ -529,7 +589,9 @@ export const matchesRoutes = new Hono<AuthEnv>()
     const id = c.req.param("id");
 
     const match = await prisma.match.findFirst({
-      where: { AND: [{ id }, matchVisibilityWhere(user.id)] },
+      where: {
+        AND: [{ id }, { deletedAt: null }, matchVisibilityWhere(user.id)],
+      },
       select: { id: true },
     });
     if (!match) {

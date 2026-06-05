@@ -114,6 +114,13 @@ model Match {
   startedAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt /// Drives Last-Write-Wins merging during pull-sync
   completedAt DateTime?
+  /// Phase 8-G soft-delete tombstone. When set, the row is filtered out
+  /// of active surfaces (`GET /:id` 404s, `GET /api/share/:token` 404s)
+  /// but still ships in `GET /api/matches?since=` deltas so linked-friend
+  /// devices receive a one-shot prune signal. The server never hard-deletes
+  /// these rows; a future background sweep (deferred to v1.x) may prune
+  /// once every linked viewer has had a chance to consume the tombstone.
+  deletedAt   DateTime?
 
   players     Player[]
   scores      Score[]
@@ -191,6 +198,19 @@ model Profile {
   usedAt          DateTime @default(now()) /// Bumped on each match create; drives suggestion ordering.
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  /// Phase 8-G soft-delete tombstone. When set, the row is hidden from
+  /// the owner's active surfaces (Players tab, suggestions, stats,
+  /// achievements) but kept alive so `Player.profileId` (RESTRICT) keeps
+  /// resolving and the embedded `Player.profile` snapshot on every
+  /// device continues to render historical matches verbatim. Linked
+  /// profiles are bilaterally unlinked first (see `POST /:id/unlink`)
+  /// before `deletedAt` is set, so the friend loses match-visibility
+  /// through the existing 6-C link-transition cursor reset rather than
+  /// through a tombstone signal. Critically: the embedded `Player.profile`
+  /// projection in `GET /api/matches[/:id]` payloads MUST NOT filter
+  /// by `deletedAt` — late-arriving linked-friend devices need the
+  /// snapshot to render the match they never pulled before deletion.
+  deletedAt       DateTime?
 
   owner      User     @relation("ProfileOwner",  fields: [ownerId],      references: [id], onDelete: Cascade)
   linkedUser User?    @relation("ProfileLinked", fields: [linkedUserId], references: [id], onDelete: SetNull)

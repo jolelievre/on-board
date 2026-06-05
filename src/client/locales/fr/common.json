@@ -143,6 +143,15 @@
     "rematch": "Revanche →",
     "notFound": "Partie introuvable.",
     "scoringNotSupported": "Le suivi de score pour {{game}} n'est pas encore disponible.",
+    "delete": {
+      "cta": "Supprimer la partie",
+      "title": "Supprimer cette partie ?",
+      "body": "Les scores et les joueurs disparaîtront pour tout le monde. Action irréversible.",
+      "confirm": "Supprimer",
+      "submitting": "Suppression…",
+      "cancel": "Annuler",
+      "error": "Impossible de supprimer la partie. Réessayez."
+    },
     "newMatch": {
       "title": "Nouvelle partie",
       "playerLabel": "Joueur {{n}}",
@@ -333,6 +342,18 @@
       "theirWins": "Eux",
       "draws_one": "{{count}} égalité",
       "draws_other": "{{count}} égalités"
+    },
+    "delete": {
+      "cta": "Supprimer le profil",
+      "title": "Supprimer ce profil ?",
+      "body_one": "{{alias}} apparaît dans {{count}} partie. La partie reste — seul le profil disparaît de votre liste, des suggestions et des stats. Son alias reste affiché sur les feuilles de score existantes.",
+      "body_other": "{{alias}} apparaît dans {{count}} parties. Les parties restent — seul le profil disparaît de votre liste, des suggestions et des stats. Son alias reste affiché sur les feuilles de score existantes.",
+      "bodyNoMatches": "{{alias}} n'a encore joué aucune partie. Le profil disparaîtra de votre liste et des suggestions.",
+      "linkedWarning": "{{alias}} est lié à un compte Google. La suppression effectue d'abord la déliaison — il garde son propre profil de vous (délié) mais ne verra plus les parties partagées.",
+      "confirm": "Supprimer",
+      "submitting": "Suppression…",
+      "cancel": "Annuler",
+      "error": "Impossible de supprimer le profil. Réessayez."
     }
   },
   "stats": {

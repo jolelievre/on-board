@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOnlineStatus } from "../../../hooks/useOnlineStatus";
@@ -6,6 +6,7 @@ import { useRequiredViewerId } from "../../../hooks/useRequiredViewerId";
 import { useMatch } from "../../../hooks/data/useMatch";
 import { SevenWondersDuelScorer } from "../../../components/scoring/SevenWondersDuelScorer";
 import { SkullKingScorer } from "../../../components/scoring/skull-king/SkullKingScorer";
+import { DeleteMatchDialog } from "../../../components/matches/DeleteMatchDialog";
 import { Header } from "../../../components/layout/Header";
 import { Card } from "../../../components/ui/Card";
 import { Icon } from "../../../components/ui/Icon";
@@ -18,8 +19,10 @@ export const Route = createFileRoute("/_authenticated/matches/$id")({
 function MatchPage() {
   const { id } = Route.useParams();
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { isOnline } = useOnlineStatus();
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const viewerId = useRequiredViewerId();
 
   const { data: match, status } = useMatch(id, viewerId);
@@ -65,6 +68,10 @@ function MatchPage() {
   // after completion — so the header chrome is consistent with the explicit
   // CTA on the match-complete screen.
   const showScoreboardToggle = isSkullKing;
+  // Phase 8-G — creator-only delete affordance in the Header. The
+  // server's `DELETE /api/matches/:id` enforces creator-only; the UI
+  // mirrors that gate so non-creators never see the button.
+  const canDelete = match.createdById === viewerId;
 
   return (
     <>
@@ -75,40 +82,69 @@ function MatchPage() {
           label: gameName,
         }}
         right={
-          showScoreboardToggle ? (
-            <button
-              type="button"
-              onClick={() => setScoreboardOpen((v) => !v)}
-              aria-label={t(
-                scoreboardOpen
-                  ? "scoring.skullKing.closeScoreboard"
-                  : "scoring.skullKing.openScoreboard",
-              )}
-              aria-pressed={scoreboardOpen}
-              data-testid="sk-scoreboard-toggle"
-              style={{
-                background: scoreboardOpen
-                  ? "var(--color-primary)"
-                  : "transparent",
-                color: scoreboardOpen
-                  ? "var(--color-primary-fg)"
-                  : "var(--color-ink-soft)",
-                border: "1.5px solid var(--color-border-strong)",
-                borderColor: scoreboardOpen
-                  ? "var(--color-primary)"
-                  : "var(--color-border-strong)",
-                borderRadius: 999,
-                padding: 6,
-                width: 36,
-                height: 36,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-              }}
+          showScoreboardToggle || canDelete ? (
+            <span
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
             >
-              <Icon name="cards" size={18} />
-            </button>
+              {showScoreboardToggle && (
+                <button
+                  type="button"
+                  onClick={() => setScoreboardOpen((v) => !v)}
+                  aria-label={t(
+                    scoreboardOpen
+                      ? "scoring.skullKing.closeScoreboard"
+                      : "scoring.skullKing.openScoreboard",
+                  )}
+                  aria-pressed={scoreboardOpen}
+                  data-testid="sk-scoreboard-toggle"
+                  style={{
+                    background: scoreboardOpen
+                      ? "var(--color-primary)"
+                      : "transparent",
+                    color: scoreboardOpen
+                      ? "var(--color-primary-fg)"
+                      : "var(--color-ink-soft)",
+                    border: "1.5px solid var(--color-border-strong)",
+                    borderColor: scoreboardOpen
+                      ? "var(--color-primary)"
+                      : "var(--color-border-strong)",
+                    borderRadius: 999,
+                    padding: 6,
+                    width: 36,
+                    height: 36,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Icon name="cards" size={18} />
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteOpen(true)}
+                  aria-label={t("matches.delete.cta")}
+                  data-testid="match-delete-trigger"
+                  style={{
+                    background: "transparent",
+                    color: "var(--color-ink-soft)",
+                    border: "1.5px solid var(--color-border-strong)",
+                    borderRadius: 999,
+                    padding: 6,
+                    width: 36,
+                    height: 36,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Icon name="trash" size={18} />
+                </button>
+              )}
+            </span>
           ) : null
         }
       />
@@ -127,6 +163,25 @@ function MatchPage() {
           <UnsupportedScorer match={match} gameName={gameName} />
         )}
       </div>
+
+      {deleteOpen && (
+        <DeleteMatchDialog
+          matchId={match.id}
+          viewerId={viewerId}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={() => {
+            setDeleteOpen(false);
+            // After a successful delete the local Dexie row is gone, so
+            // `useMatch` would flip to `status: "missing"`. Navigate back
+            // to the per-game history before that transition renders
+            // a not-found state mid-fade.
+            void navigate({
+              to: "/games/$slug",
+              params: { slug: match.game.slug },
+            });
+          }}
+        />
+      )}
     </>
   );
 }

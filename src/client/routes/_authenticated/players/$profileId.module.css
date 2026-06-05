@@ -272,6 +272,23 @@
   justify-content: center;
 }
 
+/* Phase 8-G — destructive delete action sits at the very bottom of the
+ * editor stack, visually separated from the merge / link / alias edit
+ * affordances above it by a thin divider line. The button itself uses
+ * the same ghost variant as Merge so the visual weight reads "tertiary
+ * action" until the user opens the confirm dialog, which carries the
+ * destructive treatment. */
+.deleteActionRow {
+  margin-top: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: center;
+}
+.deleteActionRow :global(button) {
+  color: var(--color-danger);
+}
+
 /* Inline title + info-icon button. The icon surfaces the link
  * explainer text as a native tooltip on hover / long-press, freeing
  * the row from the previously-large hint paragraph. */

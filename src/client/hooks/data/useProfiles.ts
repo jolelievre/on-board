@@ -38,7 +38,14 @@ export function useProfileList(viewerId: string): UseProfileListResult {
   const data = useLiveQuery(
     async (): Promise<LocalProfile[]> => {
       const owned = await db.profiles.where("ownerId").equals(viewerId).toArray();
-      const rows = owned.filter((p) => p.linkedUserId !== viewerId);
+      // `mergeProfiles` and `mutations.deleteProfile` both hard-delete
+      // the local row on tombstone, so `deletedAt` should never appear
+      // set on a stored profile. The filter is defense-in-depth —
+      // documents the invariant and shields the UI if a transient state
+      // ever leaks through.
+      const rows = owned.filter(
+        (p) => p.linkedUserId !== viewerId && !p.deletedAt,
+      );
       // usedAt descending — most recently used friend first.
       rows.sort((a, b) => {
         if (a.usedAt > b.usedAt) return -1;
@@ -340,7 +347,11 @@ export function useProfileSuggestions(
       // The Players tab listing in `useProfileList` separately filters
       // out the self-Profile because the tab is friend-only — keep
       // these two consumers' filters distinct.
-      const owned = await db.profiles.where("ownerId").equals(viewerId).toArray();
+      const all = await db.profiles.where("ownerId").equals(viewerId).toArray();
+      // Drop tombstoned profiles defensively — `mergeProfiles` /
+      // `mutations.deleteProfile` already hard-delete the local row,
+      // but the filter documents the invariant for the picker surface.
+      const owned = all.filter((p) => !p.deletedAt);
       owned.sort((a, b) => {
         const aSelf = a.linkedUserId === viewerId ? 0 : 1;
         const bSelf = b.linkedUserId === viewerId ? 0 : 1;

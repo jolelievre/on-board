@@ -53,6 +53,14 @@ export type LocalProfile = {
   createdAt: string;
   /** ISO timestamp — LWW key for pull-sync merge. */
   updatedAt: string;
+  /** Phase 8-G soft-delete tombstone. Optional so v7-and-earlier rows
+   * (where the column didn't exist) keep meaning "active". `mergeProfiles`
+   * hard-deletes the local row on any incoming row carrying a
+   * `deletedAt`; this field is therefore only ever observed transiently
+   * during a single merge pass. Active-read hooks filter
+   * `deletedAt == null` defensively so a queued delete that's mid-flight
+   * still hides the row from suggestions / stats / Players tab. */
+  deletedAt?: string;
   /** Denormalized linked-user projection. Null when unclaimed. */
   linkedUser: LocalProfileLinkedUser | null;
 };
@@ -104,6 +112,14 @@ export type SyncQueueEntry = {
    * re-post the same row. Cleared by 8-F's Retry action so a fresh
    * failure gets reported again. */
   reported?: boolean;
+  /** Phase 8-G — authoritative owner stamp captured at enqueue time.
+   * When set, `inferEntryOwnerId` reads this directly and skips the
+   * row-walking inference. Required for DELETE entries because the
+   * mutation hard-deletes the local Dexie row before flush runs, so
+   * the row-based inference would return null and `filterOwnedBy`
+   * would drop the entry as foreign. Optional on legacy entries —
+   * the row inference handles them. */
+  ownerId?: string;
 };
 
 export type LocalGame = {
@@ -128,6 +144,12 @@ export type LocalMatch = {
   completedAt: string | null;
   /** ISO timestamp — LWW key for pull-sync merge. */
   updatedAt: string;
+  /** Phase 8-G soft-delete tombstone. `mergeMatches` hard-deletes the
+   * local match + its players + scores on any incoming row carrying a
+   * `deletedAt`; this field is therefore transient (only observed during
+   * a single merge pass). Optional so v7-and-earlier rows keep meaning
+   * "active". */
+  deletedAt?: string;
 };
 
 /** Denormalized Profile projection embedded on each Player row when
@@ -399,6 +421,25 @@ class OnBoardDB extends Dexie {
           }
         }
       });
+
+    // v8 — Phase 8-G: introduce `deletedAt` on `LocalMatch` and
+    // `LocalProfile` (tombstone propagation for delete-match and
+    // delete-profile). No index changes — `deletedAt` is read alongside
+    // each row and filtered in-memory by the active hooks. No upgrader
+    // needed: the field is optional, and an absent value on legacy rows
+    // reads as "active". The version bump is bookkeeping so a future
+    // schema change can chain off v8 cleanly.
+    this.version(8).stores({
+      syncQueue: "++id, createdAt, status",
+      games: "id, slug",
+      matches:
+        "id, gameId, status, startedAt, updatedAt, [createdById+startedAt]",
+      players:
+        "id, matchId, profileId, profileLinkedUserId, [matchId+position]",
+      scores: "id, matchId, [matchId+playerId+category], updatedAt",
+      profiles: "id, ownerId, linkedUserId, usedAt, updatedAt",
+      syncMeta: "key",
+    });
   }
 }
 
