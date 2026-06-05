@@ -125,7 +125,7 @@ function MatchPage() {
                 <button
                   type="button"
                   onClick={() => setDeleteOpen(true)}
-                  aria-label={t("matches.delete.moreLabel")}
+                  aria-label={t("matches.delete.cta")}
                   data-testid="match-delete-trigger"
                   style={{
                     background: "transparent",
@@ -141,7 +141,7 @@ function MatchPage() {
                     cursor: "pointer",
                   }}
                 >
-                  <Icon name="more-vertical" size={18} />
+                  <Icon name="trash" size={18} />
                 </button>
               )}
             </span>

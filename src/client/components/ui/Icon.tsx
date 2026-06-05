@@ -37,8 +37,7 @@ export type IconName =
   | "zero"
   | "calendar-check"
   | "share"
-  | "trash"
-  | "more-vertical";
+  | "trash";
 
 type Props = {
   name: IconName;
@@ -441,18 +440,6 @@ export function Icon({ name, size = 20, stroke = 1.6, className, title }: Props)
           <path d="M10 4h4a1 1 0 011 1v2H9V5a1 1 0 011-1z" />
           <path d="M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13" />
           <path d="M10 11v6M14 11v6" />
-        </svg>
-      );
-    case "more-vertical":
-      // Three vertical dots — universal "overflow menu" affordance.
-      // Used in Phase 8-G to surface the destructive delete action
-      // alongside the existing per-screen primary actions.
-      return (
-        <svg {...props}>
-          {titleEl}
-          <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />
-          <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
-          <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
         </svg>
       );
     case "skull-king":

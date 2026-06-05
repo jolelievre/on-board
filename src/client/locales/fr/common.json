@@ -145,7 +145,6 @@
     "scoringNotSupported": "Le suivi de score pour {{game}} n'est pas encore disponible.",
     "delete": {
       "cta": "Supprimer la partie",
-      "moreLabel": "Options de la partie",
       "title": "Supprimer cette partie ?",
       "body": "Les scores et les joueurs disparaîtront pour tout le monde. Action irréversible.",
       "confirm": "Supprimer",
