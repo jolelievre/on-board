@@ -59,8 +59,14 @@ export type LocalProfile = {
    * `deletedAt`; this field is therefore only ever observed transiently
    * during a single merge pass. Active-read hooks filter
    * `deletedAt == null` defensively so a queued delete that's mid-flight
-   * still hides the row from suggestions / stats / Players tab. */
-  deletedAt?: string;
+   * still hides the row from suggestions / stats / Players tab.
+   *
+   * `string | null` (not just `string`) so the server-emitted `null`
+   * for active rows is structurally assignable — pull-sync's truthy
+   * check (`if (p.deletedAt)`) treats `null` and `undefined` the same,
+   * so accepting both keeps the API → Dexie boundary type-safe without
+   * forcing every construction site to write `deletedAt: null`. */
+  deletedAt?: string | null;
   /** Denormalized linked-user projection. Null when unclaimed. */
   linkedUser: LocalProfileLinkedUser | null;
 };
@@ -148,8 +154,12 @@ export type LocalMatch = {
    * local match + its players + scores on any incoming row carrying a
    * `deletedAt`; this field is therefore transient (only observed during
    * a single merge pass). Optional so v7-and-earlier rows keep meaning
-   * "active". */
-  deletedAt?: string;
+   * "active".
+   *
+   * `string | null` (not just `string`) so the server-emitted `null`
+   * for active rows is structurally assignable — see the matching
+   * comment on `LocalProfile.deletedAt`. */
+  deletedAt?: string | null;
 };
 
 /** Denormalized Profile projection embedded on each Player row when
