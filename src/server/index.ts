@@ -53,6 +53,16 @@ app.use("/assets/*", async (c, next) => {
   c.header("Cache-Control", "public, max-age=31536000, immutable");
 });
 
+// PWA install-prompt screenshots. Filenames are stable (renaming
+// requires editing both the manifest and the install page), so a long
+// immutable cache is safe — same reasoning as `/assets/*`, just on a
+// different prefix because Vite preserves the `public/` directory
+// structure for static files.
+app.use("/screenshots/*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "public, max-age=31536000, immutable");
+});
+
 // Serve SPA static files in production
 app.use("/*", serveStatic({ root: "./dist/client" }));
 app.get("*", serveStatic({ root: "./dist/client", path: "index.html" }));
