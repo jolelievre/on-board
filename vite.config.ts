@@ -5,6 +5,32 @@ import { VitePWA } from "vite-plugin-pwa";
 import type { IncomingHttpHeaders } from "http";
 import { readFile } from "node:fs/promises";
 import path from "path";
+import { execSync } from "node:child_process";
+
+// Version + commit SHA exposed to the client via Vite `define`. Surfaces
+// in Settings as a one-line footer so an installed PWA can be matched
+// to a specific deploy when triaging a bug report. Both values are
+// statically replaced at build time — no runtime cost.
+const PKG_VERSION = JSON.parse(
+  await readFile(path.resolve(__dirname, "package.json"), "utf-8"),
+).version as string;
+
+function resolveGitSha(): string {
+  // Build arg supplied by the Dockerfile is the source of truth in CI;
+  // fall back to `git rev-parse` for local builds. Empty string when
+  // neither is available so the footer can render `vX.Y.Z` alone.
+  const fromEnv = process.env.GIT_SHA;
+  if (fromEnv && fromEnv.length > 0) return fromEnv;
+  try {
+    return execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+  } catch {
+    return "";
+  }
+}
+
+const GIT_SHA = resolveGitSha();
 
 function toHeadersInit(raw: IncomingHttpHeaders): HeadersInit {
   const headers: [string, string][] = [];
@@ -226,9 +252,33 @@ export default defineConfig({
             purpose: "maskable",
           },
         ],
+        // Long-press / launcher shortcuts — surfaced by the OS when the
+        // user holds the home-screen icon. "Games" lands on the games
+        // list (the new-match starting point); "Stats" jumps straight to
+        // the dashboard.
+        shortcuts: [
+          {
+            name: "New match",
+            short_name: "New match",
+            description: "Start a new match",
+            url: "/games",
+            icons: [{ src: "/pwa-icon-192.png", sizes: "192x192" }],
+          },
+          {
+            name: "Stats",
+            short_name: "Stats",
+            description: "Open the stats dashboard",
+            url: "/stats",
+            icons: [{ src: "/pwa-icon-192.png", sizes: "192x192" }],
+          },
+        ],
       },
     }),
   ],
+  define: {
+    __APP_VERSION__: JSON.stringify(PKG_VERSION),
+    __GIT_SHA__: JSON.stringify(GIT_SHA),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

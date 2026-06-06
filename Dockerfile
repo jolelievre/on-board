@@ -15,6 +15,12 @@ WORKDIR /app
 #   preview → red bug badge, name "OnBoard Test"
 ARG DEPLOY_ENV=production
 ENV DEPLOY_ENV=${DEPLOY_ENV}
+# GIT_SHA flows into the Settings version footer via Vite `define`. Coolify
+# injects the deploy commit here so an installed PWA can be matched back to
+# a specific build when triaging a bug report. Optional — local Docker
+# builds without the arg fall back to `git rev-parse` inside vite.config.ts.
+ARG GIT_SHA=""
+ENV GIT_SHA=${GIT_SHA}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate

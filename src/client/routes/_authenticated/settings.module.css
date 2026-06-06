@@ -66,6 +66,15 @@
   color: var(--color-ink);
 }
 
+.versionFooter {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-ink-faint);
+  text-align: center;
+  margin: 0.75rem 0 1.25rem;
+  letter-spacing: 0.02em;
+}
+
 .hint {
   font-family: var(--font-body);
   font-size: 0.78rem;

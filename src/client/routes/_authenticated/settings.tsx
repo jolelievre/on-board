@@ -139,6 +139,11 @@ function SettingsPage() {
             <span aria-hidden>·</span>
             <Link to="/terms">{t("legal.terms.title")}</Link>
           </nav>
+
+          <p className={styles.versionFooter} data-testid="settings-version-footer">
+            OnBoard v{__APP_VERSION__}
+            {__GIT_SHA__ ? ` · ${__GIT_SHA__.slice(0, 7)}` : ""}
+          </p>
         </div>
       </div>
     </>
