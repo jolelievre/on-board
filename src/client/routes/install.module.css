@@ -1,0 +1,151 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem 1.75rem 2.5rem;
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.backLink {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--color-ink-soft);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.backLink:hover {
+  color: var(--color-ink);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.85rem;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.5rem;
+  color: var(--color-ink);
+}
+
+.intro {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--color-ink-soft);
+  margin: 0 0 1.75rem;
+}
+
+.section {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.sectionToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.125rem;
+  background: transparent;
+  border: 0;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.sectionToggle:hover {
+  background: var(--color-surface-alt);
+}
+
+.sectionHeading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.platformGlyph {
+  color: var(--color-ink-soft);
+  flex-shrink: 0;
+}
+
+.sectionBody {
+  padding: 0 1.125rem 1.125rem;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--color-ink);
+}
+
+.steps {
+  list-style: none;
+  counter-reset: install-step;
+  padding: 0;
+  margin: 0;
+}
+
+.steps li {
+  counter-increment: install-step;
+  position: relative;
+  padding: 0.5rem 0 0.5rem 2.25rem;
+}
+
+.steps li::before {
+  content: counter(install-step);
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: white;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.steps strong {
+  color: var(--color-ink);
+}
+
+.afterInstall {
+  margin-top: 2rem;
+  padding: 1rem 1.125rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--color-ink-soft);
+}
+
+.afterInstall strong {
+  color: var(--color-ink);
+}
+
+.bottom {
+  margin-top: 2rem;
+  display: flex;
+  justify-content: center;
+}

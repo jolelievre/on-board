@@ -85,6 +85,12 @@ function LoginPage() {
         />
       </p>
 
+      <p className={styles.installLink}>
+        <Link to="/install" data-testid="login-install-link">
+          {t("install.loginLink")}
+        </Link>
+      </p>
+
       <div className={styles.bottom}>
         <LanguageSelector />
       </div>

@@ -34,6 +34,26 @@
     },
     "back": "Retour"
   },
+  "install": {
+    "back": "Retour",
+    "title": "Installer OnBoard",
+    "intro": "OnBoard fonctionne mieux lorsqu'il est ajouté à votre écran d'accueil — il s'ouvre comme une vraie application, fonctionne hors ligne et garde votre session. Choisissez votre appareil ci-dessous.",
+    "loginLink": "Comment installer",
+    "ios": {
+      "title": "iPhone ou iPad (Safari)",
+      "step1": "Ouvrez cette page dans <b>Safari</b>. Les autres navigateurs sur iOS ne permettent pas d'installer d'applications web.",
+      "step2": "Appuyez sur le bouton <b>Partager</b> (carré avec une flèche vers le haut) en bas de l'écran.",
+      "step3": "Faites défiler vers le bas et appuyez sur <b>Sur l'écran d'accueil</b>.",
+      "step4": "Appuyez sur <b>Ajouter</b>. L'icône OnBoard apparaît sur votre écran d'accueil — ouvrez-la pour utiliser l'application."
+    },
+    "android": {
+      "title": "Android (Chrome)",
+      "step1": "Ouvrez cette page dans <b>Chrome</b>. La plupart des autres navigateurs Android le permettent aussi — le libellé du menu peut différer.",
+      "step2": "Appuyez sur le <b>menu ⋮</b> en haut à droite.",
+      "step3": "Appuyez sur <b>Installer l'application</b> (ou <b>Ajouter à l'écran d'accueil</b>). Confirmez pour ajouter l'icône OnBoard à votre écran d'accueil."
+    },
+    "afterInstall": "<b>Après l'installation</b>, ouvrez OnBoard depuis votre écran d'accueil et connectez-vous. Vous n'aurez à le faire qu'une seule fois."
+  },
   "settings": {
     "title": "Paramètres",
     "profile": "Profil",
