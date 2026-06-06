@@ -39,6 +39,26 @@
     "title": "Installer OnBoard",
     "intro": "OnBoard fonctionne mieux lorsqu'il est ajouté à votre écran d'accueil — il s'ouvre comme une vraie application, fonctionne hors ligne et garde votre session. Choisissez votre appareil ci-dessous.",
     "loginLink": "Comment installer",
+    "hero": {
+      "tagline": "Suivi des scores de jeux de société",
+      "pitch": "Notez et suivez vos parties entre amis. Hors ligne. Sans pub. Gratuit."
+    },
+    "features": {
+      "scoring": "Scoring intégré pour 7 Wonders Duel et Skull King.",
+      "offline": "Fonctionne hors ligne — notez une partie n'importe où, la synchronisation suit.",
+      "friends": "Gardez vos amis en profil et voyez qui gagne sur la durée.",
+      "share": "Partagez un résumé de partie via un lien public, sans installation requise."
+    },
+    "screenshotsTitle": "Aperçu",
+    "screenshots": {
+      "games": "Choisissez un jeu",
+      "scoring7wd": "Notez 7 Wonders Duel",
+      "scoringSk": "Résultats à Skull King",
+      "players": "Vos profils d'amis",
+      "profile": "Stats et parties d'un ami",
+      "studio": "Personnalisez les avatars"
+    },
+    "stepsTitle": "Comment installer",
     "ios": {
       "title": "iPhone ou iPad (Safari)",
       "step1": "Ouvrez cette page dans <b>Safari</b>. Les autres navigateurs sur iOS ne permettent pas d'installer d'applications web.",

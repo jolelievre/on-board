@@ -22,6 +22,17 @@ function detectPlatform(): Platform | null {
   return null;
 }
 
+const SCREENSHOTS = [
+  { src: "/screenshots/01-games.png", key: "games" as const },
+  { src: "/screenshots/02-scoring-7wd.png", key: "scoring7wd" as const },
+  { src: "/screenshots/03-scoring-sk.png", key: "scoringSk" as const },
+  { src: "/screenshots/04-players.png", key: "players" as const },
+  { src: "/screenshots/05-profile.png", key: "profile" as const },
+  { src: "/screenshots/06-studio.png", key: "studio" as const },
+];
+
+const FEATURES = ["scoring", "offline", "friends", "share"] as const;
+
 function InstallPage() {
   const { t } = useTranslation();
   const initialPlatform = useMemo(detectPlatform, []);
@@ -37,7 +48,56 @@ function InstallPage() {
         <LanguageSelector />
       </div>
 
-      <h1 className={styles.title}>{t("install.title")}</h1>
+      <section className={styles.hero} data-testid="install-hero">
+        <img
+          src="/pwa-icon-192.png"
+          alt=""
+          width={88}
+          height={88}
+          className={styles.heroIcon}
+        />
+        <div className={styles.heroText}>
+          <h1 className={styles.heroName}>{t("app.name")}</h1>
+          <p className={styles.heroTagline}>{t("install.hero.tagline")}</p>
+          <p className={styles.heroPitch}>{t("install.hero.pitch")}</p>
+        </div>
+      </section>
+
+      <ul className={styles.features} data-testid="install-features">
+        {FEATURES.map((key) => (
+          <li key={key} className={styles.featureRow}>
+            <Icon name="check" size={14} className={styles.featureIcon} />
+            <span>{t(`install.features.${key}`)}</span>
+          </li>
+        ))}
+      </ul>
+
+      <section
+        className={styles.screenshotStrip}
+        data-testid="install-screenshots"
+      >
+        <h2 className={styles.sectionTitle}>{t("install.screenshotsTitle")}</h2>
+        <div className={styles.screenshotScroller}>
+          {SCREENSHOTS.map((shot) => (
+            <figure key={shot.src} className={styles.screenshotFrame}>
+              <img
+                src={shot.src}
+                alt={t(`install.screenshots.${shot.key}`)}
+                className={styles.screenshotImg}
+                // Lazy-load — the install page is the only place these
+                // render in the app, and they're heavy.
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption className={styles.screenshotCaption}>
+                {t(`install.screenshots.${shot.key}`)}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
+
+      <h2 className={styles.sectionTitle}>{t("install.stepsTitle")}</h2>
       <p className={styles.intro}>{t("install.intro")}</p>
 
       <PlatformSection

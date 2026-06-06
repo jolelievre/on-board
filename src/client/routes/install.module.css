@@ -46,6 +46,136 @@
   margin: 0 0 1.75rem;
 }
 
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.heroIcon {
+  width: 88px;
+  height: 88px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  flex-shrink: 0;
+}
+
+.heroText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.heroName {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.65rem;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--color-ink);
+}
+
+.heroTagline {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-ink-faint);
+  margin: 0;
+}
+
+.heroPitch {
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--color-ink);
+  margin: 0.25rem 0 0;
+}
+
+.features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.featureRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: var(--color-ink);
+}
+
+.featureIcon {
+  color: var(--color-accent);
+  flex-shrink: 0;
+  margin-top: 0.2rem;
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  margin: 0 0 0.75rem;
+  color: var(--color-ink);
+}
+
+.screenshotStrip {
+  margin: 0 0 1.75rem;
+  /* Break out of the page padding so the scroll runs edge-to-edge. */
+  margin-left: -1.75rem;
+  margin-right: -1.75rem;
+  padding: 0 1.75rem;
+}
+
+.screenshotStrip .sectionTitle {
+  padding: 0;
+}
+
+.screenshotScroller {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.screenshotFrame {
+  margin: 0;
+  flex: 0 0 auto;
+  width: 65vw;
+  max-width: 240px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.screenshotImg {
+  width: 100%;
+  height: 380px;
+  object-fit: cover;
+  object-position: top center;
+  border-radius: 18px;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-soft);
+  background: var(--color-surface);
+}
+
+.screenshotCaption {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: var(--color-ink-soft);
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
 .section {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);

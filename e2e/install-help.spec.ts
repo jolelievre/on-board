@@ -9,7 +9,12 @@ test.describe("Public install help page", () => {
     await page.waitForLoadState("domcontentloaded");
     // Page must not redirect to /
     await expect(page).toHaveURL(/\/install$/);
-    await expect(page.locator("h1")).toContainText("Install OnBoard");
+    // Hero block surfaces the app name, tagline + pitch.
+    await expect(page.getByTestId("install-hero")).toBeVisible();
+    await expect(page.locator("h1")).toContainText("OnBoard");
+    // Features list and screenshot strip render below the hero.
+    await expect(page.getByTestId("install-features")).toBeVisible();
+    await expect(page.getByTestId("install-screenshots")).toBeVisible();
   });
 
   test("iOS and Android sections are both present, default-open follows UA", async ({
@@ -67,7 +72,7 @@ test.describe("Public install help page", () => {
     await expect(link).toBeVisible();
     await link.click();
     await page.waitForURL(/\/install$/);
-    await expect(page.locator("h1")).toContainText("Install OnBoard");
+    await expect(page.getByTestId("install-hero")).toBeVisible();
   });
 });
 

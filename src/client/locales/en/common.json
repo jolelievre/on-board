@@ -39,6 +39,26 @@
     "title": "Install OnBoard",
     "intro": "OnBoard works best when added to your home screen — it opens like a regular app, runs offline, and stays signed in. Pick your device below.",
     "loginLink": "How to install",
+    "hero": {
+      "tagline": "Board game score tracker",
+      "pitch": "Score and follow your matches with friends. Offline-ready. No ads. Free."
+    },
+    "features": {
+      "scoring": "Built-in scoring for 7 Wonders Duel and Skull King.",
+      "offline": "Works offline — score a match anywhere and sync later.",
+      "friends": "Track friends as profiles, see who's winning over time.",
+      "share": "Share a match summary as a public link, no install required."
+    },
+    "screenshotsTitle": "A look inside",
+    "screenshots": {
+      "games": "Pick a game",
+      "scoring7wd": "Score 7 Wonders Duel",
+      "scoringSk": "Skull King results",
+      "players": "Your friend profiles",
+      "profile": "A friend's stats and matches",
+      "studio": "Customize avatars"
+    },
+    "stepsTitle": "How to install",
     "ios": {
       "title": "iPhone or iPad (Safari)",
       "step1": "Open this page in <b>Safari</b>. Other browsers on iOS can't install web apps.",
