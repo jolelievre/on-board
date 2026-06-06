@@ -86,7 +86,9 @@ function InstallPage() {
         <h2 className={styles.sectionTitle}>{t("install.screenshotsTitle")}</h2>
         <div className={styles.screenshotScroller}>
           {SCREENSHOTS.map((shot, idx) => {
-            const webp = shot.src.replace(/\.png$/, ".webp") + SCREENSHOT_V;
+            const webpLg = shot.src.replace(/\.png$/, ".webp") + SCREENSHOT_V;
+            const webpSm =
+              shot.src.replace(/\.png$/, "-360w.webp") + SCREENSHOT_V;
             const png = shot.src + SCREENSHOT_V;
             const caption = t(`install.screenshots.${shot.key}`);
             // The first screenshot is above the fold on desktop and
@@ -95,10 +97,18 @@ function InstallPage() {
             // stay lazy since they only matter once the user scrolls
             // into the strip.
             const isFirst = idx === 0;
+            // Strip caps at 240 CSS-px on desktop; on phones the 65vw
+            // rule yields ~150-220 CSS-px. With srcset+sizes the
+            // browser picks the 360w WebP on most mobile DPRs and the
+            // 720w only when device pixel ratio actually warrants it.
             return (
               <figure key={shot.src} className={styles.screenshotFrame}>
                 <picture>
-                  <source srcSet={webp} type="image/webp" />
+                  <source
+                    type="image/webp"
+                    srcSet={`${webpSm} 360w, ${webpLg} 720w`}
+                    sizes="(max-width: 480px) 65vw, 240px"
+                  />
                   <img
                     src={png}
                     alt={caption}

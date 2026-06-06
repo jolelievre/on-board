@@ -29,7 +29,12 @@ const DIR = path.resolve(
   "public",
   "screenshots",
 );
-const TARGET_WIDTH = 720;
+// Two srcset candidates so mobile (where the strip caps at ~140 px
+// wide) doesn't download the 720 px desktop variant. Lighthouse's
+// `uses-responsive-images` audit flagged ~300 KiB of avoidable bytes
+// on mobile from this gap.
+const WIDTHS = [720, 360] as const;
+const PRIMARY_WIDTH = WIDTHS[0]; // PNG fallback + manifest reference
 const WEBP_QUALITY = 80;
 
 async function main() {
@@ -55,29 +60,43 @@ async function main() {
   for (const file of pngs) {
     const srcPath = path.join(DIR, file);
     const meta = await sharp(srcPath).metadata();
-    const width = meta.width ?? TARGET_WIDTH;
+    const width = meta.width ?? PRIMARY_WIDTH;
 
-    // If a previous run already downsized below the target width,
+    // If a previous run already downsized below the primary width,
     // skip rework — keeps `npm run build` idempotent.
-    const needsResize = width > TARGET_WIDTH;
+    const needsResize = width > PRIMARY_WIDTH;
 
-    // Always emit the WebP sibling (cheap, even on a small input).
-    const webpPath = srcPath.replace(/\.png$/, ".webp");
-    await sharp(srcPath)
-      .resize({ width: TARGET_WIDTH, withoutEnlargement: true })
-      .webp({ quality: WEBP_QUALITY })
-      .toFile(webpPath);
+    // Emit one WebP per candidate width. The primary (720) is what
+    // the manifest references; the smaller (360) only ships via the
+    // <picture> srcSet on /install.
+    const base = file.replace(/\.png$/, "");
+    const emitted: string[] = [];
+    for (const w of WIDTHS) {
+      const out = path.join(
+        DIR,
+        w === PRIMARY_WIDTH ? `${base}.webp` : `${base}-${w}w.webp`,
+      );
+      await sharp(srcPath)
+        .resize({ width: w, withoutEnlargement: true })
+        .webp({ quality: WEBP_QUALITY })
+        .toFile(out);
+      emitted.push(path.basename(out));
+    }
 
     if (needsResize) {
-      // Replace the PNG in place. Buffer the resized output first
-      // because sharp can't read and write to the same path.
+      // Replace the PNG in place with the primary-width version.
+      // Buffer first — sharp can't read and write to the same path.
       const buf = await sharp(srcPath)
-        .resize({ width: TARGET_WIDTH, withoutEnlargement: true })
+        .resize({ width: PRIMARY_WIDTH, withoutEnlargement: true })
         .png({ compressionLevel: 9 })
         .toBuffer();
       await fs.writeFile(srcPath, buf);
     }
-    console.log(`optimize-screenshots: ${file} -> ${webpPath}${needsResize ? " (resized PNG)" : ""}`);
+    console.log(
+      `optimize-screenshots: ${file} -> ${emitted.join(", ")}${
+        needsResize ? " (resized PNG)" : ""
+      }`,
+    );
   }
 }
 
