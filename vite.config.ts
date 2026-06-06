@@ -291,5 +291,10 @@ export default defineConfig({
   },
   build: {
     outDir: "dist/client",
+    // Ship source maps to production. The audience is friends, not the
+    // open web, so the small confidentiality trade-off is fine; in
+    // exchange the browser devtools (and Lighthouse's `valid-source-maps`
+    // audit) get real symbols when triaging a bug report.
+    sourcemap: true,
   },
 });
