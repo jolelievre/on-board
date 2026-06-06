@@ -22,6 +22,13 @@ function detectPlatform(): Platform | null {
   return null;
 }
 
+// Version-busted cache key so a `package.json` bump invalidates the
+// 1-year cache on /screenshots/* and the browser refetches the new
+// PNG/WebP. Filenames are stable across releases so without this the
+// long-cache headers would keep serving the old artwork until manual
+// purge. Matches the manifest entries' `?v=__APP_VERSION__` suffix.
+const SCREENSHOT_V = `?v=${__APP_VERSION__}`;
+
 const SCREENSHOTS = [
   { src: "/screenshots/01-games.png", key: "games" as const },
   { src: "/screenshots/02-scoring-7wd.png", key: "scoring7wd" as const },
@@ -78,22 +85,35 @@ function InstallPage() {
       >
         <h2 className={styles.sectionTitle}>{t("install.screenshotsTitle")}</h2>
         <div className={styles.screenshotScroller}>
-          {SCREENSHOTS.map((shot) => (
-            <figure key={shot.src} className={styles.screenshotFrame}>
-              <img
-                src={shot.src}
-                alt={t(`install.screenshots.${shot.key}`)}
-                className={styles.screenshotImg}
-                // Lazy-load — the install page is the only place these
-                // render in the app, and they're heavy.
-                loading="lazy"
-                decoding="async"
-              />
-              <figcaption className={styles.screenshotCaption}>
-                {t(`install.screenshots.${shot.key}`)}
-              </figcaption>
-            </figure>
-          ))}
+          {SCREENSHOTS.map((shot, idx) => {
+            const webp = shot.src.replace(/\.png$/, ".webp") + SCREENSHOT_V;
+            const png = shot.src + SCREENSHOT_V;
+            const caption = t(`install.screenshots.${shot.key}`);
+            // The first screenshot is above the fold on desktop and
+            // becomes the LCP element — eager-load + fetchpriority high
+            // so Lighthouse doesn't flag `lcp-lazy-loaded`. The rest
+            // stay lazy since they only matter once the user scrolls
+            // into the strip.
+            const isFirst = idx === 0;
+            return (
+              <figure key={shot.src} className={styles.screenshotFrame}>
+                <picture>
+                  <source srcSet={webp} type="image/webp" />
+                  <img
+                    src={png}
+                    alt={caption}
+                    className={styles.screenshotImg}
+                    loading={isFirst ? "eager" : "lazy"}
+                    fetchPriority={isFirst ? "high" : "auto"}
+                    decoding="async"
+                  />
+                </picture>
+                <figcaption className={styles.screenshotCaption}>
+                  {caption}
+                </figcaption>
+              </figure>
+            );
+          })}
         </div>
       </section>
 
