@@ -278,6 +278,10 @@ async function captureLoginScreens(page: Page, suffix: string) {
 
   await shoot(page, `01-login-dev${suffix}`);
 
+  // Production-look #1: Google only. Replicates a deploy where only
+  // GOOGLE_CLIENT_ID is configured server-side. Kept as a separate
+  // capture from -both below so a design session can compare the
+  // single-button against the multi-provider layout.
   await page.evaluate(() => {
     const form = document.querySelector("form");
     if (!form) return;
@@ -289,6 +293,36 @@ async function captureLoginScreens(page: Page, suffix: string) {
     form.replaceWith(btn);
   });
   await shoot(page, `01-login-prod${suffix}`);
+
+  // Production-look #2: both providers visible. Synthetic — the test-auth
+  // form is replaced with two stacked buttons that mimic the prod
+  // `SocialProviderButtons` render. We don't drive the real
+  // `/api/auth/providers` endpoint because the test-mode dev server
+  // never returns Google/Facebook from it.
+  await page.goto(BASE_URL);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("h1");
+  await page.evaluate(() => {
+    const form = document.querySelector("form");
+    if (!form) return;
+    const container = document.createElement("div");
+    container.style.cssText =
+      "display:flex;flex-direction:column;gap:0.75rem;width:100%;max-width:22rem;margin:0 auto;";
+    const cls =
+      "rounded-lg bg-white px-4 py-3 font-medium text-gray-700 shadow-sm ring-1 ring-gray-300 hover:bg-gray-50";
+    const g = document.createElement("button");
+    g.type = "button";
+    g.className = cls;
+    g.textContent = "Sign in with Google";
+    container.appendChild(g);
+    const f = document.createElement("button");
+    f.type = "button";
+    f.className = cls;
+    f.textContent = "Sign in with Facebook";
+    container.appendChild(f);
+    form.replaceWith(container);
+  });
+  await shoot(page, `01-login-prod-both${suffix}`);
 }
 
 async function captureGamesAndNewMatch(
@@ -654,36 +688,80 @@ async function capturePlayersAndProfile(
   await shoot(page, `22-profile-detail${suffix}`);
 }
 
+/** Capture all 4 Avatar Capture Studio states: hub, camera, reposition,
+ * style. Reposition + style are wrapped in try/catch — if the fake
+ * device doesn't produce a captureable frame, we still bank the hub +
+ * camera screens rather than failing the whole run. */
 async function captureAvatarUploader(page: Page, suffix: string, friend: SeededFriend) {
   await page.goto(`${BASE_URL}/players/${friend.id}`);
   await page.waitForLoadState("domcontentloaded");
   await page.waitForSelector("[data-testid='profile-edit-avatar']");
 
-  // Open the editor.
+  // 1. Hub — the default screen after opening the studio.
   await page.click("[data-testid='profile-edit-avatar']");
   await page.waitForSelector("[data-testid='avatar-uploader']");
+  await page.waitForSelector("[data-testid='studio-new-photo']");
   await page.waitForTimeout(150);
-  await shoot(page, `23-avatar-uploader-idle${suffix}`);
+  await shoot(page, `23-studio-hub${suffix}`);
 
-  // Camera mode. The stubbed getUserMedia returns a canvas stream;
-  // wait for the video element to start playing before screenshotting.
-  await page.click("[data-testid='avatar-open-camera']");
-  await page.waitForSelector("[data-testid='avatar-camera-capture']");
-  await page.waitForFunction(() => {
-    const v = document.querySelector("video");
-    return v instanceof HTMLVideoElement && v.readyState >= 2;
-  }, { timeout: 5_000 }).catch(() => { /* still capture even if readyState stalls */ });
+  // 2. Camera — fake device emits a synthetic stream; wait for video
+  //    to be playable before screenshotting.
+  await page.click("[data-testid='studio-new-photo']");
+  await page.waitForSelector("[data-testid='studio-camera']");
+  await page
+    .waitForFunction(
+      () => {
+        const v = document.querySelector("[data-testid='studio-camera'] video");
+        return v instanceof HTMLVideoElement && v.readyState >= 2;
+      },
+      { timeout: 5_000 },
+    )
+    .catch(() => { /* capture anyway */ });
   await page.waitForTimeout(400);
-  await shoot(page, `24-avatar-uploader-camera${suffix}`);
+  await shoot(page, `24-studio-camera${suffix}`);
 
-  // Exit cleanly so the camera shuts down before the next screen.
-  await page.click("[data-testid='avatar-camera-cancel']");
+  // 3. Reposition — tap the shutter, the captured frame moves into the
+  //    reposition screen.
+  try {
+    await page.click("[data-testid='studio-camera-shutter']");
+    await page.waitForSelector("[data-testid='studio-reposition']", {
+      timeout: 5_000,
+    });
+    await page.waitForTimeout(300);
+    await shoot(page, `25-studio-reposition${suffix}`);
+
+    // 4. Style — confirm reposition → lands on the style screen.
+    await page.click("[data-testid='studio-reposition-confirm']");
+    await page.waitForSelector("[data-testid='studio-style']", {
+      timeout: 5_000,
+    });
+    await page.waitForTimeout(200);
+    await shoot(page, `26-studio-style${suffix}`);
+
+    // Back out without saving so we don't persist the synthetic photo
+    // (it would leak into subsequent captures of the same profile).
+    await page.click("[data-testid='studio-style-back']");
+  } catch (err) {
+    console.warn(
+      `captureAvatarUploader: reposition/style stages skipped (${(err as Error).message})`,
+    );
+  }
+
+  // Close the editor.
   await page.click("[data-testid='avatar-done']").catch(() => {});
 }
 
 async function captureLinkSurfaces(page: Page, suffix: string, friend: SeededFriend) {
   await page.goto(`${BASE_URL}/players/${friend.id}`);
   await page.waitForLoadState("domcontentloaded");
+
+  // The link buttons live inside the editor — open it via the pencil
+  // overlay (`profile-edit-avatar`). Same selector + click pattern as
+  // captureMergeDialog. Pre-Phase-8 the link section was on the default
+  // profile view; the editor-only model landed in Phase 8.
+  await page.waitForSelector("[data-testid='profile-edit-avatar']");
+  await page.click("[data-testid='profile-edit-avatar']");
+  await page.waitForSelector("[data-testid='profile-editor']");
   await page.waitForSelector("[data-testid='profile-link-show']");
 
   // QR display.
@@ -705,11 +783,14 @@ async function captureLinkSurfaces(page: Page, suffix: string, friend: SeededFri
     }
   }, { timeout: 5_000 }).catch(() => { /* capture anyway */ });
   await page.waitForTimeout(200);
-  await shoot(page, `25-link-code-display${suffix}`);
+  await shoot(page, `27-link-code-display${suffix}`);
 
-  // Back out and open scanner.
+  // Back out and open scanner — reopen the editor since the goto
+  // closed it (editor state is component-local).
   await page.goto(`${BASE_URL}/players/${friend.id}`);
   await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='profile-edit-avatar']");
+  await page.click("[data-testid='profile-edit-avatar']");
   await page.waitForSelector("[data-testid='profile-link-scan']");
   await page.click("[data-testid='profile-link-scan']");
   await page.waitForSelector("[data-testid='link-scanner']");
@@ -743,7 +824,7 @@ async function captureLinkSurfaces(page: Page, suffix: string, friend: SeededFri
     )
     .catch(() => { /* capture anyway */ });
   await page.waitForTimeout(400);
-  await shoot(page, `26-link-scanner${suffix}`);
+  await shoot(page, `28-link-scanner${suffix}`);
 
   // Exit scanner.
   await page.goto(`${BASE_URL}/players/${friend.id}`);
@@ -753,12 +834,85 @@ async function captureLinkSurfaces(page: Page, suffix: string, friend: SeededFri
 async function captureMergeDialog(page: Page, suffix: string, friend: SeededFriend) {
   await page.goto(`${BASE_URL}/players/${friend.id}`);
   await page.waitForLoadState("domcontentloaded");
+  // Merge action lives inside the editor like the link buttons —
+  // pencil overlay opens it.
+  await page.waitForSelector("[data-testid='profile-edit-avatar']");
+  await page.click("[data-testid='profile-edit-avatar']");
   await page.waitForSelector("[data-testid='profile-merge-action']");
   await page.click("[data-testid='profile-merge-action']");
   await page.waitForSelector("[role='dialog']").catch(() => {});
   await page.waitForTimeout(200);
-  await shoot(page, `27-merge-dialog${suffix}`);
+  await shoot(page, `29-merge-dialog${suffix}`);
   await page.keyboard.press("Escape");
+}
+
+async function captureStatsDashboard(page: Page, suffix: string) {
+  await page.goto(`${BASE_URL}/stats`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='stats-hero']");
+  await page.waitForTimeout(200);
+  await shoot(page, `33-stats-dashboard${suffix}`);
+
+  // Achievements tab — second panel in the same page, captures the
+  // friend-circle achievement stamps with the seeded match history.
+  await page.click("[data-testid='stats-tabs'] button:has-text('Achievements'), [data-testid='stats-tabs'] button:has-text('Succès')");
+  await page.waitForSelector("[data-testid='achievements-panel']");
+  await page.waitForTimeout(200);
+  await shoot(page, `34-achievements${suffix}`);
+}
+
+/** Public install help page. Doesn't require auth, but we drive the
+ * capture from inside the signed-in session for consistency with the
+ * rest of the pass — the cookie is harmless on a public route. */
+async function captureInstallHelp(page: Page, suffix: string) {
+  await page.goto(`${BASE_URL}/install`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='install-section-ios']");
+  await page.waitForTimeout(200);
+  await shoot(page, `35-install-help${suffix}`);
+}
+
+/** Public share-link page. Mints a token off the most recent completed
+ * 7WD match (seeded in `seedData`) and visits the public `/share/:token`
+ * route to capture the unauthed reader view. */
+async function captureShareLinkPage(page: Page, suffix: string) {
+  const req = page.context().request;
+  // Find a completed match via the matches list — first one suffices.
+  const matchesRes = await req.get("/api/matches");
+  if (!matchesRes.ok()) {
+    throw new Error(`captureShareLinkPage: list matches ${matchesRes.status()}`);
+  }
+  const matches = (await matchesRes.json()) as { id: string; status: string }[];
+  const completed = matches.find((m) => m.status === "COMPLETED");
+  if (!completed) {
+    console.warn("captureShareLinkPage: no completed match — skipping");
+    return;
+  }
+  const tokRes = await req.post(`/api/matches/${completed.id}/share-token`);
+  if (!tokRes.ok() && tokRes.status() !== 201) {
+    throw new Error(`captureShareLinkPage: mint token ${tokRes.status()}`);
+  }
+  const { token } = (await tokRes.json()) as { token: string };
+
+  await page.goto(`${BASE_URL}/share/${token}`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("[data-testid='share-summary']");
+  await page.waitForTimeout(300);
+  await shoot(page, `36-share-link${suffix}`);
+}
+
+async function captureLegalPages(page: Page, suffix: string) {
+  await page.goto(`${BASE_URL}/privacy`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("h1");
+  await page.waitForTimeout(150);
+  await shoot(page, `37-privacy${suffix}`);
+
+  await page.goto(`${BASE_URL}/terms`);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForSelector("h1");
+  await page.waitForTimeout(150);
+  await shoot(page, `38-terms${suffix}`);
 }
 
 async function captureSettings(page: Page, theme: Theme, suffix: string) {
@@ -770,7 +924,7 @@ async function captureSettings(page: Page, theme: Theme, suffix: string) {
   await ensureLanguage(page, "en");
   await ensureTheme(page, theme);
   await page.waitForSelector("[data-testid='profile-edit-avatar']");
-  await shoot(page, `28-settings${suffix}`);
+  await shoot(page, `30-settings${suffix}`);
 
   // Open the avatar editor on the self-Profile — this is the only path
   // where the linked-avatar toggle is visible (self-Profile is linked
@@ -778,11 +932,11 @@ async function captureSettings(page: Page, theme: Theme, suffix: string) {
   await page.click("[data-testid='profile-edit-avatar']");
   await page.waitForSelector("[data-testid='avatar-uploader']");
   await page.waitForTimeout(150);
-  await shoot(page, `29-settings-avatar-editing${suffix}`);
+  await shoot(page, `31-settings-avatar-editing${suffix}`);
   await page.click("[data-testid='avatar-done']").catch(() => {});
 
   await ensureLanguage(page, "fr");
-  await shoot(page, `30-settings-french${suffix}`);
+  await shoot(page, `32-settings-french${suffix}`);
   await ensureLanguage(page, "en");
 }
 
@@ -807,6 +961,10 @@ async function captureAuthPass(
   await captureLinkSurfaces(page, suffix, friends[0]);
   await captureMergeDialog(page, suffix, friends[0]);
   await captureSettings(page, theme, suffix);
+  await captureStatsDashboard(page, suffix);
+  await captureInstallHelp(page, suffix);
+  await captureShareLinkPage(page, suffix);
+  await captureLegalPages(page, suffix);
 }
 
 async function clearOutDir() {

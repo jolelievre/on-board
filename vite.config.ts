@@ -219,6 +219,11 @@ export default defineConfig({
       workbox: {
         // Precache everything Vite emits, including bundled font files.
         globPatterns: ["**/*.{js,css,html,woff,woff2,svg,png,ico}"],
+        // Install-prompt screenshots aren't on the critical path — only
+        // fetched when Chrome/Edge renders the install dialog or the
+        // public /install page surfaces them. Skipping them shaves ~1MB
+        // off the precache and the SW install round.
+        globIgnores: ["**/screenshots/**"],
         // The SPA shell handles routing — fall back to index.html for
         // navigations so the app still loads when offline.
         navigateFallback: "/index.html",
@@ -270,6 +275,56 @@ export default defineConfig({
             description: "Open the stats dashboard",
             url: "/stats",
             icons: [{ src: "/pwa-icon-192.png", sizes: "192x192" }],
+          },
+        ],
+        // Install-prompt screenshots. Android Chrome (and Edge) render
+        // these in the rich install dialog; iOS Safari ignores the field
+        // entirely and uses its own minimal share-sheet UI. Narrow
+        // (mobile portrait) only — the friend-circle audience installs
+        // from a phone. Sizes are the actual Pixel-5 full-page captures
+        // produced by `npm run screenshots`.
+        screenshots: [
+          {
+            src: "/screenshots/01-games.png",
+            sizes: "1081x1999",
+            type: "image/png",
+            form_factor: "narrow",
+            label: "Pick a game and start a new match",
+          },
+          {
+            src: "/screenshots/02-scoring-7wd.png",
+            sizes: "1081x2761",
+            type: "image/png",
+            form_factor: "narrow",
+            label: "Score a 7 Wonders Duel match in progress",
+          },
+          {
+            src: "/screenshots/03-scoring-sk.png",
+            sizes: "1081x2272",
+            type: "image/png",
+            form_factor: "narrow",
+            label: "Score Skull King rounds with bid bonuses",
+          },
+          {
+            src: "/screenshots/04-players.png",
+            sizes: "1081x1999",
+            type: "image/png",
+            form_factor: "narrow",
+            label: "Keep your friend profiles in one place",
+          },
+          {
+            src: "/screenshots/05-profile.png",
+            sizes: "1081x5632",
+            type: "image/png",
+            form_factor: "narrow",
+            label: "See a friend's stats and recent matches",
+          },
+          {
+            src: "/screenshots/06-studio.png",
+            sizes: "1081x7304",
+            type: "image/png",
+            form_factor: "narrow",
+            label: "Customize avatars and frames",
           },
         ],
       },
