@@ -75,6 +75,15 @@
       "cta": "Ajouter à l'écran d'accueil",
       "iosHint": "Sur iOS, appuyez sur le bouton Partager dans Safari, puis « Sur l'écran d'accueil »."
     },
+    "shareApp": {
+      "title": "Partager OnBoard",
+      "hint": "Envoyez à un proche un lien pour installer OnBoard sur son téléphone.",
+      "cta": "Partager OnBoard",
+      "copyCta": "Copier le lien d'installation",
+      "copied": "Lien copié",
+      "shareTitle": "OnBoard — suivi des scores de jeux de société",
+      "shareText": "Notez et suivez vos parties de jeux de société avec OnBoard."
+    },
     "sync": {
       "title": "File de synchronisation",
       "ok": "Tout est synchronisé",

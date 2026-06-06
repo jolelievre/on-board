@@ -83,3 +83,52 @@ test.describe("Settings version footer", () => {
     await expect(footer).toContainText(/^OnBoard v\d+\.\d+\.\d+/);
   });
 });
+
+test.describe("Share-app button in Settings", () => {
+  test("copies the absolute /install URL when Web Share is unavailable", async ({
+    page,
+  }) => {
+    // Force the fallback clipboard path on both browsers:
+    // - hide navigator.share so the button skips the native sheet
+    //   (which Playwright can't drive)
+    // - replace navigator.clipboard.writeText with a sniffer that
+    //   captures the argument on window.__lastCopy — sidesteps the
+    //   browser-specific clipboard permission grant (chromium accepts
+    //   `clipboard-write`, webkit doesn't).
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "share", {
+        configurable: true,
+        get: () => undefined,
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: (text: string) => {
+            (window as unknown as { __lastCopy?: string }).__lastCopy = text;
+            return Promise.resolve();
+          },
+          readText: () =>
+            Promise.resolve(
+              (window as unknown as { __lastCopy?: string }).__lastCopy ?? "",
+            ),
+        },
+      });
+    });
+
+    await page.goto("/settings");
+    await page.waitForLoadState("domcontentloaded");
+
+    const button = page.getByTestId("share-app-button");
+    await expect(button).toBeVisible();
+
+    await button.click();
+    // Transient confirmation flips the label.
+    await expect(button).toContainText(/copied|copié/i);
+
+    const lastCopy = await page.evaluate(
+      () => (window as unknown as { __lastCopy?: string }).__lastCopy,
+    );
+    const origin = await page.evaluate(() => window.location.origin);
+    expect(lastCopy).toBe(`${origin}/install`);
+  });
+});

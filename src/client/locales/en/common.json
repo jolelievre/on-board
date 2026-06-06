@@ -75,6 +75,15 @@
       "cta": "Add to home screen",
       "iosHint": "On iOS, tap the Share button in Safari, then \"Add to Home Screen\"."
     },
+    "shareApp": {
+      "title": "Share OnBoard",
+      "hint": "Send a friend a link to install OnBoard on their phone.",
+      "cta": "Share OnBoard",
+      "copyCta": "Copy install link",
+      "copied": "Link copied",
+      "shareTitle": "OnBoard — board game score tracker",
+      "shareText": "Score and follow your board-game matches with OnBoard."
+    },
     "sync": {
       "title": "Sync queue",
       "ok": "All changes synced",
