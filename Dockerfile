@@ -8,6 +8,10 @@ RUN npm ci --include=dev
 ### Stage 2: Build client + server
 FROM node:20-alpine AS builder
 WORKDIR /app
+# Install git so vite.config.ts's `git rev-parse HEAD` fallback works
+# when no GIT_SHA build arg is passed (the .git/ directory is copied in
+# below). Cheap fallback layer — only matters in the discarded builder.
+RUN apk add --no-cache git
 # DEPLOY_ENV controls per-environment PWA branding (icon badge + manifest
 # name + theme color). Coolify passes this as a build arg per environment:
 #   production → no badge, name "OnBoard"
