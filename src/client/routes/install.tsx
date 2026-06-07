@@ -2,7 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { LanguageSelector } from "../components/LanguageSelector";
+import { Button } from "../components/ui/Button";
 import { Icon } from "../components/ui/Icon";
+import { useInstallPrompt } from "../hooks/useInstallPrompt";
 import styles from "./install.module.css";
 
 export const Route = createFileRoute("/install")({
@@ -45,6 +47,11 @@ function InstallPage() {
   const initialPlatform = useMemo(detectPlatform, []);
   const [openIOS, setOpenIOS] = useState(initialPlatform !== "android");
   const [openAndroid, setOpenAndroid] = useState(initialPlatform !== "ios");
+  // Same hook as the Settings install group: surfaces `canInstall` when
+  // the browser captured a `beforeinstallprompt` event (mostly Chromium-
+  // family on Android / desktop). On iOS or after a dismissal cooldown
+  // the button hides — the manual steps below cover those cases.
+  const { canInstall, install, isInstalled } = useInstallPrompt();
 
   return (
     <div className={styles.page}>
@@ -69,6 +76,30 @@ function InstallPage() {
           <p className={styles.heroPitch}>{t("install.hero.pitch")}</p>
         </div>
       </section>
+
+      {canInstall && (
+        <Button
+          type="button"
+          onClick={() => void install()}
+          variant="primary"
+          size="lg"
+          fullWidth
+          iconBefore={<Icon name="plus" size={18} />}
+          className={styles.installCta}
+          data-testid="install-cta-button"
+        >
+          {t("install.ctaInstall")}
+        </Button>
+      )}
+      {isInstalled && (
+        <p
+          className={styles.installedPill}
+          data-testid="install-cta-installed"
+        >
+          <Icon name="check" size={14} />
+          <span>{t("install.ctaInstalled")}</span>
+        </p>
+      )}
 
       <ul className={styles.features} data-testid="install-features">
         {FEATURES.map((key) => (
@@ -104,11 +135,18 @@ function InstallPage() {
             return (
               <figure key={shot.src} className={styles.screenshotFrame}>
                 <picture>
+                  {/* Force mobile to the 360w variant regardless of
+                      DPR. The strip's frames are scroll-snap children
+                      that visibly render at 56-220 CSS-px on a phone
+                      (most are off-screen until scroll), so a 720w
+                      source is wasteful even at 3x DPR. Desktop still
+                      gets the sharper 720w. */}
                   <source
                     type="image/webp"
-                    srcSet={`${webpSm} 360w, ${webpLg} 720w`}
-                    sizes="(max-width: 480px) 65vw, 240px"
+                    media="(max-width: 480px)"
+                    srcSet={webpSm}
                   />
+                  <source type="image/webp" srcSet={webpLg} />
                   <img
                     src={png}
                     alt={caption}

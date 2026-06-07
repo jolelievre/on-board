@@ -37,6 +37,20 @@ const WIDTHS = [720, 360] as const;
 const PRIMARY_WIDTH = WIDTHS[0]; // PNG fallback + manifest reference
 const WEBP_QUALITY = 80;
 
+// Crop the top portion of full-page captures down to roughly the
+// rendered viewport height. Source captures use `fullPage: true`, so
+// a screen with stats or a long match history scrolls past the
+// BottomNav — the resulting PNG is many viewports tall, which looks
+// like a scroll dump in the install-page strip and wastes bandwidth
+// in both the manifest entry and the LCP audit.
+//
+// Empirically the BottomNav sits at roughly y=1280 in a 720-wide
+// resized capture (Playwright's `fullPage` doesn't pin `position:
+// fixed` to the logical viewport bottom — it ends up higher up in
+// the captured image), so 1.78 cuts just past the navbar without
+// leaving the next row of cards visible underneath.
+const MAX_ASPECT_RATIO = 1.78;
+
 async function main() {
   let entries: string[];
   try {
@@ -61,14 +75,13 @@ async function main() {
     const srcPath = path.join(DIR, file);
     const meta = await sharp(srcPath).metadata();
     const width = meta.width ?? PRIMARY_WIDTH;
-
-    // If a previous run already downsized below the primary width,
-    // skip rework — keeps `npm run build` idempotent.
-    const needsResize = width > PRIMARY_WIDTH;
+    const height = meta.height ?? 0;
 
     // Emit one WebP per candidate width. The primary (720) is what
     // the manifest references; the smaller (360) only ships via the
-    // <picture> srcSet on /install.
+    // <picture> srcSet on /install. Each is cropped from the top so
+    // the bottom-navbar row anchors the bottom of the frame, mirroring
+    // a normal one-viewport phone screenshot.
     const base = file.replace(/\.png$/, "");
     const emitted: string[] = [];
     for (const w of WIDTHS) {
@@ -76,25 +89,46 @@ async function main() {
         DIR,
         w === PRIMARY_WIDTH ? `${base}.webp` : `${base}-${w}w.webp`,
       );
-      await sharp(srcPath)
-        .resize({ width: w, withoutEnlargement: true })
+      const maxH = Math.round(w * MAX_ASPECT_RATIO);
+      // Source is taller than the viewport target → resize then
+      // extract top maxH. Resize alone would distort aspect, so we
+      // do two passes: scale to the new width (preserving aspect),
+      // then extract the top stripe.
+      const resized = sharp(srcPath).resize({
+        width: w,
+        withoutEnlargement: true,
+      });
+      const buf = await resized.toBuffer({ resolveWithObject: true });
+      const cropHeight = Math.min(buf.info.height, maxH);
+      await sharp(buf.data)
+        .extract({ left: 0, top: 0, width: buf.info.width, height: cropHeight })
         .webp({ quality: WEBP_QUALITY })
         .toFile(out);
       emitted.push(path.basename(out));
     }
 
-    if (needsResize) {
-      // Replace the PNG in place with the primary-width version.
-      // Buffer first — sharp can't read and write to the same path.
-      const buf = await sharp(srcPath)
-        .resize({ width: PRIMARY_WIDTH, withoutEnlargement: true })
+    // Replace the PNG in place with the primary-width, viewport-
+    // cropped version so the manifest's PNG fallback matches what
+    // the WebP variants show.
+    const maxPrimaryH = Math.round(PRIMARY_WIDTH * MAX_ASPECT_RATIO);
+    const needsResize = width > PRIMARY_WIDTH;
+    const needsCrop = height > maxPrimaryH;
+    if (needsResize || needsCrop) {
+      const resized = sharp(srcPath).resize({
+        width: PRIMARY_WIDTH,
+        withoutEnlargement: true,
+      });
+      const buf = await resized.toBuffer({ resolveWithObject: true });
+      const cropHeight = Math.min(buf.info.height, maxPrimaryH);
+      const pngBuf = await sharp(buf.data)
+        .extract({ left: 0, top: 0, width: buf.info.width, height: cropHeight })
         .png({ compressionLevel: 9 })
         .toBuffer();
-      await fs.writeFile(srcPath, buf);
+      await fs.writeFile(srcPath, pngBuf);
     }
     console.log(
       `optimize-screenshots: ${file} -> ${emitted.join(", ")}${
-        needsResize ? " (resized PNG)" : ""
+        needsResize || needsCrop ? " (resized/cropped PNG)" : ""
       }`,
     );
   }

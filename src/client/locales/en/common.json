@@ -43,6 +43,9 @@
       "tagline": "Board game score tracker",
       "pitch": "Score and follow your matches with friends. Offline-ready. No ads. Free."
     },
+    "ctaInstall": "Install OnBoard",
+    "ctaInstalled": "OnBoard is installed",
+    "ctaFallback": "Follow the steps below to install on your device.",
     "features": {
       "scoring": "Built-in scoring for 7 Wonders Duel and Skull King.",
       "offline": "Works offline — score a match anywhere and sync later.",

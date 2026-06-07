@@ -43,6 +43,9 @@
       "tagline": "Suivi des scores de jeux de société",
       "pitch": "Notez et suivez vos parties entre amis. Hors ligne. Sans pub. Gratuit."
     },
+    "ctaInstall": "Installer OnBoard",
+    "ctaInstalled": "OnBoard est installé",
+    "ctaFallback": "Suivez les étapes ci-dessous pour installer sur votre appareil.",
     "features": {
       "scoring": "Scoring intégré pour 7 Wonders Duel et Skull King.",
       "offline": "Fonctionne hors ligne — notez une partie n'importe où, la synchronisation suit.",
