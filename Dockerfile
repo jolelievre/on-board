@@ -8,10 +8,6 @@ RUN npm ci --include=dev
 ### Stage 2: Build client + server
 FROM node:20-alpine AS builder
 WORKDIR /app
-# Install git so vite.config.ts's `git rev-parse HEAD` fallback works
-# when no GIT_SHA build arg is passed (the .git/ directory is copied in
-# below). Cheap fallback layer — only matters in the discarded builder.
-RUN apk add --no-cache git
 # DEPLOY_ENV controls per-environment PWA branding (icon badge + manifest
 # name + theme color). Coolify passes this as a build arg per environment:
 #   production → no badge, name "OnBoard"
@@ -19,10 +15,11 @@ RUN apk add --no-cache git
 #   preview → red bug badge, name "OnBoard Test"
 ARG DEPLOY_ENV=production
 ENV DEPLOY_ENV=${DEPLOY_ENV}
-# GIT_SHA flows into the Settings version footer via Vite `define`. Coolify
-# injects the deploy commit here so an installed PWA can be matched back to
-# a specific build when triaging a bug report. Optional — local Docker
-# builds without the arg fall back to `git rev-parse` inside vite.config.ts.
+# GIT_SHA fills the Settings version footer via Vite `define`. Coolify
+# must supply this build arg per app (set the build variable
+# `GIT_SHA=${SOURCE_COMMIT}` in the Coolify UI). When the arg is empty
+# `vite.config.ts` falls back to `git rev-parse HEAD` — that path is
+# only there for local Docker builds, since Alpine ships without git.
 ARG GIT_SHA=""
 ENV GIT_SHA=${GIT_SHA}
 COPY --from=deps /app/node_modules ./node_modules

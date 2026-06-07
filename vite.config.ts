@@ -16,9 +16,10 @@ const PKG_VERSION = JSON.parse(
 ).version as string;
 
 function resolveGitSha(): string {
-  // Build arg supplied by the Dockerfile is the source of truth in CI;
-  // fall back to `git rev-parse` for local builds. Empty string when
-  // neither is available so the footer can render `vX.Y.Z` alone.
+  // GIT_SHA build arg passed by Coolify is the source of truth in CI.
+  // Set it on each Coolify app as `GIT_SHA=${SOURCE_COMMIT}` (Coolify
+  // expands `SOURCE_COMMIT` to the deploy commit). Local builds fall
+  // back to `git rev-parse` so the Settings footer still fills.
   const fromEnv = process.env.GIT_SHA;
   if (fromEnv && fromEnv.length > 0) return fromEnv;
   try {
