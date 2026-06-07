@@ -40,6 +40,29 @@ app.get("/share/:token", async (c) => {
   return c.html(injected);
 });
 
+// Long-cache the content-hashed asset bundle. Everything under
+// `/assets/*` is emitted by Vite with a content hash in the filename
+// (`index-D7bXfjox.css`, `caveat-latin-600-normal-zlTlWIYU.woff2`), so
+// a year-long immutable cache is safe — a new build emits new filenames.
+// Lighthouse flagged the absent Cache-Control as `uses-long-cache-ttl`
+// (≈488 KiB of re-downloaded assets per repeat visit on slow networks).
+// index.html, the SW, and the favicon set keep their default headers so
+// a deploy lands without waiting for cache eviction.
+app.use("/assets/*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "public, max-age=31536000, immutable");
+});
+
+// PWA install-prompt screenshots. Filenames are stable (renaming
+// requires editing both the manifest and the install page), so a long
+// immutable cache is safe — same reasoning as `/assets/*`, just on a
+// different prefix because Vite preserves the `public/` directory
+// structure for static files.
+app.use("/screenshots/*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "public, max-age=31536000, immutable");
+});
+
 // Serve SPA static files in production
 app.use("/*", serveStatic({ root: "./dist/client" }));
 app.get("*", serveStatic({ root: "./dist/client", path: "index.html" }));

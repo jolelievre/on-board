@@ -98,12 +98,11 @@ function SharePage() {
         )}
 
         {/* Install CTA is shown alongside any state — even an expired
-            link is a good moment to nudge a friend toward the app. The
-            target swaps to `/install` in PR 8-E. */}
+            link is a good moment to nudge a friend toward the app. */}
         <section className={styles.installCta} data-testid="share-install-cta">
           <h2 className={styles.installTitle}>{t("share.install.title")}</h2>
           <p className={styles.installBody}>{t("share.install.body")}</p>
-          <Link to="/" className={styles.installButton}>
+          <Link to="/install" className={styles.installButton}>
             {t("share.install.cta")}
           </Link>
         </section>

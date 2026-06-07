@@ -15,6 +15,20 @@ WORKDIR /app
 #   preview → red bug badge, name "OnBoard Test"
 ARG DEPLOY_ENV=production
 ENV DEPLOY_ENV=${DEPLOY_ENV}
+# Commit SHA for the Settings version footer (statically baked in by
+# Vite `define`).
+#   SOURCE_COMMIT — automatically provided by Coolify for every
+#                   Dockerfile build (see Coolify docs → Build Packs
+#                   → Dockerfile). No Coolify UI configuration needed.
+#   GIT_SHA       — explicit override for local Docker builds or
+#                   non-Coolify CI.
+# `vite.config.ts → resolveGitSha()` reads both, then falls back to
+# `git rev-parse HEAD` for the host where `npm run build` runs
+# directly (no Docker).
+ARG SOURCE_COMMIT=""
+ARG GIT_SHA=""
+ENV SOURCE_COMMIT=${SOURCE_COMMIT}
+ENV GIT_SHA=${GIT_SHA}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate

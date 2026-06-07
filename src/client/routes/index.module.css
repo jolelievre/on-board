@@ -128,3 +128,19 @@
 .legalFooter a:hover {
   color: var(--color-ink);
 }
+
+.installLink {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  text-align: center;
+  margin: 0.75rem auto 0;
+}
+
+.installLink a {
+  color: var(--color-ink-soft);
+  text-decoration: underline;
+}
+
+.installLink a:hover {
+  color: var(--color-ink);
+}

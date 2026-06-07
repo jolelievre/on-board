@@ -122,6 +122,11 @@ function SettingsPage() {
             </Group>
           )}
 
+          <Group title={t("settings.shareApp.title")}>
+            <p className={styles.hint}>{t("settings.shareApp.hint")}</p>
+            <ShareAppButton />
+          </Group>
+
           <Button
             type="button"
             onClick={() => { clearSessionCache(); void authClient.signOut(); }}
@@ -139,9 +144,77 @@ function SettingsPage() {
             <span aria-hidden>·</span>
             <Link to="/terms">{t("legal.terms.title")}</Link>
           </nav>
+
+          <p className={styles.versionFooter} data-testid="settings-version-footer">
+            OnBoard v{__APP_VERSION__}
+            {__GIT_SHA__ ? ` · ${__GIT_SHA__.slice(0, 7)}` : ""}
+          </p>
         </div>
       </div>
     </>
+  );
+}
+
+/** Share-the-app affordance. Uses the Web Share API when the browser
+ * exposes it (most mobile browsers) so the user lands in their native
+ * share sheet — the natural way to send a friend an install link from a
+ * phone. Desktop browsers and the few mobile ones without the API fall
+ * back to copying the absolute `/install` URL to clipboard with a
+ * transient "Link copied" confirmation. */
+function ShareAppButton() {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const supportsShare =
+    typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  const installUrl =
+    typeof window !== "undefined"
+      ? new URL("/install", window.location.origin).toString()
+      : "/install";
+
+  async function handleClick() {
+    if (supportsShare) {
+      try {
+        await navigator.share({
+          title: t("settings.shareApp.shareTitle"),
+          text: t("settings.shareApp.shareText"),
+          url: installUrl,
+        });
+        return;
+      } catch {
+        // User cancelled the sheet, or the browser refused (e.g. no user
+        // activation) — fall through to clipboard so they still have a
+        // way to send the link.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(installUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // No clipboard API either (rare — http context). Nothing to
+      // recover with; the affordance just no-ops.
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      onClick={() => void handleClick()}
+      variant="secondary"
+      size="md"
+      fullWidth
+      iconBefore={
+        <Icon name={copied ? "check" : "share"} size={16} />
+      }
+      data-testid="share-app-button"
+    >
+      {copied
+        ? t("settings.shareApp.copied")
+        : supportsShare
+          ? t("settings.shareApp.cta")
+          : t("settings.shareApp.copyCta")}
+    </Button>
   );
 }
 

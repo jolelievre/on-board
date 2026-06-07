@@ -1,12 +1,12 @@
 {
   "name": "on-board",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "npm run dev:kill --silent && vite",
     "dev:kill": "lsof -ti :5173 | xargs kill -9 2>/dev/null; echo 'Port 5173 cleared'",
-    "prebuild": "tsx scripts/generate-pwa-icons.ts",
+    "prebuild": "tsx scripts/generate-pwa-icons.ts && tsx scripts/optimize-screenshots.ts",
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "node dist/server/index.js",
     "lint": "eslint .",

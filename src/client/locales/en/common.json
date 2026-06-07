@@ -34,6 +34,49 @@
     },
     "back": "Back"
   },
+  "install": {
+    "back": "Back",
+    "title": "Install OnBoard",
+    "intro": "OnBoard works best when added to your home screen — it opens like a regular app, runs offline, and stays signed in. Pick your device below.",
+    "loginLink": "How to install",
+    "hero": {
+      "tagline": "Board game score tracker",
+      "pitch": "Score and follow your matches with friends. Offline-ready. No ads. Free."
+    },
+    "ctaInstall": "Install OnBoard",
+    "ctaInstalled": "OnBoard is installed",
+    "ctaFallback": "Follow the steps below to install on your device.",
+    "features": {
+      "scoring": "Built-in scoring for 7 Wonders Duel and Skull King.",
+      "offline": "Works offline — score a match anywhere and sync later.",
+      "friends": "Track friends as profiles, see who's winning over time.",
+      "share": "Share a match summary as a public link, no install required."
+    },
+    "screenshotsTitle": "A look inside",
+    "screenshots": {
+      "games": "Pick a game",
+      "scoring7wd": "Score 7 Wonders Duel",
+      "scoringSk": "Skull King results",
+      "players": "Your friend profiles",
+      "profile": "A friend's stats and matches",
+      "studio": "Customize avatars"
+    },
+    "stepsTitle": "How to install",
+    "ios": {
+      "title": "iPhone or iPad (Safari)",
+      "step1": "Open this page in <b>Safari</b>. Other browsers on iOS can't install web apps.",
+      "step2": "Tap the <b>Share</b> button (the square with an upward arrow) at the bottom of the screen.",
+      "step3": "Scroll down and tap <b>Add to Home Screen</b>.",
+      "step4": "Tap <b>Add</b>. The OnBoard icon appears on your home screen — open it from there to use the app."
+    },
+    "android": {
+      "title": "Android (Chrome)",
+      "step1": "Open this page in <b>Chrome</b>. Most other Android browsers also support this — the menu wording may differ.",
+      "step2": "Tap the <b>⋮ menu</b> in the top-right corner.",
+      "step3": "Tap <b>Install app</b> (or <b>Add to Home screen</b>). Confirm to add the OnBoard icon to your home screen."
+    },
+    "afterInstall": "<b>After installing</b>, open OnBoard from your home screen and sign in. You'll only need to do this once."
+  },
   "settings": {
     "title": "Settings",
     "profile": "Profile",
@@ -54,6 +97,15 @@
       "hint": "Add OnBoard to your home screen for quick access",
       "cta": "Add to home screen",
       "iosHint": "On iOS, tap the Share button in Safari, then \"Add to Home Screen\"."
+    },
+    "shareApp": {
+      "title": "Share OnBoard",
+      "hint": "Send a friend a link to install OnBoard on their phone.",
+      "cta": "Share OnBoard",
+      "copyCta": "Copy install link",
+      "copied": "Link copied",
+      "shareTitle": "OnBoard — board game score tracker",
+      "shareText": "Score and follow your board-game matches with OnBoard."
     },
     "sync": {
       "title": "Sync queue",

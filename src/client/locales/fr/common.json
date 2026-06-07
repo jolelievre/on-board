@@ -34,6 +34,49 @@
     },
     "back": "Retour"
   },
+  "install": {
+    "back": "Retour",
+    "title": "Installer OnBoard",
+    "intro": "OnBoard fonctionne mieux lorsqu'il est ajouté à votre écran d'accueil — il s'ouvre comme une vraie application, fonctionne hors ligne et garde votre session. Choisissez votre appareil ci-dessous.",
+    "loginLink": "Comment installer",
+    "hero": {
+      "tagline": "Suivi des scores de jeux de société",
+      "pitch": "Notez et suivez vos parties entre amis. Hors ligne. Sans pub. Gratuit."
+    },
+    "ctaInstall": "Installer OnBoard",
+    "ctaInstalled": "OnBoard est installé",
+    "ctaFallback": "Suivez les étapes ci-dessous pour installer sur votre appareil.",
+    "features": {
+      "scoring": "Scoring intégré pour 7 Wonders Duel et Skull King.",
+      "offline": "Fonctionne hors ligne — notez une partie n'importe où, la synchronisation suit.",
+      "friends": "Gardez vos amis en profil et voyez qui gagne sur la durée.",
+      "share": "Partagez un résumé de partie via un lien public, sans installation requise."
+    },
+    "screenshotsTitle": "Aperçu",
+    "screenshots": {
+      "games": "Choisissez un jeu",
+      "scoring7wd": "Notez 7 Wonders Duel",
+      "scoringSk": "Résultats à Skull King",
+      "players": "Vos profils d'amis",
+      "profile": "Stats et parties d'un ami",
+      "studio": "Personnalisez les avatars"
+    },
+    "stepsTitle": "Comment installer",
+    "ios": {
+      "title": "iPhone ou iPad (Safari)",
+      "step1": "Ouvrez cette page dans <b>Safari</b>. Les autres navigateurs sur iOS ne permettent pas d'installer d'applications web.",
+      "step2": "Appuyez sur le bouton <b>Partager</b> (carré avec une flèche vers le haut) en bas de l'écran.",
+      "step3": "Faites défiler vers le bas et appuyez sur <b>Sur l'écran d'accueil</b>.",
+      "step4": "Appuyez sur <b>Ajouter</b>. L'icône OnBoard apparaît sur votre écran d'accueil — ouvrez-la pour utiliser l'application."
+    },
+    "android": {
+      "title": "Android (Chrome)",
+      "step1": "Ouvrez cette page dans <b>Chrome</b>. La plupart des autres navigateurs Android le permettent aussi — le libellé du menu peut différer.",
+      "step2": "Appuyez sur le <b>menu ⋮</b> en haut à droite.",
+      "step3": "Appuyez sur <b>Installer l'application</b> (ou <b>Ajouter à l'écran d'accueil</b>). Confirmez pour ajouter l'icône OnBoard à votre écran d'accueil."
+    },
+    "afterInstall": "<b>Après l'installation</b>, ouvrez OnBoard depuis votre écran d'accueil et connectez-vous. Vous n'aurez à le faire qu'une seule fois."
+  },
   "settings": {
     "title": "Paramètres",
     "profile": "Profil",
@@ -54,6 +97,15 @@
       "hint": "Ajoutez OnBoard à votre écran d'accueil pour un accès rapide",
       "cta": "Ajouter à l'écran d'accueil",
       "iosHint": "Sur iOS, appuyez sur le bouton Partager dans Safari, puis « Sur l'écran d'accueil »."
+    },
+    "shareApp": {
+      "title": "Partager OnBoard",
+      "hint": "Envoyez à un proche un lien pour installer OnBoard sur son téléphone.",
+      "cta": "Partager OnBoard",
+      "copyCta": "Copier le lien d'installation",
+      "copied": "Lien copié",
+      "shareTitle": "OnBoard — suivi des scores de jeux de société",
+      "shareText": "Notez et suivez vos parties de jeux de société avec OnBoard."
     },
     "sync": {
       "title": "File de synchronisation",
