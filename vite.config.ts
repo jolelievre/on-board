@@ -16,11 +16,13 @@ const PKG_VERSION = JSON.parse(
 ).version as string;
 
 function resolveGitSha(): string {
-  // GIT_SHA build arg passed by Coolify is the source of truth in CI.
-  // Set it on each Coolify app as `GIT_SHA=${SOURCE_COMMIT}` (Coolify
-  // expands `SOURCE_COMMIT` to the deploy commit). Local builds fall
-  // back to `git rev-parse` so the Settings footer still fills.
-  const fromEnv = process.env.GIT_SHA;
+  // Resolution order:
+  //   1. GIT_SHA — explicit override (local Docker / non-Coolify CI).
+  //   2. SOURCE_COMMIT — Coolify auto-injects this on every Dockerfile
+  //      build (no Coolify UI config needed). Per their build-packs
+  //      docs it's always populated with the deploy commit.
+  //   3. `git rev-parse HEAD` — for `npm run build` on a dev host.
+  const fromEnv = process.env.GIT_SHA || process.env.SOURCE_COMMIT;
   if (fromEnv && fromEnv.length > 0) return fromEnv;
   try {
     return execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] })
