@@ -77,29 +77,42 @@ function InstallPage() {
         </div>
       </section>
 
-      {canInstall && (
-        <Button
-          type="button"
-          onClick={() => void install()}
-          variant="primary"
-          size="lg"
-          fullWidth
-          iconBefore={<Icon name="plus" size={18} />}
-          className={styles.installCta}
-          data-testid="install-cta-button"
-        >
-          {t("install.ctaInstall")}
-        </Button>
-      )}
-      {isInstalled && (
-        <p
-          className={styles.installedPill}
-          data-testid="install-cta-installed"
-        >
-          <Icon name="check" size={14} />
-          <span>{t("install.ctaInstalled")}</span>
-        </p>
-      )}
+      {/* Reserve-space slot for the async install CTA. `beforeinstallprompt`
+          fires after first paint on Chrome, so without a fixed slot the
+          button appears mid-page-load and pushes every section below
+          down — Lighthouse counts that as cumulative layout shift. The
+          slot height matches the lg-size Button so the layout doesn't
+          change once the state resolves; the slot collapses to 0 on
+          browsers that never fire the event (iOS Safari, desktops with
+          no PWA support, post-cooldown). */}
+      <div
+        className={styles.installSlot}
+        data-empty={!canInstall && !isInstalled ? "true" : "false"}
+      >
+        {canInstall && (
+          <Button
+            type="button"
+            onClick={() => void install()}
+            variant="primary"
+            size="lg"
+            fullWidth
+            iconBefore={<Icon name="plus" size={18} />}
+            className={styles.installCta}
+            data-testid="install-cta-button"
+          >
+            {t("install.ctaInstall")}
+          </Button>
+        )}
+        {isInstalled && (
+          <p
+            className={styles.installedPill}
+            data-testid="install-cta-installed"
+          >
+            <Icon name="check" size={14} />
+            <span>{t("install.ctaInstalled")}</span>
+          </p>
+        )}
+      </div>
 
       <ul className={styles.features} data-testid="install-features">
         {FEATURES.map((key) => (
@@ -122,11 +135,13 @@ function InstallPage() {
               shot.src.replace(/\.png$/, "-360w.webp") + SCREENSHOT_V;
             const png = shot.src + SCREENSHOT_V;
             const caption = t(`install.screenshots.${shot.key}`);
-            // The first screenshot is above the fold on desktop and
-            // becomes the LCP element — eager-load + fetchpriority high
-            // so Lighthouse doesn't flag `lcp-lazy-loaded`. The rest
-            // stay lazy since they only matter once the user scrolls
-            // into the strip.
+            // First three screenshots are above the fold on a typical
+            // desktop viewport — the strip renders 3-4 in parallel at
+            // ~240px each. Lighthouse picks whichever lands as LCP, so
+            // eager-load all three with high priority on the first
+            // (which is the most-likely LCP target). The remaining
+            // three stay lazy since they only matter on scroll.
+            const isAboveFold = idx < 3;
             const isFirst = idx === 0;
             // Strip caps at 240 CSS-px on desktop; on phones the 65vw
             // rule yields ~150-220 CSS-px. With srcset+sizes the
@@ -151,7 +166,7 @@ function InstallPage() {
                     src={png}
                     alt={caption}
                     className={styles.screenshotImg}
-                    loading={isFirst ? "eager" : "lazy"}
+                    loading={isAboveFold ? "eager" : "lazy"}
                     fetchPriority={isFirst ? "high" : "auto"}
                     decoding="async"
                   />

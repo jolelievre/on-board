@@ -53,8 +53,26 @@
   margin: 0 0 1.25rem;
 }
 
-.installCta {
+.installSlot {
+  /* Holds the install CTA — reserved height so the async-arriving
+   * Button doesn't shift layout below it. Height matches Button
+   * size="lg" + bottom margin. Collapses to 0 when nothing renders
+   * inside (data-empty="true") so the page isn't padded out on
+   * browsers that never get an install prompt. */
+  min-height: 4rem;
   margin: 0 0 1.5rem;
+  display: flex;
+  align-items: stretch;
+}
+
+.installSlot[data-empty="true"] {
+  min-height: 0;
+  margin: 0;
+}
+
+.installCta {
+  margin: 0;
+  width: 100%;
 }
 
 .installedPill {
