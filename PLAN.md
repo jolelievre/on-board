@@ -1157,22 +1157,22 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 |---|---|---|
 | Real-time sync indicator | ✅ Shipped | (already in `__root.tsx`) |
 | Match history filters (game / profile / date) | ⛔ Dropped — existing per-game/per-profile navigation already scopes the lists; filters would duplicate it. Revisit in v1.x at scale. | — |
-| Personal stats dashboard | 🟡 Per-profile only (6-B) | PR 8-C |
-| Lighthouse PWA audit | 🟡 Infra ready, not run | PR 8-I |
-| Install help page (public) | ❌ Missing | PR 8-I |
-| v1.0.0 release tooling | ❌ Missing | PR 8-J |
+| Personal stats dashboard | ✅ Shipped (8-C) | PR 8-C |
+| Lighthouse PWA audit | ✅ Shipped (8-I) — final scores P:87 mobile / 95 desktop / A:100 BP:100 SEO:100 | PR 8-I |
+| Install help page (public) | ✅ Shipped (8-I) | PR 8-I |
+| v1.0.0 release tooling | ✅ Shipped (8-I+8-J merged into the same PR) | PR 8-I/J |
 | **Multi-provider auth + account linking** | ✅ Shipped (8-A, #27) | PR 8-A |
 | **Privacy + ToS pages** (Facebook prereq) | ✅ Shipped (8-A, #27) | PR 8-A |
 | **Account-switch leak** — same-device sign-in as different user sees prior user's matches (surfaced during 8-A testing) | ✅ Shipped (8-B, #28) | PR 8-B |
-| **Achievements / badges** | ❌ Missing | PR 8-D |
-| **Public read-only match share-link** | ❌ Missing | PR 8-D |
-| **Sync queue visibility** (Settings panel + failed-state banner + structured server errors + best-effort telemetry) — surfaced during 8-D mobile testing, see #31 | ❌ Missing | PR 8-E (ship-first) |
-| **Sync queue recovery** (cascading-failure marker, Retry/Discard actions, auto-unblock) | ❌ Missing | PR 8-F (depends on 8-E) |
-| **Delete a match / delete a profile** — destructive cleanup affordances for the user-facing data model. Match history surfaces a long-press / overflow action; Profile detail surfaces a Delete button. Both go through the sync queue with confirm dialogs and cascade rules. | ❌ Missing | PR 8-G |
-| **Local↔server model consistency audit** — sweep every Dexie table (Match, Profile, Player, Score) against its Prisma counterpart to catch fields that exist server-side but were never mirrored client-side (the `createdById` oversight surfaced in 8-F is the immediate example). Adds a typecheck-style guard so future field drift gets caught. | ❌ Missing | PR 8-H |
-| **App version footer in Settings** | ❌ Missing | PR 8-I |
-| **Screenshot-script refresh** (cover post-Phase-5 screens) | ❌ Stale | PR 8-J (end of phase so it captures everything) |
-| **Graphify refresh** | ❌ Stale | PR 8-J (end of phase so it captures everything) |
+| **Achievements / badges** | ✅ Shipped (8-D) | PR 8-D |
+| **Public read-only match share-link** | ✅ Shipped (8-D) | PR 8-D |
+| **Sync queue visibility** (Settings panel + failed-state banner + structured server errors + best-effort telemetry) — surfaced during 8-D mobile testing, see #31 | ✅ Shipped (8-E) | PR 8-E (ship-first) |
+| **Sync queue recovery** (cascading-failure marker, Retry/Discard actions, auto-unblock) | ✅ Shipped (8-F) | PR 8-F (depends on 8-E) |
+| **Delete a match / delete a profile** — destructive cleanup affordances for the user-facing data model. Match history surfaces a long-press / overflow action; Profile detail surfaces a Delete button. Both go through the sync queue with confirm dialogs and cascade rules. | ✅ Shipped (8-G) | PR 8-G |
+| **Local↔server model consistency audit** — sweep every Dexie table (Match, Profile, Player, Score) against its Prisma counterpart to catch fields that exist server-side but were never mirrored client-side (the `createdById` oversight surfaced in 8-F is the immediate example). Adds a typecheck-style guard so future field drift gets caught. | ✅ Shipped (8-H) | PR 8-H |
+| **App version footer in Settings** | ✅ Shipped (8-I) — sourced from package.json + Coolify SOURCE_COMMIT | PR 8-I |
+| **Screenshot-script refresh** (cover post-Phase-5 screens) | ✅ Shipped (8-I+8-J merged) — 76 PNGs across 38 screens | PR 8-I/J |
+| **Graphify refresh** | ✅ Shipped (8-I+8-J merged) — refreshed at HEAD of `feat/install-help-and-lighthouse` | PR 8-I/J |
 
 ### Phasing — 11 PRs
 
@@ -1286,7 +1286,7 @@ Shipping the whole phase as one PR. The visual story is coherent end-to-end (a s
 - Tombstones / explicit "this row is stale" markers — not needed because the viewer filter rejects all cross-account rows reactively.
 - Cross-tab session-mismatch detection — same-device same-tab covers the reported bug; multi-tab is a future hardening.
 
-#### PR 8-C — "Your stats" dashboard (`feat/stats-dashboard`, ~1.5 days)
+#### PR 8-C — "Your stats" dashboard (`feat/stats-dashboard`, ~1.5 days) ✅ DONE
 
 **Goal**: viewer-personal dashboard — "your stats". Framed top-to-bottom as the signed-in user's own performance, with a single panel showing where they rank vs linked friends per game.
 
@@ -1330,7 +1330,7 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 
 **Acceptance**: stats numbers match a hand-computed reference for a seeded fixture; the dashboard updates within seconds of a new match completing (`useLiveQuery` reactivity); the friend-rankings panel shows the viewer's own row highlighted.
 
-#### PR 8-D — Achievements + public match share-link (`feat/achievements-and-share`, ~3 days)
+#### PR 8-D — Achievements + public match share-link (`feat/achievements-and-share`, ~3 days) ✅ DONE
 
 **Goal**: two creative additions chosen during planning. Independent of each other; bundled because each is small. Sequenced before the install/Lighthouse PR so the dashboard's achievements row lands while the stats work is still fresh and so the install-help/audit PR captures the final UI surface.
 
@@ -1377,7 +1377,7 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 
 **Acceptance**: a fresh user wins their first 7WD match → "First Win" stamp appears on their stats + profile within seconds (`useLiveQuery` reactivity). A completed match's share URL renders publicly with the right data, unfurls correctly in iMessage/Slack previews, revoke kills it on the next request.
 
-#### PR 8-E — Sync queue visibility (`feat/sync-queue-visibility`, ~0.5 day) — ship-first
+#### PR 8-E — Sync queue visibility (`feat/sync-queue-visibility`, ~0.5 day) — ship-first ✅ DONE
 
 **Goal**: Surface terminally-failed sync entries to the user *without* attempting to fix the underlying queue bug yet. Surfaced during PR 8-D mobile testing — see **#31**. This PR ships first so we can observe the real-world stuck state on the user's device (no easy local repro: requests are sub-second so we can't reliably kill the server mid-flight). Once a real failure is captured + diagnosed via this UI, PR 8-F lands the fix.
 
@@ -1403,7 +1403,7 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 
 **Acceptance**: ship to integration, ask the user to retry the share flow on their mobile, then open Settings → Sync. The Charles repro from PR 8-D shows up: the failed profile-create entry is listed with the server's actual error message. That diagnostic data feeds PR 8-F.
 
-#### PR 8-F — Sync queue recovery (`fix/sync-queue-recovery`, ~1 day) — depends on 8-E
+#### PR 8-F — Sync queue recovery (`fix/sync-queue-recovery`, ~1 day) — depends on 8-E ✅ DONE
 
 **Goal**: Now that 8-E has surfaced the failure modes and captured real-world stuck-state data, fix the underlying queue stall. Tracked in **#31**.
 
@@ -1430,7 +1430,7 @@ Stats tab added to bottom-nav between Games and Players (icon `bar-chart-2` — 
 
 **Acceptance**: take the captured failure from 8-E, push the fix, observe the stuck state drain on the same device. The Charles repro no longer ends in a silent split-brain — either the entry retries successfully, or the user discards it through Settings and the dependent match entries fall through cleanly.
 
-#### PR 8-G — Delete a match + delete a profile (`feat/delete-match-and-profile`, ~1 day)
+#### PR 8-G — Delete a match + delete a profile (`feat/delete-match-and-profile`, ~1 day) ✅ DONE
 
 **Goal**: ship the destructive cleanup affordances the user-facing data model has been missing since Phase 5. Every other CRUD verb (create / read / update) is wired across local + sync queue + server; delete is the gap. Friends need a way to drop a mistaken match entry or retire a profile they no longer share games with.
 
@@ -1524,7 +1524,7 @@ Active-list endpoints (`GET /api/profiles?since=` for the owner's Players tab, a
 
 **Acceptance**: own a match, delete it from history → it disappears locally + on the server, and a linked friend's next pull prunes their local copy. Own a linked profile, click Delete → confirm dialog explains the unlink-first behaviour → confirm → profile gone from owner's active surfaces, multi-player matches still render the historical alias + avatar verbatim, late-arriving devices receive the same snapshot via the API.
 
-#### PR 8-H — Local↔server model consistency audit (`chore/dexie-server-model-audit`, ~0.5 day)
+#### PR 8-H — Local↔server model consistency audit (`chore/dexie-server-model-audit`, ~0.5 day) ✅ DONE
 
 **Goal**: catch the next `createdById`-style oversight before it bites. PR 8-F surfaced that `Match.createdById` exists server-side but was never mirrored in `createMatch`'s local write — it only landed via pull-sync, which left a multi-day window where the local row was incomplete (and broke ownership inference on every device that created a match in that window). This PR sweeps every Dexie table against its Prisma counterpart and adds a check that catches future drift.
 
@@ -1552,7 +1552,7 @@ Active-list endpoints (`GET /api/profiles?since=` for the owner's Players tab, a
 
 **Acceptance**: the audit table at the top of this PR's description lists every Prisma field, every Dexie field, the gap (if any), and the resolution. The drift guard fails when artificially poking a hole (e.g. removing `LocalMatch.gameId`). `npm run type-check` passes cleanly with everything in sync.
 
-#### PR 8-I — Public install help + Lighthouse audit + Settings version footer (`feat/install-help-and-lighthouse`, ~1 day)
+#### PR 8-I — Public install help + Lighthouse audit + Settings version footer (`feat/install-help-and-lighthouse`, ~1 day) ✅ DONE — absorbed PR 8-J's scope as well (screenshot refresh, manifest screenshots, version bump, CHANGELOG, graphify refresh)
 
 **Goal**: every loose-end gating a friend's "go install OnBoard" experience. Dev-asset refresh (screenshots + graphify) is deliberately deferred to PR 8-J so it captures the final state of everything, not a snapshot that gets invalidated by 8-D's UI work.
 
@@ -1585,7 +1585,7 @@ Active-list endpoints (`GET /api/profiles?since=` for the owner's Players tab, a
 
 **Acceptance**: Lighthouse PWA criteria pass against integration (mobile + desktop). Logged-out visitor can reach `/install` from `/`. Settings shows `v0.x.y • abc1234`.
 
-#### PR 8-J — Dev-asset refresh + v1.0.0 release (`release/v1.0.0`, ~1 day)
+#### PR 8-J — Dev-asset refresh + v1.0.0 release (`release/v1.0.0`, ~1 day) ✅ DONE — folded into PR 8-I (`feat/install-help-and-lighthouse`); release artefacts (1.0.0 version bump, CHANGELOG.md, mark-Phase-8-done in this PLAN, graphify refresh at HEAD) all landed there. Owner tags `v1.0.0` and triggers the manual production deploy on `onboard-prod` after the PR merges.
 
 **Goal**: regenerate the dev artefacts now that everything in 8-A through 8-I has landed, then cut the version and deploy to production.
 
